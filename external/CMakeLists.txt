@@ -1,4 +1,3 @@
-add_subdirectory(vulkan)
-set(ENABLE_OPT OFF)
-add_subdirectory(glslang)
-add_subdirectory(tinyobjloader)
+option(ASSIMP_BUILD_TESTS OFF)
+option(ASSIMP_INSTALL OFF)
+add_subdirectory(assimp)

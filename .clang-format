@@ -1,4 +1,8 @@
 # Format Style Options - Created with Clang Power Tools
 ---
 BasedOnStyle: Microsoft
+AccessModifierOffset: -4
+PointerAlignment: Left
+AlwaysBreakTemplateDeclarations: Yes
+
 ...

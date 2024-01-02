@@ -1,0 +1,46 @@
+name: CMake
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  BUILD_TYPE: Release
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Setup cmake
+      uses: jwlawson/actions-setup-cmake@v1.14
+      with:
+        cmake-version: '3.28.1'
+
+    - uses: actions/checkout@v3
+
+    - name: Update submodules
+      run: git submodule update --init --recursive
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCI_RUNNING=ON
+
+    # TODO: I have no fucking idea why this piece of shit consistently throws and error:
+    #   "fatal  error C1011: cannot locate standard module interface. Did you install the library part of the C++ modules feature in VS setup?"
+    #   Despite modules component seems to be installed:
+    # - name: Export
+    #   run: >
+    #     Start-Process -FilePath "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
+    #     -ArgumentList 'export --productId Microsoft.VisualStudio.Product.Enterprise --channelId VisualStudio.17.Release --quiet --config .vsconfig'
+    #     -Wait -NoNewWindow
+    #
+    # - name: Export
+    #   run: >
+    #     cat .vsconfig
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
