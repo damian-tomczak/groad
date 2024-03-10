@@ -49,5 +49,6 @@ set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_P
 set_property(TARGET assimp PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET zlibstatic PROPERTY FOLDER "ThirdPartyLibraries")
+set_property(TARGET imgui PROPERTY FOLDER "ThirdPartyLibraries")
 
 set_property(TARGET copy_assets PROPERTY FOLDER "tools")
