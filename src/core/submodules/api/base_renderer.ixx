@@ -34,7 +34,7 @@ export constexpr const char* apiToStr(const API api)
     }
 }
 
-export class IRenderer : public NonCopyableAndNonMoveable
+export class IRenderer : public NonCopyableAndMoveable
 {
     inline static bool isRendererCreated{};
 

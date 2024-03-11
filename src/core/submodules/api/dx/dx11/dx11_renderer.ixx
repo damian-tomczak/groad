@@ -5,6 +5,7 @@ module;
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <wrl/client.h>
+#include "imgui_impl_dx11.h"
 
 #include "utils.h"
 
@@ -27,6 +28,11 @@ export class DX11Renderer : public DXRenderer
 public:
     DX11Renderer(std::weak_ptr<IWindow> pWindow) : DXRenderer{pWindow}
     {
+    }
+
+    ~DX11Renderer()
+    {
+        ImGui_ImplDX11_Shutdown();
     }
 
     void init() override;
@@ -92,7 +98,7 @@ public:
         return mpPS.Get();
     }
 
-    Torus mTorus{0.7f, 0.2f, 40, 40};
+    Torus mTorus{0.7f, 0.2f, 200, 20};
 
 private:
     void initCore();
@@ -122,18 +128,6 @@ private:
 
 module :private;
 
-namespace
-{
-constexpr UINT argbToAbgr(XMFLOAT4 argb)
-{
-    int A = static_cast<int>(argb.w * 255);
-    int R = static_cast<int>(argb.x * 255);
-    int G = static_cast<int>(argb.y * 255);
-    int B = static_cast<int>(argb.z * 255);
-    return (A << 24) | (B << 16) | (G << 8) | (R << 0);
-}
-} // namespace
-
 void DX11Renderer::init()
 {
     initCore();
@@ -143,13 +137,15 @@ void DX11Renderer::init()
     buildVertexLayout();
 
     D3D11_RASTERIZER_DESC wireframeDesc{
-        .FillMode = D3D11_FILL_WIREFRAME,
+        .FillMode = D3D11_FILL_SOLID,
         .CullMode = D3D11_CULL_NONE,
         .FrontCounterClockwise = false,
         .DepthClipEnable = true,
     };
 
     HR(mpD3DDevice->CreateRasterizerState(&wireframeDesc, &mpWireframeRS));
+
+    ImGui_ImplDX11_Init(mpD3DDevice.Get(), mpD3DImmediateContext.Get());
 }
 
 void DX11Renderer::onResize()
@@ -163,10 +159,7 @@ void DX11Renderer::onResize()
     mpDepthStencilBuffer.Reset();
 
     const auto pWindow = mpWindow.lock().get();
-    if (pWindow == nullptr)
-    {
-        ERR("Window is invalid");
-    }
+    ASSERT(pWindow);
 
     HR(mpSwapChain->ResizeBuffers(1, pWindow->getWidth(), pWindow->getHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, 0));
     ComPtr<ID3D11Texture2D> pBackBuffer;

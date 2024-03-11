@@ -9,7 +9,7 @@ module;
 export module window;
 export import std.core;
 
-export class IWindow : public NonCopyableAndNonMoveable
+export class IWindow : public NonCopyableAndMoveable
 {
     inline static bool isWindowCreated{};
 
@@ -34,7 +34,7 @@ public:
     >;
     // clang-format
 
-    IWindow(const int width = 1280, const int height = 720) : mWidth{width}, mHeight{height}
+    IWindow(unsigned width = 1280, unsigned height = 720) : mWidth{width}, mHeight{height}
     {
     }
 
@@ -99,6 +99,9 @@ public:
 
 protected:
     EventData mEventData;
-    int mWidth;
-    int mHeight;
+    unsigned mWidth;
+    unsigned mHeight;
+
+    int mLastXMousePosition{};
+    int mLastYMousePosition{};
 };

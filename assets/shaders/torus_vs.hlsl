@@ -1,6 +1,6 @@
 cbuffer cbPerObject
 {
-    float4x4 gWorldViewProj;
+    float4x4 mvp;
 };
 
 struct VertexIn
@@ -16,6 +16,6 @@ struct VertexOut
 VertexOut main(VertexIn vin)
 {
     VertexOut vout;
-    vout.pos = mul(float4(vin.pos, 1.0f), gWorldViewProj);
+    vout.pos = mul(float4(vin.pos, 1.0f), mvp);
     return vout;
 }

@@ -93,7 +93,7 @@ public:
     NonMoveable& operator=(NonMoveable&&) = delete;
 };
 
-class NonCopyableAndNonMoveable : public NonCopyable, public NonMoveable
+class NonCopyableAndMoveable : public NonCopyable, public NonMoveable
 {
 };
 

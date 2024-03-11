@@ -1,6 +1,8 @@
 module;
 
 #include "utils.h"
+#include "mg.hpp"
+
 #include <DirectXMath.h>
 
 export module core.camera;
@@ -9,17 +11,17 @@ using namespace DirectX;
 
 export class Camera
 {
-    inline static const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    inline static const XMVECTOR right = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    inline static XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 
     XMVECTOR mPosition;
     XMVECTOR mFront;
 
-    float mYaw;
-    float mPitch;
+    float mYaw{};
+    float mPitch{};
 
     float mMovementSpeed = 100.0f;
-    float mMouseSensitivity = 0.1f;
+    float mMouseSensitivity = 0.01f;
     float mZoom = 45.0f;
 
 public:
@@ -45,7 +47,7 @@ public:
 
     XMMATRIX getViewMatrix() const
     {
-        return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), up);
+        return mg::XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
     void processKeyboard(const CameraMovement direction, const float deltaTime)
@@ -61,10 +63,10 @@ public:
             mPosition = XMVectorSubtract(mPosition, XMVectorScale(mFront, velocity));
             break;
         case LEFT:
-            mPosition = XMVectorSubtract(mPosition, XMVectorScale(right, velocity));
+            mPosition = XMVectorSubtract(mPosition, XMVectorScale(mRight, velocity));
             break;
         case RIGHT:
-            mPosition = XMVectorAdd(mPosition, XMVectorScale(right, velocity));
+            mPosition = XMVectorAdd(mPosition, XMVectorScale(mRight, velocity));
             break;
         default:
             ASSERT(false);
@@ -95,12 +97,16 @@ public:
 private:
     void updateCameraVectors()
     {
-        // float mYaw = XMConvertToRadians(mYaw);
-        // float mPitch = XMConvertToRadians(mPitch);
-        // XMVECTOR mFront = XMVectorSet(cosf(mYaw) * cosf(mPitch), sinf(mPitch), sinf(mYaw) * cosf(mPitch), 0.0f);
+        float yawRadians = XMConvertToRadians(mYaw);
+        float pitchRadians = XMConvertToRadians(mPitch);
 
-        // mFront = XMVector3Normalize(mFront);
-        // Right = XMVector3Normalize(XMVector3Cross(mFront, WorldUp));
-        // Up = XMVector3Normalize(XMVector3Cross(Right, mFront));
+        XMVECTOR front;
+        front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians),
+                            sinf(yawRadians) * cosf(pitchRadians), 0.0f
+        );
+        mFront = XMVector3Normalize(front);
+
+        mRight = XMVector3Normalize(XMVector3Cross(mFront, mUp));
+        mUp = XMVector3Normalize(XMVector3Cross(mRight, mFront));
     }
 };

@@ -3,11 +3,15 @@ module;
 #include <DirectXMath.h>
 #include <Windows.h>
 
-// TODO: I won't bother myself right now too much with abstraction
-#include <DirectXPackedVector.h>
 #include <d3d11.h>
 
 #include "utils.h"
+
+#include "imgui.h"
+#include "imgui_impl_dx11.h"
+#include "imgui_impl_win32.h"
+
+#include "mg.hpp"
 
 export module app;
 
@@ -18,12 +22,13 @@ import dx11renderer;
 
 using namespace std::chrono;
 
-export class App final : public NonCopyableAndNonMoveable
+export class App final : public NonCopyableAndMoveable
 {
     static constexpr float aspectRatioFactor = 0.25f;
 
 public:
     App(const ParsedOptions&& options);
+    ~App();
 
     void init();
     void onResize();
@@ -34,18 +39,21 @@ public:
 
 private:
     void processInput(float deltaTime);
+    void renderUi();
 
     DirectX::XMFLOAT4X4 mWorldMatrix;
     DirectX::XMFLOAT4X4 mViewMatrix;
     DirectX::XMFLOAT4X4 mProjMatrix;
 
     const ParsedOptions mOptions;
-    Camera mCamera;
+    Camera mCamera{0.f, 0.f, -5.f};
 
     std::shared_ptr<IWindow> mpWindow;
     std::unique_ptr<DX11Renderer> mpRenderer;
 
     bool mIsRunning{};
+    bool mIsMenuEnabled{};
+    bool mIsUiClicked{};
 };
 
 module :private;
@@ -67,8 +75,24 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
     XMStoreFloat4x4(&mProjMatrix, I);
 }
 
+App::~App()
+{
+    mpWindow.reset();
+    mpRenderer.reset();
+    ImGui::DestroyContext();
+}
+
 void App::init()
 {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.IniFilename = nullptr;
+    io.LogFilename = nullptr;
+
+    ImGui::StyleColorsDark();
+
     mpWindow = std::shared_ptr<IWindow>(IWindow::createWindow());
     mpWindow->init();
     mpWindow->show();
@@ -86,7 +110,7 @@ void App::onResize()
     ASSERT(mpWindow);
     mpRenderer->onResize();
 
-    DirectX::XMMATRIX p = DirectX::XMMatrixPerspectiveFovLH(aspectRatioFactor * std::numbers::pi_v<float>,
+    DirectX::XMMATRIX p = mg::createPerspectiveFovLH(aspectRatioFactor * std::numbers::pi_v<float>,
                                                             mpWindow->getAspectRatio(), 1.0f, 1000.0f);
     XMStoreFloat4x4(&mProjMatrix, p);
 }
@@ -123,37 +147,30 @@ void App::drawScene()
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
     mpRenderer->getImmediateContext()->IASetInputLayout(mpRenderer->getInputLayout());
-    mpRenderer->getImmediateContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    UINT vStride = sizeof(DirectX::XMFLOAT3);
-    UINT cStride = sizeof(DirectX::PackedVector::XMCOLOR);
-    UINT offset{};
+    mpRenderer->getImmediateContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    UINT vStride = sizeof(DirectX::XMFLOAT3), offset = 0;
     mpRenderer->getImmediateContext()->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
     mpRenderer->getImmediateContext()->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
-
     mpRenderer->getImmediateContext()->RSSetState(mpRenderer->getWireframeRS());
 
-    const DirectX::XMMATRIX world = XMLoadFloat4x4(&mWorldMatrix);
-    const DirectX::XMMATRIX view = mCamera.getViewMatrix();
-    const DirectX::XMMATRIX proj = XMLoadFloat4x4(&mProjMatrix);
-    const auto tmpWorldViewProj = world * view * proj;
-    DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(tmpWorldViewProj);
+    DirectX::XMMATRIX world = XMLoadFloat4x4(&mWorldMatrix);
+    DirectX::XMMATRIX view = mCamera.getViewMatrix();
+    DirectX::XMMATRIX proj = XMLoadFloat4x4(&mProjMatrix);
+    DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(world * view * proj);
 
-    D3D11_MAPPED_SUBRESOURCE cbData{};
+    D3D11_MAPPED_SUBRESOURCE cbData;
     mpRenderer->getImmediateContext()->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-
     memcpy(cbData.pData, &worldViewProj, sizeof(worldViewProj));
-
     mpRenderer->getImmediateContext()->Unmap(mpRenderer->getConstantBuffer(), 0);
 
     mpRenderer->getImmediateContext()->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);
     mpRenderer->getImmediateContext()->PSSetShader(mpRenderer->getFragmentShader(), nullptr, 0);
-
     mpRenderer->getImmediateContext()->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-
     mpRenderer->getImmediateContext()->DrawIndexed(static_cast<UINT>(mpRenderer->mTorus.getTopology().size()), 0, 0);
 
-    HR(mpRenderer->getSwapchain()->Present(0, 0));
+    renderUi();
+
+    mpRenderer->getSwapchain()->Present(0, 0);
 }
 
 void App::processInput(const float deltaTime)
@@ -192,4 +209,69 @@ void App::processInput(const float deltaTime)
     };
 
     mpWindow->dispatchMessage();
+}
+
+void App::renderUi()
+{
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    mIsMenuEnabled = false;
+
+    const ImVec2 windowSize = ImGui::GetIO().DisplaySize;
+    const float menuWidth = windowSize.x * 0.2f;
+
+    ImGui::SetNextWindowPos(ImVec2(windowSize.x - menuWidth, 0));
+    ImGui::SetNextWindowSize(ImVec2(menuWidth, windowSize.y));
+
+    if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
+    {
+        mIsMenuEnabled = true;
+
+        ImGui::Text("Ellipsoid:");
+
+        mIsUiClicked = false;
+
+        ImGui::Spacing();
+
+        //static const char* comboItems[] = {"MOVE", "ROTATE"};
+
+        //ImGui::Combo("##InteractionType", reinterpret_cast<int*>(&mInteractionType), comboItems,
+        //             IM_ARRAYSIZE(comboItems));
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        //ImGui::SliderFloat("a", &properties.a, 0.0f, 10.0f);
+        //mIsUiClicked |= ImGui::IsItemActive();
+        //ImGui::SliderFloat("b", &properties.b, 0.0f, 10.0f);
+        //mIsUiClicked |= ImGui::IsItemActive();
+        //ImGui::SliderFloat("c", &properties.c, 0.1f, 10.0f);
+        //mIsUiClicked |= ImGui::IsItemActive();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        ImGui::Text("Mouse sensitivity: ");
+        //ImGui::SliderFloat("##mouseSensivity", &mMouseSensitivity, 0.1f, 100.0f);
+
+        //ImGui::Text(("DeltaTime: " + std::to_string(deltaTime)).c_str());
+
+        if (ImGui::Button("Reset ellipsoid"))
+        {
+            mIsUiClicked = true;
+        }
+    }
+
+    ImGui::End();
+
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
