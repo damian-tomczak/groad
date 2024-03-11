@@ -4,7 +4,7 @@ module;
 #include "Windows.h"
 #endif
 
-#include "utils.hpp"
+#include "utils.h"
 
 export module window;
 export import std.core;
@@ -14,6 +14,26 @@ export class IWindow : public NonCopyableAndNonMoveable
     inline static bool isWindowCreated{};
 
 public:
+    struct Event
+    {
+        struct MousePosition
+        {
+            int xoffset;
+            int yoffset;
+        };
+
+        struct MouseWheel
+        {
+            int yoffset;
+        };
+    };
+    // clang-format off
+    using EventData = std::variant<
+        Event::MousePosition,
+        Event::MouseWheel
+    >;
+    // clang-format
+
     IWindow(const int width = 1280, const int height = 720) : mWidth{width}, mHeight{height}
     {
     }
@@ -68,29 +88,17 @@ public:
         return static_cast<float>(mWidth) / mHeight;
     }
 
-    struct EventData
+    template <typename EventType>
+    [[nodiscard]] EventType getEvent() const
     {
-        struct MousePosition
-        {
-            int xoffset;
-            int yoffset;
-        };
-
-        struct MouseWheel
-        {
-            int yoffset;
-        };
-    };
-    // clang-format off
-    std::variant<
-        EventData::MousePosition,
-        EventData::MouseWheel
-    > mEventData;
-    // clang-format on
+        ASSERT(std::holds_alternative<EventType>(mEventData));
+        return std::get<EventType>(mEventData);
+    }
 
     static IWindow* createWindow(const uint32_t width = 1280, const uint32_t height = 720);
 
 protected:
+    EventData mEventData;
     int mWidth;
     int mHeight;
 };

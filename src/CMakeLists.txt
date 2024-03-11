@@ -22,6 +22,12 @@ file(GLOB_RECURSE SHADER_FILES
     ${ASSETS_DIR}/shaders/*
 )
 
+if (MSVC)
+    foreach(SHADER_FILE ${SHADER_FILES})
+        set_source_files_properties(${SHADER_FILE} PROPERTIES VS_TOOL_OVERRIDE "None")
+    endforeach()
+endif()
+
 add_executable(${CMAKE_PROJECT_NAME}
     ${SRC_FILES}
     ${H_FILES}

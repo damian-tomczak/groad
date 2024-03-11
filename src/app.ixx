@@ -7,7 +7,7 @@ module;
 #include <DirectXPackedVector.h>
 #include <d3d11.h>
 
-#include "utils.hpp"
+#include "utils.h"
 
 export module app;
 
@@ -129,7 +129,6 @@ void App::drawScene()
     UINT cStride = sizeof(DirectX::PackedVector::XMCOLOR);
     UINT offset{};
     mpRenderer->getImmediateContext()->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
-    mpRenderer->getImmediateContext()->IASetVertexBuffers(1, 1, mpRenderer->getColorBuffer(), &cStride, &offset);
     mpRenderer->getImmediateContext()->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
 
     mpRenderer->getImmediateContext()->RSSetState(mpRenderer->getWireframeRS());
@@ -152,7 +151,7 @@ void App::drawScene()
 
     mpRenderer->getImmediateContext()->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
 
-    mpRenderer->getImmediateContext()->DrawIndexed(36, 0, 0);
+    mpRenderer->getImmediateContext()->DrawIndexed(static_cast<UINT>(mpRenderer->mTorus.getTopology().size()), 0, 0);
 
     HR(mpRenderer->getSwapchain()->Present(0, 0));
 }
@@ -182,12 +181,12 @@ void App::processInput(const float deltaTime)
         mCamera.processKeyboard(Camera::RIGHT, deltaTime);
         break;
     case IWindow::Message::MOUSE_MOVE:
-        const auto mousePosition = std::get<IWindow::EventData::MousePosition>(mpWindow->mEventData);
+        const auto mousePosition = mpWindow->getEvent<IWindow::Event::MousePosition>();
         mCamera.processMouseMovement(static_cast<float>(mousePosition.xoffset),
                                      static_cast<float>(mousePosition.yoffset));
         break;
     case IWindow::Message::MOUSE_WHEEL:
-        const auto mouseWheel = std::get<IWindow::EventData::MouseWheel>(mpWindow->mEventData);
+        const auto mouseWheel = mpWindow->getEvent<IWindow::Event::MouseWheel>();
         mCamera.processMouseScroll(static_cast<float>(mouseWheel.yoffset));
         break;
     };

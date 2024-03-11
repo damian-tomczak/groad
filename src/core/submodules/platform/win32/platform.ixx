@@ -3,7 +3,7 @@ module;
 #include "Windows.h"
 #include <windowsx.h>
 
-#include "utils.hpp"
+#include "utils.h"
 
 #define LIBRARY_TYPE HMODULE
 #define LoadFunction GetProcAddress
@@ -176,7 +176,7 @@ LRESULT Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam,
         break;
     case WM_MOUSEMOVE: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MOVE), wParam, lParam);
-        const EventData::MousePosition mousePosition{
+        const Event::MousePosition mousePosition{
             .xoffset = GET_X_LPARAM(lParam),
             .yoffset = GET_Y_LPARAM(lParam),
         };
@@ -185,7 +185,7 @@ LRESULT Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam,
     }
     case WM_MOUSEWHEEL: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_WHEEL), wParam, lParam);
-        const EventData::MousePosition mouseWheel{
+        const Event::MouseWheel mouseWheel{
             .yoffset = GET_WHEEL_DELTA_WPARAM(wParam),
         };
         mEventData = mouseWheel;

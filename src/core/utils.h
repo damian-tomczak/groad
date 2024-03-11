@@ -43,7 +43,6 @@ using namespace std::literals;
 
 // clang-format off
 #define HR(x)                                                                   \
-                                                                                \
     if (const auto hr = x; FAILED(hr))                                          \
     {                                                                           \
         ERR(std::format(#x " {}({})", std::system_category().message(hr), hr)); \
@@ -72,7 +71,7 @@ enum class LogLevel : uint8_t
     COUNT
 };
 
-void log(const std::string_view& msg, const LogLevel level = LogLevel::DEFAULT);
+void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT);
 
 class NonCopyable
 {

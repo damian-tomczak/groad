@@ -6,12 +6,15 @@ module;
 #include <d3dcompiler.h>
 #include <wrl/client.h>
 
-#include "utils.hpp"
+#include "utils.h"
 
 export module dx11renderer;
 import std.core;
+import std.filesystem;
+
 import dxrenderer;
 import platform;
+import torus;
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -59,11 +62,6 @@ public:
         return mpBoxVB.GetAddressOf();
     }
 
-    ID3D11Buffer* const* getColorBuffer() const
-    {
-        return mpBoxCB.GetAddressOf();
-    }
-
     ID3D11Buffer* getIndexBuffer() const
     {
         return mpBoxIB.Get();
@@ -94,10 +92,12 @@ public:
         return mpPS.Get();
     }
 
+    Torus mTorus{0.7f, 0.2f, 40, 40};
+
 private:
     void initCore();
     void buildGeometryBuffers();
-    void buildFX();
+    void createShaders();
     void buildVertexLayout();
 
     ComPtr<ID3D11Device> mpD3DDevice;
@@ -108,7 +108,6 @@ private:
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
     ComPtr<ID3D11Buffer> mpBoxVB;
-    ComPtr<ID3D11Buffer> mpBoxCB;
     ComPtr<ID3D11Buffer> mpBoxIB;
     ComPtr<ID3D11RasterizerState> mpWireframeRS;
     ComPtr<ID3D10Blob> mpVSBlob;
@@ -140,7 +139,7 @@ void DX11Renderer::init()
     initCore();
 
     buildGeometryBuffers();
-    buildFX();
+    createShaders();
     buildVertexLayout();
 
     D3D11_RASTERIZER_DESC wireframeDesc{
@@ -262,22 +261,10 @@ void DX11Renderer::initCore()
 
 void DX11Renderer::buildGeometryBuffers()
 {
-    // clang-format off
-    XMFLOAT3 vertices[] =
-    {
-        XMFLOAT3(-1.0f, -1.0f, -1.0f),
-        XMFLOAT3(-1.0f, +1.0f, -1.0f),
-        XMFLOAT3(+1.0f, +1.0f, -1.0f),
-        XMFLOAT3(+1.0f, -1.0f, -1.0f),
-        XMFLOAT3(-1.0f, -1.0f, +1.0f),
-        XMFLOAT3(-1.0f, +1.0f, +1.0f),
-        XMFLOAT3(+1.0f, +1.0f, +1.0f),
-        XMFLOAT3(+1.0f, -1.0f, +1.0f),
-    };
-    // clang-format on
+    const auto geometry = mTorus.getGeometry();
 
     D3D11_BUFFER_DESC vbd{
-        .ByteWidth = sizeof(XMFLOAT3) * 8,
+        .ByteWidth = static_cast<UINT>(sizeof(decltype(geometry)::value_type) * geometry.size()),
         .Usage = D3D11_USAGE_IMMUTABLE,
         .BindFlags = D3D11_BIND_VERTEX_BUFFER,
         .CPUAccessFlags = 0,
@@ -285,69 +272,15 @@ void DX11Renderer::buildGeometryBuffers()
         .StructureByteStride = 0,
     };
     D3D11_SUBRESOURCE_DATA vinitData{
-        .pSysMem = vertices,
+        .pSysMem = geometry.data(),
     };
     HR(mpD3DDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
 
-    // clang-format off
-    PackedVector::XMCOLOR colors[]
-    {
-        argbToAbgr(Colors::White  ),
-        argbToAbgr(Colors::Black  ),
-        argbToAbgr(Colors::Red    ),
-        argbToAbgr(Colors::Green  ),
-        argbToAbgr(Colors::Blue   ),
-        argbToAbgr(Colors::Yellow ),
-        argbToAbgr(Colors::Cyan   ),
-        argbToAbgr(Colors::Magenta)
-    };
-    // clang-format on
-
-    D3D11_BUFFER_DESC cbd{
-        .ByteWidth = sizeof(PackedVector::XMCOLOR) * 8,
-        .Usage = D3D11_USAGE_IMMUTABLE,
-        .BindFlags = D3D11_BIND_VERTEX_BUFFER,
-        .CPUAccessFlags = 0,
-        .MiscFlags = 0,
-        .StructureByteStride = 0,
-    };
-
-    D3D11_SUBRESOURCE_DATA cinitData{
-        .pSysMem = colors,
-    };
-    HR(mpD3DDevice->CreateBuffer(&cbd, &cinitData, mpBoxCB.GetAddressOf()));
-
-    // clang-format off
-	UINT indices[] = {
-		// front face
-		0, 1, 2,
-		0, 2, 3,
-
-		// back face
-		4, 6, 5,
-		4, 7, 6,
-
-		// left face
-		4, 5, 1,
-		4, 1, 0,
-
-		// right face
-		3, 2, 6,
-		3, 6, 7,
-
-		// top face
-		1, 5, 6,
-		1, 6, 2,
-
-		// bottom face
-		4, 0, 3,
-		4, 3, 7
-	};
-    // clang-format off
+	const auto topology = mTorus.getTopology();
 
     D3D11_BUFFER_DESC ibd
     {
-        .ByteWidth = sizeof(UINT) * 36,
+        .ByteWidth = static_cast<UINT>(sizeof(decltype(topology)::value_type) * topology.size()),
         .Usage = D3D11_USAGE_IMMUTABLE,
         .BindFlags = D3D11_BIND_INDEX_BUFFER,
         .CPUAccessFlags = 0,
@@ -356,43 +289,61 @@ void DX11Renderer::buildGeometryBuffers()
     };
     D3D11_SUBRESOURCE_DATA initData
     {
-        .pSysMem = indices,
+        .pSysMem = topology.data(),
     };
     HR(mpD3DDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
 }
 
-void DX11Renderer::buildFX()
+void DX11Renderer::createShaders()
 {
-    const auto checkCompilationErrors = [](ComPtr<ID3D10Blob> compilationMsgs) {
-        if (compilationMsgs != 0)
-        {
-            ERR("Shader compilation error: "s + reinterpret_cast<char*>(compilationMsgs->GetBufferPointer()));
-            compilationMsgs.Reset();
-        }
-    };
+    namespace fs = std::filesystem;
 
-    DWORD shaderFlags{};
+    auto compileShader = [](const fs::path shaderPath, const std::string_view shaderModel, ComPtr<ID3D10Blob>& shaderBlob) {
+        static constexpr std::string_view shaderEntryPoint{"main"};
+        static const fs::path shaderPaths{ASSETS_PATH "shaders/"};
+
+        const fs::path fullShaderPath = shaderPaths / shaderPath;
+
+        ComPtr<ID3D10Blob> compilationMsgs;
+        DWORD shaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
 #ifndef NDEBUG
-    shaderFlags |= D3D10_SHADER_DEBUG;
-    shaderFlags |= D3D10_SHADER_SKIP_OPTIMIZATION;
+        shaderFlags |= D3D10_SHADER_DEBUG | D3D10_SHADER_SKIP_OPTIMIZATION;
 #endif
 
+        HRESULT hr = D3DCompileFromFile(
+            fullShaderPath.c_str(),
+            nullptr,
+            nullptr,
+            shaderEntryPoint.data(),
+            shaderModel.data(),
+            shaderFlags,
+            0,
+            shaderBlob.GetAddressOf(),
+            compilationMsgs.GetAddressOf());
+
+        const bool containMessage = compilationMsgs != nullptr;
+
+        if (FAILED(hr) || containMessage)
+        {
+            std::ostringstream errorMessage;
+            errorMessage << "Shader compilation error (" << std::system_category().message(hr) << ")[" << hr << "]"
+                         << (containMessage ? ":" : "")
+                         << (containMessage ? reinterpret_cast<char*>(compilationMsgs->GetBufferPointer()) : "");
+
+            ERR(errorMessage.str());
+        }
+
+        compilationMsgs.Reset();
+    };
+
     ComPtr<ID3D10Blob> compiledShader;
-    ComPtr<ID3D10Blob> compilationMsgs;
 
-    HR(D3DCompileFromFile(ASSETS_PATH L"shaders/color.fx", 0, 0, "VS", "vs_5_0", shaderFlags,
-        0, mpVSBlob.GetAddressOf(), compilationMsgs.GetAddressOf()));
-
-    checkCompilationErrors(compilationMsgs);
-
+    compileShader("torus_vs.hlsl", "vs_5_0", mpVSBlob);
     HR(mpD3DDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, mpVS.GetAddressOf()));
 
-    HR(D3DCompileFromFile(ASSETS_PATH L"shaders/color.fx", 0, 0, "PS", "ps_5_0", shaderFlags,
-        0, compiledShader.GetAddressOf(), compilationMsgs.GetAddressOf()));
-
-    checkCompilationErrors(compilationMsgs);
-
+    compileShader("torus_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpD3DDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
+
     compiledShader.Reset();
 
     D3D11_BUFFER_DESC constantBufferDesc
@@ -400,19 +351,19 @@ void DX11Renderer::buildFX()
         .ByteWidth = sizeof(XMMATRIX),
         .Usage = D3D11_USAGE_DYNAMIC,
         .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
-        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE
+        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
     };
     HR(mpD3DDevice->CreateBuffer(&constantBufferDesc, nullptr, &mpConstantBuffer));
 }
 
+
 void DX11Renderer::buildVertexLayout()
 {
-    D3D11_INPUT_ELEMENT_DESC vertexDesc[] =
+    std::array vertexDesc
     {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        {"COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 1, 0, D3D11_INPUT_PER_VERTEX_DATA, 0}
+        D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
 
-    HR(mpD3DDevice->CreateInputLayout(vertexDesc, 2, mpVSBlob->GetBufferPointer(),
+    HR(mpD3DDevice->CreateInputLayout(vertexDesc.data(), static_cast<UINT>(vertexDesc.size()), mpVSBlob->GetBufferPointer(),
         mpVSBlob->GetBufferSize(), &mpInputLayout));
 }
