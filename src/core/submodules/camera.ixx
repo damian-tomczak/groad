@@ -50,9 +50,10 @@ public:
         return mg::XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
-    void processKeyboard(const CameraMovement direction, const float deltaTime)
+    void moveCamera(const CameraMovement direction, float deltaTime)
     {
         const float velocity = mMovementSpeed * deltaTime;
+        puts(std::to_string(velocity).c_str());
 
         switch (direction)
         {
@@ -73,7 +74,7 @@ public:
         }
     }
 
-    void processMouseMovement(float xoffset, float yoffset, bool constrainmPitch = true)
+    void rotateCamera(float xoffset, float yoffset, bool constrainmPitch = true)
     {
         xoffset *= mMouseSensitivity;
         yoffset *= mMouseSensitivity;
@@ -89,7 +90,7 @@ public:
         updateCameraVectors();
     }
 
-    void processMouseScroll(float yoffset)
+    void zoomCamera(float yoffset)
     {
         mZoom = std::min(std::max(mZoom - yoffset, 1.0f), 45.0f);
     }

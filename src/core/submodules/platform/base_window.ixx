@@ -45,6 +45,7 @@ public:
 
     enum class Message
     {
+        EMPTY,
 #ifdef _WIN32
         RESIZE = WM_USER + 1,
 #else
@@ -72,8 +73,7 @@ public:
 
     virtual void init() = 0;
     virtual void show() = 0;
-    virtual Message peekMessage() = 0;
-    virtual void dispatchMessage() = 0;
+    virtual Message getMessage() = 0;
 
     [[nodiscard]] int getWidth() const
     {
@@ -102,6 +102,6 @@ protected:
     unsigned mWidth;
     unsigned mHeight;
 
-    int mLastXMousePosition{};
-    int mLastYMousePosition{};
+    std::optional<int> mLastXMousePosition;
+    std::optional<int> mLastYMousePosition;
 };

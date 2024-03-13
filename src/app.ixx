@@ -35,10 +35,10 @@ public:
     void run();
 
     void updateScene(float deltaTime);
-    void drawScene();
+    void renderScene();
 
 private:
-    void processInput(float deltaTime);
+    void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
     DirectX::XMFLOAT4X4 mWorldMatrix;
@@ -54,6 +54,7 @@ private:
     bool mIsRunning{};
     bool mIsMenuEnabled{};
     bool mIsUiClicked{};
+    bool mIsLeftMouseClicked{};
 };
 
 module :private;
@@ -125,21 +126,26 @@ void App::run()
         const time_point nowTime = high_resolution_clock::now();
         const long long elapsedNanoseconds = duration_cast<nanoseconds>(nowTime - previousTime).count();
         static constexpr float nanosecondsPerSecond = 1e9f;
-        const float deltaTime = static_cast<float>(elapsedNanoseconds) / nanosecondsPerSecond;
+        const float dt = static_cast<float>(elapsedNanoseconds) / nanosecondsPerSecond;
         previousTime = nowTime;
 
-        processInput(deltaTime);
+        IWindow::Message msg = mpWindow->getMessage();
+        while (msg != IWindow::Message::EMPTY)
+        {
+            processInput(msg, dt);
+            msg = mpWindow->getMessage();
+        }
 
-        updateScene(deltaTime);
-        drawScene();
+        updateScene(dt);
+        renderScene();
     }
 }
 
-void App::updateScene(const float deltaTime)
+void App::updateScene(float dt)
 {
 }
 
-void App::drawScene()
+void App::renderScene()
 {
     mpRenderer->getImmediateContext()->ClearRenderTargetView(mpRenderer->getRenderTargetView(),
                                                              reinterpret_cast<const float*>(&Colors::Black));
@@ -173,11 +179,9 @@ void App::drawScene()
     mpRenderer->getSwapchain()->Present(0, 0);
 }
 
-void App::processInput(const float deltaTime)
+void App::processInput(IWindow::Message msg, float deltaTime)
 {
-    const auto message = mpWindow->peekMessage();
-
-    switch (message)
+    switch (msg)
     {
     case IWindow::Message::QUIT:
         mIsRunning = false;
@@ -186,29 +190,37 @@ void App::processInput(const float deltaTime)
         onResize();
         break;
     case IWindow::Message::KEY_W_DOWN:
-        mCamera.processKeyboard(Camera::FORWARD, deltaTime);
+        mCamera.moveCamera(Camera::FORWARD, deltaTime);
         break;
     case IWindow::Message::KEY_S_DOWN:
-        mCamera.processKeyboard(Camera::BACKWARD, deltaTime);
+        mCamera.moveCamera(Camera::BACKWARD, deltaTime);
         break;
     case IWindow::Message::KEY_A_DOWN:
-        mCamera.processKeyboard(Camera::LEFT, deltaTime);
+        mCamera.moveCamera(Camera::LEFT, deltaTime);
         break;
     case IWindow::Message::KEY_D_DOWN:
-        mCamera.processKeyboard(Camera::RIGHT, deltaTime);
+        mCamera.moveCamera(Camera::RIGHT, deltaTime);
+        break;
+    case IWindow::Message::MOUSE_LEFT_DOWN:
+        mIsLeftMouseClicked = true;
+        break;
+    case IWindow::Message::MOUSE_LEFT_UP:
+        mIsLeftMouseClicked = false;
         break;
     case IWindow::Message::MOUSE_MOVE:
-        const auto mousePosition = mpWindow->getEvent<IWindow::Event::MousePosition>();
-        mCamera.processMouseMovement(static_cast<float>(mousePosition.xoffset),
-                                     static_cast<float>(mousePosition.yoffset));
+    {
+        if (mIsLeftMouseClicked)
+        {
+            const auto mousePosition = mpWindow->getEvent<IWindow::Event::MousePosition>();
+            mCamera.rotateCamera(static_cast<float>(mousePosition.xoffset), static_cast<float>(mousePosition.yoffset));
+        }
         break;
+    }
     case IWindow::Message::MOUSE_WHEEL:
         const auto mouseWheel = mpWindow->getEvent<IWindow::Event::MouseWheel>();
-        mCamera.processMouseScroll(static_cast<float>(mouseWheel.yoffset));
+        mCamera.zoomCamera(static_cast<float>(mouseWheel.yoffset));
         break;
     };
-
-    mpWindow->dispatchMessage();
 }
 
 void App::renderUi()
