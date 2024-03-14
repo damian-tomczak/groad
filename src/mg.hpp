@@ -34,10 +34,12 @@ inline DirectX::XMMATRIX XMMatrixLookAtLH(const DirectX::XMVECTOR& position, con
     float ty = DirectX::XMVectorGetY(DirectX::XMVector3Dot(yAxis, negPos));
     float tz = DirectX::XMVectorGetZ(DirectX::XMVector3Dot(zAxis, negPos));
 
-    const DirectX::XMMATRIX viewMatrix =
-        DirectX::XMMATRIX(DirectX::XMVectorGetX(xAxis), DirectX::XMVectorGetY(xAxis), DirectX::XMVectorGetZ(xAxis), 0,
-                          DirectX::XMVectorGetX(yAxis), DirectX::XMVectorGetY(yAxis), DirectX::XMVectorGetZ(yAxis), 0,
-        DirectX::XMVectorGetX(zAxis), DirectX::XMVectorGetY(zAxis), DirectX::XMVectorGetZ(zAxis), 0, tx, ty, tz, 1);
+    const DirectX::XMMATRIX viewMatrix
+    {
+        DirectX::XMVectorGetX(xAxis), DirectX::XMVectorGetY(xAxis), DirectX::XMVectorGetZ(xAxis), 0,
+        DirectX::XMVectorGetX(yAxis), DirectX::XMVectorGetY(yAxis), DirectX::XMVectorGetZ(yAxis), 0,
+        DirectX::XMVectorGetX(zAxis), DirectX::XMVectorGetY(zAxis), DirectX::XMVectorGetZ(zAxis), 0, tx, ty, tz, 1,
+    };
 
     return viewMatrix;
 }

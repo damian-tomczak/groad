@@ -105,10 +105,16 @@ void Win32Window::show()
 
 IWindow::Message Win32Window::getMessage()
 {
-    if (PeekMessage(&mMsg, nullptr, 0, 0, PM_REMOVE) == 0)
+    const bool isEmpty = PeekMessage(&mMsg, nullptr, 0, 0, PM_REMOVE) == 0;
+    if (isEmpty)
     {
         return Message::EMPTY;
     }
+    else if (mMsg.message == WM_QUIT)
+    {
+        return Message::QUIT;
+    }
+
     TranslateMessage(&mMsg);
     DispatchMessage(&mMsg);
 
@@ -121,12 +127,8 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
     {
     case WM_DESTROY:
         PostQuitMessage(0);
-        return false;
-    case WM_QUIT:
-        PostMessage(hwnd, static_cast<UINT32>(Message::QUIT), wParam, lParam);
         return true;
     case WM_SIZE:
-    case WM_EXITSIZEMOVE:
         PostMessage(hwnd, static_cast<UINT32>(Message::RESIZE), wParam, lParam);
         return true;
     case WM_KEYDOWN:
@@ -184,38 +186,38 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
     case WM_MOUSEMOVE: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MOVE), wParam, lParam);
 
-        if ((mLastXMousePosition != std::nullopt) && (mLastYMousePosition != std::nullopt))
+        const int currentXMousePos = GET_X_LPARAM(lParam);
+        const int currentYMousePos = GET_Y_LPARAM(lParam);
+
+        if ((mLastXMousePosition == std::nullopt) && (mLastYMousePosition == std::nullopt))
         {
-            const int currentXMousePos = GET_X_LPARAM(lParam);
-            const int currentYMousePos = GET_Y_LPARAM(lParam);
-
-            const int xoffset = currentXMousePos - *mLastXMousePosition;
-            const int yoffset = currentYMousePos - *mLastYMousePosition;
-
-            const Event::MousePosition mousePosition{
-                .xoffset = xoffset,
-                .yoffset = yoffset,
-            };
-
-            mLastXMousePosition = currentXMousePos;
-            mLastYMousePosition = currentYMousePos;
-
-            mEventData = mousePosition;
+            mLastXMousePosition = std::make_optional(currentXMousePos);
+            mLastYMousePosition = std::make_optional(currentYMousePos);
         }
-        else
-        {
-            mLastXMousePosition = std::make_optional(GET_X_LPARAM(lParam));
-            mLastYMousePosition = std::make_optional(GET_Y_LPARAM(lParam));
-        }
+
+        const int xoffset = currentXMousePos - *mLastXMousePosition;
+        const int yoffset = currentYMousePos - *mLastYMousePosition;
+
+        const Event::MousePosition mousePosition{
+            .xoffset = xoffset,
+            .yoffset = yoffset,
+        };
+
+        mLastXMousePosition = currentXMousePos;
+        mLastYMousePosition = currentYMousePos;
+
+        mEventData = mousePosition;
 
         return true;
     }
     case WM_MOUSEWHEEL: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_WHEEL), wParam, lParam);
+
         const Event::MouseWheel mouseWheel{
             .yoffset = GET_WHEEL_DELTA_WPARAM(wParam),
         };
         mEventData = mouseWheel;
+
         return true;
     }
     }

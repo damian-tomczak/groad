@@ -19,6 +19,7 @@ import core;
 import core.options;
 import window;
 import dx11renderer;
+import torus;
 
 using namespace std::chrono;
 
@@ -43,7 +44,8 @@ private:
 
     DirectX::XMFLOAT4X4 mWorldMatrix;
     DirectX::XMFLOAT4X4 mViewMatrix;
-    DirectX::XMFLOAT4X4 mProjMatrix;
+
+    Torus mTorus{0.7f, 0.2f, 100, 20};
 
     const ParsedOptions mOptions;
     Camera mCamera{0.f, 0.f, -5.f};
@@ -73,13 +75,13 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 
     DirectX::XMMATRIX I = DirectX::XMMatrixIdentity();
     XMStoreFloat4x4(&mWorldMatrix, I);
-    XMStoreFloat4x4(&mProjMatrix, I);
 }
 
 App::~App()
 {
     mpWindow.reset();
     mpRenderer.reset();
+
     ImGui::DestroyContext();
 }
 
@@ -101,7 +103,7 @@ void App::init()
     const auto dx11renderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
     ASSERT(dx11renderer != nullptr);
     mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
-    mpRenderer->init();
+    mpRenderer->init(mTorus.getGeometry(), mTorus.getTopology());
 
     onResize();
 }
@@ -110,10 +112,6 @@ void App::onResize()
 {
     ASSERT(mpWindow);
     mpRenderer->onResize();
-
-    DirectX::XMMATRIX p = mg::createPerspectiveFovLH(aspectRatioFactor * std::numbers::pi_v<float>,
-                                                            mpWindow->getAspectRatio(), 1.0f, 1000.0f);
-    XMStoreFloat4x4(&mProjMatrix, p);
 }
 
 void App::run()
@@ -148,7 +146,7 @@ void App::updateScene(float dt)
 void App::renderScene()
 {
     mpRenderer->getImmediateContext()->ClearRenderTargetView(mpRenderer->getRenderTargetView(),
-                                                             reinterpret_cast<const float*>(&Colors::Black));
+                                                             reinterpret_cast<const float*>(&Colors::Blue));
     mpRenderer->getImmediateContext()->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
@@ -161,8 +159,9 @@ void App::renderScene()
 
     DirectX::XMMATRIX world = XMLoadFloat4x4(&mWorldMatrix);
     DirectX::XMMATRIX view = mCamera.getViewMatrix();
-    DirectX::XMMATRIX proj = XMLoadFloat4x4(&mProjMatrix);
-    DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(world * view * proj);
+    DirectX::XMMATRIX projectionMatrix = mg::createPerspectiveFovLH(DirectX::XMConvertToRadians(mCamera.getZoom()),
+                                                                    mpWindow->getAspectRatio(), 1.0f, 1000.0f);
+    DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(world * view * projectionMatrix);
 
     D3D11_MAPPED_SUBRESOURCE cbData;
     mpRenderer->getImmediateContext()->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
@@ -172,7 +171,7 @@ void App::renderScene()
     mpRenderer->getImmediateContext()->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);
     mpRenderer->getImmediateContext()->PSSetShader(mpRenderer->getFragmentShader(), nullptr, 0);
     mpRenderer->getImmediateContext()->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    mpRenderer->getImmediateContext()->DrawIndexed(static_cast<UINT>(mpRenderer->mTorus.getTopology().size()), 0, 0);
+    mpRenderer->getImmediateContext()->DrawIndexed(static_cast<UINT>(mTorus.getTopology().size()), 0, 0);
 
     renderUi();
 
@@ -209,16 +208,16 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         break;
     case IWindow::Message::MOUSE_MOVE:
     {
-        if (mIsLeftMouseClicked)
+        if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
             const auto mousePosition = mpWindow->getEvent<IWindow::Event::MousePosition>();
-            mCamera.rotateCamera(static_cast<float>(mousePosition.xoffset), static_cast<float>(mousePosition.yoffset));
+            mCamera.rotateCamera(static_cast<float>(mousePosition.xoffset), static_cast<float>(-mousePosition.yoffset));
         }
         break;
     }
     case IWindow::Message::MOUSE_WHEEL:
         const auto mouseWheel = mpWindow->getEvent<IWindow::Event::MouseWheel>();
-        mCamera.zoomCamera(static_cast<float>(mouseWheel.yoffset));
+        mCamera.setZoom(static_cast<float>(mouseWheel.yoffset));
         break;
     };
 }
@@ -234,52 +233,56 @@ void App::renderUi()
     const ImVec2 windowSize = ImGui::GetIO().DisplaySize;
     const float menuWidth = windowSize.x * 0.2f;
 
-    ImGui::SetNextWindowPos(ImVec2(windowSize.x - menuWidth, 0));
-    ImGui::SetNextWindowSize(ImVec2(menuWidth, windowSize.y));
+    ImGui::SetNextWindowPos(ImVec2{windowSize.x - menuWidth, 0});
+    ImGui::SetNextWindowSize(ImVec2{menuWidth, windowSize.y});
 
     if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
     {
         mIsMenuEnabled = true;
+    }
 
-        ImGui::Text("Ellipsoid:");
+    ImGui::Text("Torus:");
 
-        mIsUiClicked = false;
+    mIsUiClicked = false;
 
-        ImGui::Spacing();
+    ImGui::Spacing();
 
-        //static const char* comboItems[] = {"MOVE", "ROTATE"};
+    bool isGeometryChanged{};
+    bool isLastItemActive{};
 
-        //ImGui::Combo("##InteractionType", reinterpret_cast<int*>(&mInteractionType), comboItems,
-        //             IM_ARRAYSIZE(comboItems));
+    ImGui::Text("Major Radius:");
+    ImGui::SliderFloat("##majorRadius", &mTorus.mMajorRadius, 0.0f, 1.0f);
+    isLastItemActive = ImGui::IsItemActive();
+    mIsUiClicked |= isLastItemActive;
+    isGeometryChanged |= isLastItemActive;
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+    ImGui::Text("Minor Radius:");
+    ImGui::SliderFloat("##minorRadius", &mTorus.mMinorRadius, 0.0f, 1.0f);
+    isLastItemActive = ImGui::IsItemActive();
+    mIsUiClicked |= isLastItemActive;
+    isGeometryChanged |= isLastItemActive;
 
-        //ImGui::SliderFloat("a", &properties.a, 0.0f, 10.0f);
-        //mIsUiClicked |= ImGui::IsItemActive();
-        //ImGui::SliderFloat("b", &properties.b, 0.0f, 10.0f);
-        //mIsUiClicked |= ImGui::IsItemActive();
-        //ImGui::SliderFloat("c", &properties.c, 0.1f, 10.0f);
-        //mIsUiClicked |= ImGui::IsItemActive();
+    ImGui::Spacing();
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+    bool isTopologyChanged{};
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
+    ImGui::Text("Major Segments:");
+    ImGui::SliderInt("##majorSegments", &mTorus.mMajorSegments, 3, 100);
+    isLastItemActive = ImGui::IsItemActive();
+    mIsUiClicked |= isLastItemActive;
+    isTopologyChanged |= isLastItemActive;
+    ImGui::Text("Minor Segments:");
+    ImGui::SliderInt("##minorSegments", &mTorus.mMinorSegments, 3, 100);
+    isLastItemActive = ImGui::IsItemActive();
+    mIsUiClicked |= isLastItemActive;
+    isTopologyChanged |= isLastItemActive;
 
-        ImGui::Text("Mouse sensitivity: ");
-        //ImGui::SliderFloat("##mouseSensivity", &mMouseSensitivity, 0.1f, 100.0f);
+    if (isGeometryChanged || isTopologyChanged)
+    {
+        mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
 
-        //ImGui::Text(("DeltaTime: " + std::to_string(deltaTime)).c_str());
-
-        if (ImGui::Button("Reset ellipsoid"))
-        {
-            mIsUiClicked = true;
-        }
+        mTorus.generateGeometry();
+        mTorus.generateTopology();
     }
 
     ImGui::End();

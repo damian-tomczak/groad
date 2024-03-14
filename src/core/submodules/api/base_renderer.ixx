@@ -47,7 +47,7 @@ public:
         isRendererCreated = false;
     }
 
-    virtual void init() = 0;
+    virtual void init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer) = 0;
     virtual void onResize() = 0;
 
     static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);

@@ -15,7 +15,6 @@ import std.filesystem;
 
 import dxrenderer;
 import platform;
-import torus;
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -35,8 +34,9 @@ public:
         ImGui_ImplDX11_Shutdown();
     }
 
-    void init() override;
+    void init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer) override;
     void onResize() override;
+    void buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer);
 
     ID3D11DeviceContext* getImmediateContext() const
     {
@@ -98,11 +98,8 @@ public:
         return mpPS.Get();
     }
 
-    Torus mTorus{0.7f, 0.2f, 200, 20};
-
 private:
     void initCore();
-    void buildGeometryBuffers();
     void createShaders();
     void buildVertexLayout();
 
@@ -128,11 +125,11 @@ private:
 
 module :private;
 
-void DX11Renderer::init()
+void DX11Renderer::init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
 {
     initCore();
 
-    buildGeometryBuffers();
+    buildGeometryBuffers(vertexBuffer, indexBuffer);
     createShaders();
     buildVertexLayout();
 
@@ -252,12 +249,10 @@ void DX11Renderer::initCore()
     onResize();
 }
 
-void DX11Renderer::buildGeometryBuffers()
+void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
 {
-    const auto geometry = mTorus.getGeometry();
-
     D3D11_BUFFER_DESC vbd{
-        .ByteWidth = static_cast<UINT>(sizeof(decltype(geometry)::value_type) * geometry.size()),
+        .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(vertexBuffer)>::type::value_type) * vertexBuffer.size()),
         .Usage = D3D11_USAGE_IMMUTABLE,
         .BindFlags = D3D11_BIND_VERTEX_BUFFER,
         .CPUAccessFlags = 0,
@@ -265,24 +260,20 @@ void DX11Renderer::buildGeometryBuffers()
         .StructureByteStride = 0,
     };
     D3D11_SUBRESOURCE_DATA vinitData{
-        .pSysMem = geometry.data(),
+        .pSysMem = vertexBuffer.data(),
     };
     HR(mpD3DDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
 
-	const auto topology = mTorus.getTopology();
-
-    D3D11_BUFFER_DESC ibd
-    {
-        .ByteWidth = static_cast<UINT>(sizeof(decltype(topology)::value_type) * topology.size()),
+    D3D11_BUFFER_DESC ibd{
+        .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(indexBuffer)>::type::value_type) * indexBuffer.size()),
         .Usage = D3D11_USAGE_IMMUTABLE,
         .BindFlags = D3D11_BIND_INDEX_BUFFER,
         .CPUAccessFlags = 0,
         .MiscFlags = 0,
-	    .StructureByteStride = 0,
+        .StructureByteStride = 0,
     };
-    D3D11_SUBRESOURCE_DATA initData
-    {
-        .pSysMem = topology.data(),
+    D3D11_SUBRESOURCE_DATA initData{
+        .pSysMem = indexBuffer.data(),
     };
     HR(mpD3DDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
 }

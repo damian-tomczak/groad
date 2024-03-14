@@ -6,10 +6,11 @@ module;
 #include <DirectXMath.h>
 
 export module core.camera;
+import std.core;
 
 using namespace DirectX;
 
-export class Camera
+export class Camera : public NonCopyableAndMoveable
 {
     inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     inline static XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
@@ -21,7 +22,7 @@ export class Camera
     float mPitch{};
 
     float mMovementSpeed = 100.0f;
-    float mMouseSensitivity = 0.01f;
+    float mMouseSensitivity = 0.2f;
     float mZoom = 45.0f;
 
 public:
@@ -90,9 +91,14 @@ public:
         updateCameraVectors();
     }
 
-    void zoomCamera(float yoffset)
+    void setZoom(float yoffset)
     {
-        mZoom = std::min(std::max(mZoom - yoffset, 1.0f), 45.0f);
+        mZoom = std::min(std::max(mZoom - yoffset / abs(yoffset), 1.0f), 45.0f);
+    }
+
+    [[nodiscard]] float getZoom() const
+    {
+        return mZoom;
     }
 
 private:
@@ -101,13 +107,7 @@ private:
         float yawRadians = XMConvertToRadians(mYaw);
         float pitchRadians = XMConvertToRadians(mPitch);
 
-        XMVECTOR front;
-        front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians),
-                            sinf(yawRadians) * cosf(pitchRadians), 0.0f
-        );
+        XMVECTOR front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians), sinf(yawRadians) * cosf(pitchRadians), 0.0f);
         mFront = XMVector3Normalize(front);
-
-        mRight = XMVector3Normalize(XMVector3Cross(mFront, mUp));
-        mUp = XMVector3Normalize(XMVector3Cross(mRight, mFront));
     }
 };

@@ -18,23 +18,55 @@ public:
         generateTopology();
     }
 
-    const std::vector<float>& getGeometry() const
-    {
-        return mGeometry;
-    }
-
-    const std::vector<unsigned>& getTopology() const
-    {
-        return mTopology;
-    }
-
-private:
-    std::vector<float> mGeometry;
-    std::vector<unsigned> mTopology;
     float mMajorRadius;
     float mMinorRadius;
     int mMajorSegments;
     int mMinorSegments;
+    bool mIsDataChanged{};
+
+    const std::vector<float>& getGeometry()
+    {
+        //if (mIsDataChanged)
+        //{
+        //    generateGeometry();
+        //}
+
+        return mGeometry;
+    }
+
+    const std::vector<unsigned>& getTopology()
+    {
+        //if (mIsDataChanged)
+        //{
+        //    generateTopology();
+        //}
+
+        return mTopology;
+    }
+
+    //void setMajorRadius(float majorRadius)
+    //{
+    //    mMajorRadius = majorRadius;
+    //    mIsDataChanged = true;
+    //}
+
+    //void setMinorRadius(float minorRadius)
+    //{
+    //    mMinorRadius = minorRadius;
+    //    mIsDataChanged = true;
+    //}
+
+    //void setMajorSegments(int majorSegments)
+    //{
+    //    mMajorSegments = majorSegments;
+    //    mIsDataChanged = true;
+    //}
+
+    //void setMinorSegments(float minorSegments)
+    //{
+    //    mMinorSegments = minorSegments;
+    //    mIsDataChanged = true;
+    //}
 
     void generateGeometry()
     {
@@ -61,9 +93,17 @@ private:
             for (int j = 0; j < mMinorSegments; ++j)
             {
                 unsigned first = (i * (mMinorSegments + 1)) + j;
-                unsigned second = first + mMinorSegments + 1;
-                mTopology.insert(mTopology.end(), {first, second, first + 1, second, second + 1, first + 1});
+                unsigned nextInMinor = first + 1;
+                unsigned nextInMajor = (first + mMinorSegments + 1) % (mMajorSegments * (mMinorSegments + 1));
+
+                mTopology.insert(mTopology.end(), {first, nextInMinor});
+                mTopology.insert(mTopology.end(), {first, nextInMajor});
             }
         }
+
     }
+
+private:
+    std::vector<float> mGeometry;
+    std::vector<unsigned> mTopology;
 };

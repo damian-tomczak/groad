@@ -34,7 +34,7 @@ public:
     >;
     // clang-format
 
-    IWindow(unsigned width = 1280, unsigned height = 720) : mWidth{width}, mHeight{height}
+    IWindow(unsigned width, unsigned height) : mWidth{width}, mHeight{height}
     {
     }
 
