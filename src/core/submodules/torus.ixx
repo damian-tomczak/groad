@@ -100,7 +100,6 @@ public:
                 mTopology.insert(mTopology.end(), {first, nextInMajor});
             }
         }
-
     }
 
 private:

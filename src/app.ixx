@@ -231,10 +231,10 @@ void App::renderUi()
     mIsMenuEnabled = false;
 
     const ImVec2 windowSize = ImGui::GetIO().DisplaySize;
-    const float menuWidth = windowSize.x * 0.2f;
+    const float menuWidth = mpWindow->getWidth() * 0.2f;
 
-    ImGui::SetNextWindowPos(ImVec2{windowSize.x - menuWidth, 0});
-    ImGui::SetNextWindowSize(ImVec2{menuWidth, windowSize.y});
+    ImGui::SetNextWindowPos(ImVec2{mpWindow->getWidth() - menuWidth, 0});
+    ImGui::SetNextWindowSize(ImVec2{menuWidth, static_cast<float>(mpWindow->getHeight())});
 
     if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
     {

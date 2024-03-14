@@ -54,7 +54,6 @@ public:
     void moveCamera(const CameraMovement direction, float deltaTime)
     {
         const float velocity = mMovementSpeed * deltaTime;
-        puts(std::to_string(velocity).c_str());
 
         switch (direction)
         {
