@@ -38,14 +38,19 @@ public:
     void onResize() override;
     void buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer);
 
-    ID3D11DeviceContext* getImmediateContext() const
+    ID3D11DeviceContext* getContext() const
     {
-        return mpD3DImmediateContext.Get();
+        return mpContext.Get();
     }
 
     ID3D11RenderTargetView* getRenderTargetView() const
     {
         return mpRenderTargetView.Get();
+    }
+
+    ID3D11RenderTargetView* const* getAddressOfRenderTargetView() const
+    {
+        return mpRenderTargetView.GetAddressOf();
     }
 
     IDXGISwapChain* getSwapchain() const
@@ -103,10 +108,10 @@ private:
     void createShaders();
     void buildVertexLayout();
 
-    ComPtr<ID3D11Device> mpD3DDevice;
+    ComPtr<ID3D11Device> mpDevice;
     ComPtr<IDXGISwapChain> mpSwapChain;
     ComPtr<ID3D11Texture2D> mpDepthStencilBuffer;
-    ComPtr<ID3D11DeviceContext> mpD3DImmediateContext;
+    ComPtr<ID3D11DeviceContext> mpContext;
     ComPtr<ID3D11RenderTargetView> mpRenderTargetView;
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
@@ -128,6 +133,7 @@ module :private;
 void DX11Renderer::init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
 {
     initCore();
+    onResize();
 
     buildGeometryBuffers(vertexBuffer, indexBuffer);
     createShaders();
@@ -140,15 +146,15 @@ void DX11Renderer::init(const std::vector<float>& vertexBuffer, const std::vecto
         .DepthClipEnable = true,
     };
 
-    HR(mpD3DDevice->CreateRasterizerState(&wireframeDesc, &mpWireframeRS));
+    HR(mpDevice->CreateRasterizerState(&wireframeDesc, &mpWireframeRS));
 
-    ImGui_ImplDX11_Init(mpD3DDevice.Get(), mpD3DImmediateContext.Get());
+    ImGui_ImplDX11_Init(mpDevice.Get(), mpContext.Get());
 }
 
 void DX11Renderer::onResize()
 {
-    ASSERT(mpD3DImmediateContext);
-    ASSERT(mpD3DDevice);
+    ASSERT(mpContext);
+    ASSERT(mpDevice);
     ASSERT(mpSwapChain);
 
     mpRenderTargetView.Reset();
@@ -161,7 +167,7 @@ void DX11Renderer::onResize()
     HR(mpSwapChain->ResizeBuffers(1, pWindow->getWidth(), pWindow->getHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, 0));
     ComPtr<ID3D11Texture2D> pBackBuffer;
     HR(mpSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(pBackBuffer.GetAddressOf())));
-    HR(mpD3DDevice->CreateRenderTargetView(pBackBuffer.Get(), 0, mpRenderTargetView.GetAddressOf()));
+    HR(mpDevice->CreateRenderTargetView(pBackBuffer.Get(), 0, mpRenderTargetView.GetAddressOf()));
     pBackBuffer.Reset();
 
     D3D11_TEXTURE2D_DESC depthStencilDesc{
@@ -177,10 +183,10 @@ void DX11Renderer::onResize()
         .MiscFlags = 0,
     };
 
-    HR(mpD3DDevice->CreateTexture2D(&depthStencilDesc, 0, mpDepthStencilBuffer.GetAddressOf()));
-    HR(mpD3DDevice->CreateDepthStencilView(mpDepthStencilBuffer.Get(), 0, mpDepthStencilView.GetAddressOf()));
+    HR(mpDevice->CreateTexture2D(&depthStencilDesc, 0, mpDepthStencilBuffer.GetAddressOf()));
+    HR(mpDevice->CreateDepthStencilView(mpDepthStencilBuffer.Get(), 0, mpDepthStencilView.GetAddressOf()));
 
-    mpD3DImmediateContext->OMSetRenderTargets(1, mpRenderTargetView.GetAddressOf(), mpDepthStencilView.Get());
+    mpContext->OMSetRenderTargets(1, mpRenderTargetView.GetAddressOf(), mpDepthStencilView.Get());
 
     mScreenViewport.TopLeftX = 0;
     mScreenViewport.TopLeftY = 0;
@@ -189,7 +195,7 @@ void DX11Renderer::onResize()
     mScreenViewport.MinDepth = 0.0f;
     mScreenViewport.MaxDepth = 1.0f;
 
-    mpD3DImmediateContext->RSSetViewports(1, &mScreenViewport);
+    mpContext->RSSetViewports(1, &mScreenViewport);
 }
 
 void DX11Renderer::initCore()
@@ -200,15 +206,15 @@ void DX11Renderer::initCore()
 #endif
 
     D3D_FEATURE_LEVEL featureLevel{};
-    HR(D3D11CreateDevice(0, d3dDriverType, 0, createDeviceFlags, 0, 0, D3D11_SDK_VERSION, mpD3DDevice.GetAddressOf(),
-                         &featureLevel, mpD3DImmediateContext.GetAddressOf()));
+    HR(D3D11CreateDevice(0, d3dDriverType, 0, createDeviceFlags, 0, 0, D3D11_SDK_VERSION, mpDevice.GetAddressOf(),
+                         &featureLevel, mpContext.GetAddressOf()));
 
     if (featureLevel != D3D_FEATURE_LEVEL_11_0)
     {
         ERR("Direct11 unsupported");
     }
 
-    mpD3DDevice->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, 4,
+    mpDevice->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, 4,
                                                &m4xMsaaQuality); // 4x Msaa is always supported
     ASSERT(m4xMsaaQuality > 0);
 
@@ -234,7 +240,7 @@ void DX11Renderer::initCore()
     };
 
     ComPtr<IDXGIDevice> dxgiDevice;
-    HR(mpD3DDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(dxgiDevice.GetAddressOf())));
+    HR(mpDevice->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(dxgiDevice.GetAddressOf())));
 
     ComPtr<IDXGIAdapter> dxgiAdapter;
     HR(dxgiDevice->GetParent(__uuidof(IDXGIAdapter), reinterpret_cast<void**>(dxgiAdapter.GetAddressOf())));
@@ -242,7 +248,7 @@ void DX11Renderer::initCore()
     ComPtr<IDXGIFactory> dxgiFactory;
     HR(dxgiAdapter->GetParent(__uuidof(IDXGIFactory), reinterpret_cast<void**>(dxgiFactory.GetAddressOf())));
 
-    HR(dxgiFactory->CreateSwapChain(mpD3DDevice.Get(), &sd, mpSwapChain.GetAddressOf()));
+    HR(dxgiFactory->CreateSwapChain(mpDevice.Get(), &sd, mpSwapChain.GetAddressOf()));
 
     HR(dxgiFactory->MakeWindowAssociation(sd.OutputWindow, DXGI_MWA_NO_WINDOW_CHANGES));
 
@@ -251,6 +257,15 @@ void DX11Renderer::initCore()
 
 void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
 {
+    if (mpBoxVB != nullptr)
+    {
+        mpBoxVB.Reset();
+    }
+    if (mpBoxIB != nullptr)
+    {
+        mpBoxIB.Reset();
+    }
+
     D3D11_BUFFER_DESC vbd{
         .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(vertexBuffer)>::type::value_type) * vertexBuffer.size()),
         .Usage = D3D11_USAGE_IMMUTABLE,
@@ -262,7 +277,7 @@ void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer, 
     D3D11_SUBRESOURCE_DATA vinitData{
         .pSysMem = vertexBuffer.data(),
     };
-    HR(mpD3DDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
+    HR(mpDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
 
     D3D11_BUFFER_DESC ibd{
         .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(indexBuffer)>::type::value_type) * indexBuffer.size()),
@@ -275,7 +290,7 @@ void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer, 
     D3D11_SUBRESOURCE_DATA initData{
         .pSysMem = indexBuffer.data(),
     };
-    HR(mpD3DDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
+    HR(mpDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
 }
 
 void DX11Renderer::createShaders()
@@ -323,10 +338,10 @@ void DX11Renderer::createShaders()
     ComPtr<ID3D10Blob> compiledShader;
 
     compileShader("torus_vs.hlsl", "vs_5_0", mpVSBlob);
-    HR(mpD3DDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, mpVS.GetAddressOf()));
+    HR(mpDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, mpVS.GetAddressOf()));
 
     compileShader("torus_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpD3DDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
+    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
 
     compiledShader.Reset();
 
@@ -337,7 +352,7 @@ void DX11Renderer::createShaders()
         .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
         .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
     };
-    HR(mpD3DDevice->CreateBuffer(&constantBufferDesc, nullptr, &mpConstantBuffer));
+    HR(mpDevice->CreateBuffer(&constantBufferDesc, nullptr, &mpConstantBuffer));
 }
 
 
@@ -348,6 +363,6 @@ void DX11Renderer::buildVertexLayout()
         D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
     };
 
-    HR(mpD3DDevice->CreateInputLayout(vertexDesc.data(), static_cast<UINT>(vertexDesc.size()), mpVSBlob->GetBufferPointer(),
+    HR(mpDevice->CreateInputLayout(vertexDesc.data(), static_cast<UINT>(vertexDesc.size()), mpVSBlob->GetBufferPointer(),
         mpVSBlob->GetBufferSize(), &mpInputLayout));
 }

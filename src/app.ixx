@@ -32,10 +32,8 @@ public:
     ~App();
 
     void init();
-    void onResize();
     void run();
 
-    void updateScene(float deltaTime);
     void renderScene();
 
 private:
@@ -104,27 +102,26 @@ void App::init()
     ASSERT(dx11renderer != nullptr);
     mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
     mpRenderer->init(mTorus.getGeometry(), mTorus.getTopology());
-
-    onResize();
-}
-
-void App::onResize()
-{
-    ASSERT(mpWindow);
-    mpRenderer->onResize();
 }
 
 void App::run()
 {
     mIsRunning = true;
-    time_point previousTime = high_resolution_clock::now();
-    time_point startTime = steady_clock::now();
+
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+
+    LARGE_INTEGER previousTime;
+    QueryPerformanceCounter(&previousTime);
+
     while (mIsRunning)
     {
-        const time_point nowTime = high_resolution_clock::now();
-        const long long elapsedNanoseconds = duration_cast<nanoseconds>(nowTime - previousTime).count();
-        static constexpr float nanosecondsPerSecond = 1e9f;
-        const float dt = static_cast<float>(elapsedNanoseconds) / nanosecondsPerSecond;
+        LARGE_INTEGER nowTime;
+        QueryPerformanceCounter(&nowTime);
+
+        double elapsedTime = static_cast<double>(nowTime.QuadPart - previousTime.QuadPart) / frequency.QuadPart;
+        float dt = static_cast<float>(elapsedTime);
+
         previousTime = nowTime;
 
         IWindow::Message msg = mpWindow->getMessage();
@@ -134,28 +131,25 @@ void App::run()
             msg = mpWindow->getMessage();
         }
 
-        updateScene(dt);
         renderScene();
     }
 }
 
-void App::updateScene(float dt)
-{
-}
-
 void App::renderScene()
 {
-    mpRenderer->getImmediateContext()->ClearRenderTargetView(mpRenderer->getRenderTargetView(),
+    ID3D11DeviceContext* const pContext = mpRenderer->getContext();
+
+    pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(),
                                                              reinterpret_cast<const float*>(&Colors::Blue));
-    mpRenderer->getImmediateContext()->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
+    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    mpRenderer->getImmediateContext()->IASetInputLayout(mpRenderer->getInputLayout());
-    mpRenderer->getImmediateContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pContext->IASetInputLayout(mpRenderer->getInputLayout());
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
     UINT vStride = sizeof(DirectX::XMFLOAT3), offset = 0;
-    mpRenderer->getImmediateContext()->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
-    mpRenderer->getImmediateContext()->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
-    mpRenderer->getImmediateContext()->RSSetState(mpRenderer->getWireframeRS());
+    pContext->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
+    pContext->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
+    pContext->RSSetState(mpRenderer->getWireframeRS());
 
     DirectX::XMMATRIX world = XMLoadFloat4x4(&mWorldMatrix);
     DirectX::XMMATRIX view = mCamera.getViewMatrix();
@@ -164,14 +158,14 @@ void App::renderScene()
     DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(world * view * projectionMatrix);
 
     D3D11_MAPPED_SUBRESOURCE cbData;
-    mpRenderer->getImmediateContext()->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
     memcpy(cbData.pData, &worldViewProj, sizeof(worldViewProj));
-    mpRenderer->getImmediateContext()->Unmap(mpRenderer->getConstantBuffer(), 0);
+    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-    mpRenderer->getImmediateContext()->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);
-    mpRenderer->getImmediateContext()->PSSetShader(mpRenderer->getFragmentShader(), nullptr, 0);
-    mpRenderer->getImmediateContext()->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    mpRenderer->getImmediateContext()->DrawIndexed(static_cast<UINT>(mTorus.getTopology().size()), 0, 0);
+    pContext->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->getFragmentShader(), nullptr, 0);
+    pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+    pContext->DrawIndexed(static_cast<UINT>(mTorus.getTopology().size()), 0, 0);
 
     renderUi();
 
@@ -186,7 +180,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mIsRunning = false;
         break;
     case IWindow::Message::RESIZE:
-        onResize();
+        mpRenderer->onResize();
         break;
     case IWindow::Message::KEY_W_DOWN:
         mCamera.moveCamera(Camera::FORWARD, deltaTime);

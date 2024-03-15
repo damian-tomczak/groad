@@ -95,7 +95,7 @@ public:
         return std::get<EventType>(mEventData);
     }
 
-    static IWindow* createWindow(const uint32_t width = 1280, const uint32_t height = 720);
+    static IWindow* createWindow(uint32_t width = 1280, uint32_t height = 720);
 
 protected:
     EventData mEventData;

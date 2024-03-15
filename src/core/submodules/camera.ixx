@@ -74,18 +74,13 @@ public:
         }
     }
 
-    void rotateCamera(float xoffset, float yoffset, bool constrainmPitch = true)
+    void rotateCamera(float xoffset, float yoffset)
     {
         xoffset *= mMouseSensitivity;
         yoffset *= mMouseSensitivity;
 
         mYaw += xoffset;
         mPitch += yoffset;
-
-        if (constrainmPitch)
-        {
-            mPitch = std::min(std::max(mPitch, -89.0f), 89.0f);
-        }
 
         updateCameraVectors();
     }
