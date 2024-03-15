@@ -40,7 +40,6 @@ private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
-    DirectX::XMFLOAT4X4 mWorldMatrix;
     DirectX::XMFLOAT4X4 mViewMatrix;
 
     Torus mTorus{0.7f, 0.2f, 100, 20};
@@ -70,9 +69,6 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
         ERR(std::format("Selected graphics api {}() is not supported!", apiStr, static_cast<int>(mOptions.api))
                 .c_str());
     }
-
-    DirectX::XMMATRIX I = DirectX::XMMatrixIdentity();
-    XMStoreFloat4x4(&mWorldMatrix, I);
 }
 
 App::~App()
@@ -151,15 +147,16 @@ void App::renderScene()
     pContext->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
     pContext->RSSetState(mpRenderer->getWireframeRS());
 
-    DirectX::XMMATRIX world = XMLoadFloat4x4(&mWorldMatrix);
-    DirectX::XMMATRIX view = mCamera.getViewMatrix();
-    DirectX::XMMATRIX projectionMatrix = mg::createPerspectiveFovLH(DirectX::XMConvertToRadians(mCamera.getZoom()),
-                                                                    mpWindow->getAspectRatio(), 1.0f, 1000.0f);
-    DirectX::XMMATRIX worldViewProj = XMMatrixTranspose(world * view * projectionMatrix);
+    const ConstantBufferData data{
+        .proj = XMMatrixTranspose(mg::createPerspectiveFovLH(DirectX::XMConvertToRadians(mCamera.getZoom()),
+                                                            mpWindow->getAspectRatio(), 1.0f, 1000.0f)),
+        .view = XMMatrixTranspose(mCamera.getViewMatrix()),
+        .model = XMMatrixTranspose(DirectX::XMMatrixIdentity()),
+    };
 
     D3D11_MAPPED_SUBRESOURCE cbData;
     pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-    memcpy(cbData.pData, &worldViewProj, sizeof(worldViewProj));
+    memcpy(cbData.pData, &data, sizeof(data));
     pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
     pContext->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);

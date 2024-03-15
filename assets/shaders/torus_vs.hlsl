@@ -1,6 +1,7 @@
-cbuffer cbPerObject
-{
-    float4x4 mvp;
+cbuffer CBufferDesc: register(b0) {
+    matrix proj;
+    matrix view;
+    matrix model;
 };
 
 struct VertexIn
@@ -16,6 +17,8 @@ struct VertexOut
 VertexOut main(VertexIn vin)
 {
     VertexOut vout;
+    matrix mvp = mul(model, view);
+    mvp = mul(mvp, proj);
     vout.pos = mul(float4(vin.pos, 1.0f), mvp);
     return vout;
 }

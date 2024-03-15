@@ -1,6 +1,7 @@
-cbuffer ViewUniforms : register(b0) {
-    matrix view;
+cbuffer CBufferDesc: register(b0) {
     matrix proj;
+    matrix view;
+    matrix model;
 };
 
 static float3 gridPlane[6] = {

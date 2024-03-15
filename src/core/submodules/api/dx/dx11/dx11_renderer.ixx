@@ -19,6 +19,13 @@ import platform;
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
+export struct ConstantBufferData
+{
+    XMMATRIX proj;
+    XMMATRIX view;
+    XMMATRIX model;
+};
+
 export class DX11Renderer : public DXRenderer
 {
     static constexpr bool enable4xMsaa = true;
@@ -255,43 +262,56 @@ void DX11Renderer::initCore()
     onResize();
 }
 
-void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
+void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer,
+                                        const std::vector<unsigned>& indexBuffer)
 {
     if (mpBoxVB != nullptr)
     {
-        mpBoxVB.Reset();
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        HR(mpContext->Map(mpBoxVB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+        memcpy(mappedResource.pData, vertexBuffer.data(), sizeof(vertexBuffer[0]) * vertexBuffer.size());
+        mpContext->Unmap(mpBoxVB.Get(), 0);
     }
+    else
+    {
+        D3D11_BUFFER_DESC vbd{
+            .ByteWidth = static_cast<UINT>(sizeof(vertexBuffer[0]) * vertexBuffer.size()),
+            .Usage = D3D11_USAGE_DYNAMIC,
+            .BindFlags = D3D11_BIND_VERTEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+            .MiscFlags = 0,
+            .StructureByteStride = 0,
+        };
+        D3D11_SUBRESOURCE_DATA vinitData{
+            .pSysMem = vertexBuffer.data(),
+        };
+        HR(mpDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
+    }
+
     if (mpBoxIB != nullptr)
     {
-        mpBoxIB.Reset();
+        D3D11_MAPPED_SUBRESOURCE mappedResource;
+        HR(mpContext->Map(mpBoxIB.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+        memcpy(mappedResource.pData, indexBuffer.data(), sizeof(indexBuffer[0]) * indexBuffer.size());
+        mpContext->Unmap(mpBoxIB.Get(), 0);
     }
-
-    D3D11_BUFFER_DESC vbd{
-        .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(vertexBuffer)>::type::value_type) * vertexBuffer.size()),
-        .Usage = D3D11_USAGE_IMMUTABLE,
-        .BindFlags = D3D11_BIND_VERTEX_BUFFER,
-        .CPUAccessFlags = 0,
-        .MiscFlags = 0,
-        .StructureByteStride = 0,
-    };
-    D3D11_SUBRESOURCE_DATA vinitData{
-        .pSysMem = vertexBuffer.data(),
-    };
-    HR(mpDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
-
-    D3D11_BUFFER_DESC ibd{
-        .ByteWidth = static_cast<UINT>(sizeof(std::remove_reference<decltype(indexBuffer)>::type::value_type) * indexBuffer.size()),
-        .Usage = D3D11_USAGE_IMMUTABLE,
-        .BindFlags = D3D11_BIND_INDEX_BUFFER,
-        .CPUAccessFlags = 0,
-        .MiscFlags = 0,
-        .StructureByteStride = 0,
-    };
-    D3D11_SUBRESOURCE_DATA initData{
-        .pSysMem = indexBuffer.data(),
-    };
-    HR(mpDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
+    else
+    {
+        D3D11_BUFFER_DESC ibd{
+            .ByteWidth = static_cast<UINT>(sizeof(indexBuffer[0]) * indexBuffer.size()),
+            .Usage = D3D11_USAGE_DYNAMIC,
+            .BindFlags = D3D11_BIND_INDEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+            .MiscFlags = 0,
+            .StructureByteStride = 0,
+        };
+        D3D11_SUBRESOURCE_DATA initData{
+            .pSysMem = indexBuffer.data(),
+        };
+        HR(mpDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
+    }
 }
+
 
 void DX11Renderer::createShaders()
 {
@@ -343,11 +363,15 @@ void DX11Renderer::createShaders()
     compileShader("torus_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
 
-    compiledShader.Reset();
+    //compileShader("infinite_grid_vs.hlsl", "vs_5_0", mpVSBlob);
+    //HR(mpDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, mpVS.GetAddressOf()));
+
+    //compileShader("infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
+    //HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
 
     D3D11_BUFFER_DESC constantBufferDesc
     {
-        .ByteWidth = sizeof(XMMATRIX),
+        .ByteWidth = sizeof(ConstantBufferData),
         .Usage = D3D11_USAGE_DYNAMIC,
         .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
         .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
