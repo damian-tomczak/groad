@@ -6,7 +6,7 @@
 
 namespace mg
 {
-inline DirectX::XMMATRIX createPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
+inline DirectX::XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
 {
     const float yScale = 1.0f / std::tan(fovY / 2.0f);
     const float xScale = yScale / aspectRatio;

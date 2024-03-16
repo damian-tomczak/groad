@@ -22,6 +22,7 @@ import dx11renderer;
 import torus;
 
 using namespace std::chrono;
+using namespace DirectX;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -40,12 +41,10 @@ private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
-    DirectX::XMFLOAT4X4 mViewMatrix;
-
     Torus mTorus{0.7f, 0.2f, 100, 20};
 
     const ParsedOptions mOptions;
-    Camera mCamera{0.f, 0.f, -5.f};
+    Camera mCamera{0.0f, 0.5f, -10.0f};
 
     std::shared_ptr<IWindow> mpWindow;
     std::unique_ptr<DX11Renderer> mpRenderer;
@@ -54,6 +53,8 @@ private:
     bool mIsMenuEnabled{};
     bool mIsUiClicked{};
     bool mIsLeftMouseClicked{};
+
+    XMMATRIX mWorldMatrix = XMMatrixIdentity();
 };
 
 module :private;
@@ -141,17 +142,22 @@ void App::renderScene()
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
     pContext->IASetInputLayout(mpRenderer->getInputLayout());
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-    UINT vStride = sizeof(DirectX::XMFLOAT3), offset = 0;
+    UINT vStride = sizeof(XMFLOAT3), offset = 0;
     pContext->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
     pContext->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
     pContext->RSSetState(mpRenderer->getWireframeRS());
 
-    const ConstantBufferData data{
-        .proj = XMMatrixTranspose(mg::createPerspectiveFovLH(DirectX::XMConvertToRadians(mCamera.getZoom()),
-                                                            mpWindow->getAspectRatio(), 1.0f, 1000.0f)),
-        .view = XMMatrixTranspose(mCamera.getViewMatrix()),
-        .model = XMMatrixTranspose(DirectX::XMMatrixIdentity()),
+    XMMATRIX view = mCamera.getViewMatrix();
+    XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()),
+                                                        mpWindow->getAspectRatio(), 1.0f, 1000.0f);
+
+    const ConstantBufferData data
+    {
+        .model = XMMatrixTranspose(mWorldMatrix),
+        .view = XMMatrixTranspose(view),
+        .invView = XMMatrixTranspose(XMMatrixInverse(nullptr, view)),
+        .proj = XMMatrixTranspose(proj),
+        .invProj = XMMatrixTranspose(XMMatrixInverse(nullptr, proj)),
     };
 
     D3D11_MAPPED_SUBRESOURCE cbData;
@@ -159,9 +165,16 @@ void App::renderScene()
     memcpy(cbData.pData, &data, sizeof(data));
     pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-    pContext->VSSetShader(mpRenderer->getVertexShader(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->getFragmentShader(), nullptr, 0);
+    pContext->VSSetShader(mpRenderer->mpGridVS.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->mpGridPS.Get(), nullptr, 0);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pContext->Draw(6, 0);
+    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
+                                    0);
+    pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
     pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
     pContext->DrawIndexed(static_cast<UINT>(mTorus.getTopology().size()), 0, 0);
 
     renderUi();
@@ -201,8 +214,22 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     {
         if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
-            const auto mousePosition = mpWindow->getEvent<IWindow::Event::MousePosition>();
-            mCamera.rotateCamera(static_cast<float>(mousePosition.xoffset), static_cast<float>(-mousePosition.yoffset));
+            auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
+            mCamera.rotateCamera(static_cast<float>(mouseEvent.xoffset), static_cast<float>(-mouseEvent.yoffset));
+
+            //const float xoffset = -mouseEvent.xoffset * mouseSensitivity;
+            //const float yoffset = -mouseEvent.yoffset * mouseSensitivity;
+
+            //static float yaw{};
+            //static float pitch{};
+
+            //yaw += xoffset;
+            //pitch += yoffset;
+            //XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
+            //XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
+
+            //mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
+            //mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
         }
         break;
     }
@@ -270,10 +297,9 @@ void App::renderUi()
 
     if (isGeometryChanged || isTopologyChanged)
     {
-        mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
-
         mTorus.generateGeometry();
         mTorus.generateTopology();
+        mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
     }
 
     ImGui::End();

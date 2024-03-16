@@ -10,6 +10,8 @@ import std.core;
 
 using namespace DirectX;
 
+export inline constexpr float mouseSensitivity = 0.2f;
+
 export class Camera : public NonCopyableAndMoveable
 {
     inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -21,8 +23,7 @@ export class Camera : public NonCopyableAndMoveable
     float mYaw{};
     float mPitch{};
 
-    float mMovementSpeed = 100.0f;
-    float mMouseSensitivity = 0.2f;
+    float mMovementSpeed = 500.0f;
     float mZoom = 45.0f;
 
 public:
@@ -34,10 +35,9 @@ public:
         RIGHT
     };
 
-    Camera(XMVECTOR mPosition = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), float yaw = 90.0f, float pitch = 0.0f)
+    Camera(XMVECTOR mPosition, float yaw, float pitch)
         : mPosition{mPosition}, mYaw{yaw}, mPitch{pitch}
     {
-        mFront = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
         updateCameraVectors();
     }
 
@@ -48,7 +48,7 @@ public:
 
     XMMATRIX getViewMatrix() const
     {
-        return mg::XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
+        return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
     void moveCamera(const CameraMovement direction, float deltaTime)
@@ -76,8 +76,8 @@ public:
 
     void rotateCamera(float xoffset, float yoffset)
     {
-        xoffset *= mMouseSensitivity;
-        yoffset *= mMouseSensitivity;
+        xoffset *= mouseSensitivity;
+        yoffset *= mouseSensitivity;
 
         mYaw += xoffset;
         mPitch += yoffset;
@@ -103,5 +103,8 @@ private:
 
         XMVECTOR front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians), sinf(yawRadians) * cosf(pitchRadians), 0.0f);
         mFront = XMVector3Normalize(front);
+
+        mRight = XMVector3Normalize(XMVector3Cross(mFront, mUp));
+        mUp = XMVector3Normalize(XMVector3Cross(mRight, mFront));
     }
 };

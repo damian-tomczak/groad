@@ -1,26 +1,38 @@
-cbuffer CBufferDesc: register(b0) {
-    matrix proj;
-    matrix view;
-    matrix model;
+struct VertexInput {
+    uint vertexID : SV_VertexID;
 };
 
-static float3 gridPlane[6] = {
+struct VertexOutput {
+    float4 position : SV_POSITION;
+    float3 nearPoint : TEXCOORD0;
+    float3 farPoint : TEXCOORD1;
+};
+
+cbuffer CBuffer: register(b0) {
+    matrix model;
+    matrix view;
+    matrix invView;
+    matrix proj;
+    matrix invProj;
+};
+
+static const float3 gridPlane[6] = {
     float3(1, 1, 0), float3(-1, -1, 0), float3(-1, 1, 0),
     float3(-1, -1, 0), float3(1, 1, 0), float3(1, -1, 0)
 };
 
-struct VSInput {
-    uint vertexID : SV_VertexID;
-};
+float3 UnprojectPoint(float x, float y, float z, matrix view, matrix projection) {
+    matrix viewInv = invView;
+    matrix projInv = invProj;
+    float4 unprojectedPoint = mul(mul(float4(x, y, z, 1.0), projInv), viewInv);
+    return unprojectedPoint.xyz / unprojectedPoint.w;
+}
 
-struct VSOutput {
-    float4 pos : SV_Position;
-};
-
-VSOutput main(VSInput input)
-{
-    VSOutput output;
-    output.pos = mul(proj, mul(view, float4(gridPlane[input.vertexID].xyz, 1.0)));
-    
+VertexOutput main(VertexInput input) {
+    VertexOutput output;
+    float3 p = gridPlane[input.vertexID];
+    output.nearPoint = UnprojectPoint(p.x, p.y, 0.0, view, proj); // Unprojecting on the near plane
+    output.farPoint = UnprojectPoint(p.x, p.y, 1.0, view, proj); // Unprojecting on the far plane
+    output.position = float4(p, 1.0); // Using directly the clipped coordinates
     return output;
 }

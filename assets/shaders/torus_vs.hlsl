@@ -1,7 +1,9 @@
-cbuffer CBufferDesc: register(b0) {
-    matrix proj;
-    matrix view;
+cbuffer CBuffer: register(b0) {
     matrix model;
+    matrix view;
+    matrix invView;
+    matrix proj;
+    matrix invProj;
 };
 
 struct VertexIn
