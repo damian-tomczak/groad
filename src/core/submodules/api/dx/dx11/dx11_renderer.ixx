@@ -43,7 +43,7 @@ public:
         ImGui_ImplDX11_Shutdown();
     }
 
-    void init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer) override;
+    void init() override;
     void onResize() override;
     void buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer);
 
@@ -128,16 +128,16 @@ private:
 
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
+    ComPtr<ID3D11Texture2D> pBackBuffer;
 };
 
 module :private;
 
-void DX11Renderer::init(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer)
+void DX11Renderer::init()
 {
     initCore();
     onResize();
 
-    buildGeometryBuffers(vertexBuffer, indexBuffer);
     createShaders();
     buildVertexLayout();
 
@@ -167,10 +167,8 @@ void DX11Renderer::onResize()
     ASSERT(pWindow);
 
     HR(mpSwapChain->ResizeBuffers(1, pWindow->getWidth(), pWindow->getHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, 0));
-    ComPtr<ID3D11Texture2D> pBackBuffer;
     HR(mpSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(pBackBuffer.GetAddressOf())));
     HR(mpDevice->CreateRenderTargetView(pBackBuffer.Get(), 0, mpRenderTargetView.GetAddressOf()));
-    pBackBuffer.Reset();
 
     D3D11_TEXTURE2D_DESC depthStencilDesc{
         .Width = static_cast<UINT>(pWindow->getWidth()),
@@ -271,8 +269,6 @@ void DX11Renderer::initCore()
     HR(dxgiFactory->CreateSwapChain(mpDevice.Get(), &sd, mpSwapChain.GetAddressOf()));
 
     HR(dxgiFactory->MakeWindowAssociation(sd.OutputWindow, DXGI_MWA_NO_WINDOW_CHANGES));
-
-    onResize();
 }
 
 void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer,

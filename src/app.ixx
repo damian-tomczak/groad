@@ -53,6 +53,7 @@ private:
     bool mIsMenuEnabled{};
     bool mIsUiClicked{};
     bool mIsLeftMouseClicked{};
+    bool mIsRightMouseClicked{};
 
     XMMATRIX mWorldMatrix = XMMatrixIdentity();
 };
@@ -98,7 +99,8 @@ void App::init()
     const auto dx11renderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
     ASSERT(dx11renderer != nullptr);
     mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
-    mpRenderer->init(mTorus.getGeometry(), mTorus.getTopology());
+    mpRenderer->init();
+    mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
 }
 
 void App::run()
@@ -189,9 +191,9 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::QUIT:
         mIsRunning = false;
         break;
-    case IWindow::Message::RESIZE:
-        mpRenderer->onResize();
-        break;
+    //case IWindow::Message::RESIZE:
+    //    mpRenderer->onResize();
+    //    break;
     case IWindow::Message::KEY_W_DOWN:
         mCamera.moveCamera(Camera::FORWARD, deltaTime);
         break;
@@ -210,26 +212,36 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::MOUSE_LEFT_UP:
         mIsLeftMouseClicked = false;
         break;
+    case IWindow::Message::MOUSE_RIGHT_DOWN:
+        mIsRightMouseClicked = true;
+        break;
+    case IWindow::Message::MOUSE_RIGHT_UP:
+        mIsRightMouseClicked = false;
+        break;
     case IWindow::Message::MOUSE_MOVE:
     {
         if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
-            auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
+            const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
+
+            const float xoffset = -mouseEvent.xoffset * mouseSensitivity;
+            const float yoffset = -mouseEvent.yoffset * mouseSensitivity;
+
+            static float yaw{};
+            static float pitch{};
+
+            yaw += xoffset;
+            pitch += yoffset;
+            XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
+            XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
+
+            mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
+            mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
+        }
+        else if (mIsRightMouseClicked && (!mIsUiClicked))
+        {
+            const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
             mCamera.rotateCamera(static_cast<float>(mouseEvent.xoffset), static_cast<float>(-mouseEvent.yoffset));
-
-            //const float xoffset = -mouseEvent.xoffset * mouseSensitivity;
-            //const float yoffset = -mouseEvent.yoffset * mouseSensitivity;
-
-            //static float yaw{};
-            //static float pitch{};
-
-            //yaw += xoffset;
-            //pitch += yoffset;
-            //XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
-            //XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
-
-            //mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
-            //mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
         }
         break;
     }
@@ -300,6 +312,48 @@ void App::renderUi()
         mTorus.generateGeometry();
         mTorus.generateTopology();
         mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
+    }
+
+    //std::vector<std::string> listItems = {"Item 1", "Item 2", "Item 3"};
+    //int selectedItem = -1;
+
+    //const char* items[listItems.size()];
+    //for (size_t i = 0; i < listItems.size(); ++i)
+    //{
+    //    items[i] = listItems[i].c_str();
+    //}
+
+    //// Display the list box
+    //if (ImGui::ListBox("##objects", &selectedItem, items, static_cast<int>(listItems.size())))
+    //{
+    //    // Item selection logic can be handled here if needed
+    //}
+
+    //// If an item is selected, allow for its name to be edited
+    //if (selectedItem >= 0 && selectedItem < listItems.size())
+    //{
+    //    ImGui::Text("Selected item: %s", listItems[selectedItem].c_str());
+
+    //    // Buffer for new name input, ensuring enough space for editing
+    //    char nameBuffer[256];
+    //    snprintf(nameBuffer, sizeof(nameBuffer), "%s", listItems[selectedItem].c_str());
+
+    //    // Input text field to edit the name of the selected item
+    //    if (ImGui::InputText("Edit Name", nameBuffer, sizeof(nameBuffer)))
+    //    {
+    //        // If input text is confirmed, update the selected item's name
+    //        listItems[selectedItem] = nameBuffer;
+    //    }
+    //}
+
+    if (ImGui::Button("Add Torus"))
+    {
+
+    }
+    ImGui::SameLine();
+
+    if (ImGui::Button("Remove Torus"))
+    {
     }
 
     ImGui::End();
