@@ -2,17 +2,31 @@ module;
 
 #include <DirectXMath.h>
 
-export module torus;
+export module core.renderables;
 import std.core;
 import core.renderer;
 
 using namespace DirectX;
 
+export class Point : public Renderable
+{
+    inline static unsigned counter{};
+
+public:
+    Point() : Renderable{std::format("Point {}", counter++).c_str()}
+    {
+
+    }
+};
+
 export class Torus : public Renderable
 {
+    inline static unsigned counter{};
+
 public:
     Torus(float majorRadius, float minorRadius, int majorSegments, int minorSegments)
-        : mMajorRadius(majorRadius), mMinorRadius(minorRadius), mMajorSegments(majorSegments),
+        : Renderable{std::format("Torus {}", counter++).c_str()}, mMajorRadius(majorRadius), mMinorRadius(minorRadius),
+          mMajorSegments(majorSegments),
           mMinorSegments(minorSegments)
     {
         generateGeometry();

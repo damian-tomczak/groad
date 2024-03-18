@@ -19,7 +19,6 @@ import core;
 import core.options;
 import window;
 import dx11renderer;
-import torus;
 
 using namespace std::chrono;
 using namespace DirectX;
@@ -276,80 +275,23 @@ void App::renderUi()
         mIsMenuEnabled = true;
     }
 
-    ImGui::Text("Torus:");
+    ImGui::Text("CAD: ");
 
     mIsUiClicked = false;
 
     ImGui::Spacing();
 
-    bool isGeometryChanged{};
-    bool isLastItemActive{};
+    std::vector<const char*> renderableNames{};
+    static int selectedItem = -1, newSelectedItem = -1;
 
-    //ImGui::Text("Major Radius:");
-    //ImGui::SliderFloat("##majorRadius", &mTorus.mMajorRadius, 0.0f, 1.0f);
-    //isLastItemActive = ImGui::IsItemActive();
-    //mIsUiClicked |= isLastItemActive;
-    //isGeometryChanged |= isLastItemActive;
+    for (const auto& renderable : mpRenderer->mRenderables)
+    {
+        renderableNames.emplace_back(renderable->mTag.c_str());
+    }
 
-    //ImGui::Text("Minor Radius:");
-    //ImGui::SliderFloat("##minorRadius", &mTorus.mMinorRadius, 0.0f, 1.0f);
-    //isLastItemActive = ImGui::IsItemActive();
-    //mIsUiClicked |= isLastItemActive;
-    //isGeometryChanged |= isLastItemActive;
-
-    //ImGui::Spacing();
-
-    //bool isTopologyChanged{};
-
-    //ImGui::Text("Major Segments:");
-    //ImGui::SliderInt("##majorSegments", &mTorus.mMajorSegments, 3, 100);
-    //isLastItemActive = ImGui::IsItemActive();
-    //mIsUiClicked |= isLastItemActive;
-    //isTopologyChanged |= isLastItemActive;
-    //ImGui::Text("Minor Segments:");
-    //ImGui::SliderInt("##minorSegments", &mTorus.mMinorSegments, 3, 100);
-    //isLastItemActive = ImGui::IsItemActive();
-    //mIsUiClicked |= isLastItemActive;
-    //isTopologyChanged |= isLastItemActive;
-
-    //if (isGeometryChanged || isTopologyChanged)
-    //{
-    //    mTorus.generateGeometry();
-    //    mTorus.generateTopology();
-    //    mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
-    //}
-
-    //std::vector<std::string> listItems = {"Item 1", "Item 2", "Item 3"};
-    //int selectedItem = -1;
-
-    //const char* items[listItems.size()];
-    //for (size_t i = 0; i < listItems.size(); ++i)
-    //{
-    //    items[i] = listItems[i].c_str();
-    //}
-
-    //// Display the list box
-    //if (ImGui::ListBox("##objects", &selectedItem, items, static_cast<int>(listItems.size())))
-    //{
-    //    // Item selection logic can be handled here if needed
-    //}
-
-    //// If an item is selected, allow for its name to be edited
-    //if (selectedItem >= 0 && selectedItem < listItems.size())
-    //{
-    //    ImGui::Text("Selected item: %s", listItems[selectedItem].c_str());
-
-    //    // Buffer for new name input, ensuring enough space for editing
-    //    char nameBuffer[256];
-    //    snprintf(nameBuffer, sizeof(nameBuffer), "%s", listItems[selectedItem].c_str());
-
-    //    // Input text field to edit the name of the selected item
-    //    if (ImGui::InputText("Edit Name", nameBuffer, sizeof(nameBuffer)))
-    //    {
-    //        // If input text is confirmed, update the selected item's name
-    //        listItems[selectedItem] = nameBuffer;
-    //    }
-    //}
+    if (ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size())))
+    {
+    }
 
     if (ImGui::Button("Add Torus"))
     {
@@ -361,7 +303,86 @@ void App::renderUi()
     {
     }
 
+    if (ImGui::Button("Add Point"))
+    {
+        mpRenderer->addRenderable(std::move(std::make_unique<Point>()));
+    }
+    ImGui::SameLine();
+
+    if (ImGui::Button("Remove Point"))
+    {
+    }
+
+    if (newSelectedItem != -1)
+    {
+        ImGui::Separator();
+
+        bool dataChanged{};
+        auto& selectedRenderable = mpRenderer->mRenderables.at(newSelectedItem);
+
+        if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable.get()); pTorus != nullptr)
+        {
+            ImGui::Text("Selected item: %s",selectedRenderable->mTag.c_str());
+
+            static char nameBuffer[256]{};
+
+            if (newSelectedItem != selectedItem)
+            {
+                memset(nameBuffer, 0, sizeof(nameBuffer));
+                selectedRenderable->mTag.copy(nameBuffer, sizeof(nameBuffer) - 1);
+                selectedItem = newSelectedItem;
+            }
+
+            ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Rename"))
+            {
+                selectedRenderable->mTag = nameBuffer;
+            }
+
+            dataChanged |= ImGui::IsItemActive();
+
+            ImGui::Text("Major Radius:");
+            ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
+            dataChanged |= ImGui::IsItemActive();
+
+            ImGui::Text("Minor Radius:");
+            ImGui::SliderFloat("##minorRadius", &pTorus->mMinorRadius, 0.0f, 1.0f);
+            dataChanged |= ImGui::IsItemActive();
+
+            ImGui::Spacing();
+
+            ImGui::Text("Major Segments:");
+            ImGui::SliderInt("##majorSegments", &pTorus->mMajorSegments, 3, 100);
+            dataChanged |= ImGui::IsItemActive();
+
+            ImGui::Text("Minor Segments:");
+            ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
+            dataChanged |= ImGui::IsItemActive();
+
+            if (dataChanged)
+            {
+                selectedRenderable->generateGeometry();
+                selectedRenderable->generateTopology();
+                mpRenderer->buildGeometryBuffers();
+            }
+
+            mIsUiClicked |= dataChanged;
+        }
+        else if (auto pPoint = dynamic_cast<Point*>(selectedRenderable.get()); pPoint != nullptr)
+        {
+
+        }
+    }
+
     ImGui::End();
+
+    if (mIsUiClicked)
+    {
+        puts("1");
+    }
 
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());

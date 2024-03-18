@@ -37,7 +37,12 @@ export constexpr const char* apiToStr(const API api)
 export class Renderable : public NonCopyable
 {
 public:
-    Renderable() = default;
+    Renderable(std::string_view tag) : mTag{tag}
+    {
+
+    }
+
+    std::string mTag;
 
     virtual const std::vector<float>& getGeometry() const
     {

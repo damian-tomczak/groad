@@ -276,13 +276,11 @@ void DX11Renderer::initCore()
 
 void DX11Renderer::buildGeometryBuffers()
 {
-    if (!mRebuildBuffers)
-    {
-        return;
-    }
-
     for (unsigned int i{}; i < mRenderables.size(); ++i)
     {
+        mVertexBuffers[i].Reset();
+        mIndexBuffers[i].Reset();
+
         D3D11_BUFFER_DESC vbd{
             .ByteWidth = static_cast<UINT>(sizeof(float) * mRenderables[i]->getGeometry().size()),
             .Usage = D3D11_USAGE_DYNAMIC,

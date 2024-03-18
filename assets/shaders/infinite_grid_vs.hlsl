@@ -31,8 +31,8 @@ float3 UnprojectPoint(float x, float y, float z, matrix view, matrix projection)
 VertexOutput main(VertexInput input) {
     VertexOutput output;
     float3 p = gridPlane[input.vertexID];
-    output.nearPoint = UnprojectPoint(p.x, p.y, 0.0, view, proj); // Unprojecting on the near plane
-    output.farPoint = UnprojectPoint(p.x, p.y, 1.0, view, proj); // Unprojecting on the far plane
-    output.position = float4(p, 1.0); // Using directly the clipped coordinates
+    output.nearPoint = UnprojectPoint(p.x, p.y, 0.0, view, proj);
+    output.farPoint = UnprojectPoint(p.x, p.y, 1.0, view, proj);
+    output.position = float4(p, 1.0);
     return output;
 }
