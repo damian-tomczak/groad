@@ -53,6 +53,8 @@ public:
     ComPtr<ID3D11PixelShader> mpPS;
     ComPtr<ID3D11VertexShader> mpGridVS;
     ComPtr<ID3D11PixelShader> mpGridPS;
+    ComPtr<ID3D11VertexShader> mpCursorVS;
+    ComPtr<ID3D11PixelShader> mpCursorPS;
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
@@ -369,6 +371,14 @@ void DX11Renderer::createShaders()
     compileShader("infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
                                    &mpGridPS));
+
+    compileShader("cursor_vs.hlsl", "vs_5_0", compiledShader);
+    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                    mpCursorVS.GetAddressOf()));
+
+    compileShader("cursor_ps.hlsl", "ps_5_0", compiledShader);
+    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                   &mpCursorPS));
 
     D3D11_BUFFER_DESC constantBufferDesc
     {

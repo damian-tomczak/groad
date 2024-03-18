@@ -146,7 +146,11 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         case 'D':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_D_DOWN), wParam, lParam);
             return true;
+        case VK_DELETE:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_DELETE_DOWN), wParam, lParam);
+            return true;
         }
+
         break;
     case WM_KEYUP:
         switch (wParam)
@@ -162,6 +166,9 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
             return true;
         case 'D':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_D_UP), wParam, lParam);
+            return true;
+        case VK_DELETE:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_DELETE_UP), wParam, lParam);
             return true;
         }
         break;

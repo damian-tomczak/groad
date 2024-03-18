@@ -1,3 +1,11 @@
+cbuffer CBuffer: register(b0) {
+    matrix model;
+    matrix view;
+    matrix invView;
+    matrix proj;
+    matrix invProj;
+};
+
 struct VertexInput {
     uint vertexID : SV_VertexID;
 };
@@ -6,14 +14,6 @@ struct VertexOutput {
     float4 position : SV_POSITION;
     float3 nearPoint : TEXCOORD0;
     float3 farPoint : TEXCOORD1;
-};
-
-cbuffer CBuffer: register(b0) {
-    matrix model;
-    matrix view;
-    matrix invView;
-    matrix proj;
-    matrix invProj;
 };
 
 static const float3 gridPlane[6] = {

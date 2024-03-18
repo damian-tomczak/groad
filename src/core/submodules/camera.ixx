@@ -10,7 +10,7 @@ import std.core;
 
 using namespace DirectX;
 
-export inline constexpr float mouseSensitivity = 0.2f;
+export inline constexpr float mouseSensitivity = 0.05f;
 
 export class Camera : public NonCopyableAndMoveable
 {

@@ -8,7 +8,8 @@ struct PSOutput {
     float4 color : SV_Target;
 };
 
-float4 grid(float3 fragPos3D, float scale) {
+float4 grid(float3 fragPos3D, float scale)
+{
     float2 coord = fragPos3D.xz * scale; // use the scale variable to set the distance between the lines
     float2 derivative = fwidth(coord);
     float2 grid = abs(frac(coord - 0.5) - 0.5) / derivative;

@@ -53,6 +53,8 @@ private:
     bool mIsRightMouseClicked{};
 
     XMMATRIX mWorldMatrix = XMMatrixIdentity();
+
+    int mSelectedRenderableIdx = -1;
 };
 
 module :private;
@@ -171,6 +173,11 @@ void App::renderScene()
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
                                     0);
 
+    pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pContext->Draw(6, 0);
+
     unsigned i{};
     for (auto& renderable : mpRenderer->mRenderables)
     {
@@ -198,17 +205,35 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     //case IWindow::Message::RESIZE:
     //    mpRenderer->onResize();
     //    break;
+    case IWindow::Message::KEY_DELETE_DOWN:
+        if (mSelectedRenderableIdx != -1)
+        {
+            mpRenderer->mRenderables[mSelectedRenderableIdx] = nullptr;
+        }
+        break;
     case IWindow::Message::KEY_W_DOWN:
-        mCamera.moveCamera(Camera::FORWARD, deltaTime);
+        if (!mIsUiClicked)
+        {
+            mCamera.moveCamera(Camera::FORWARD, deltaTime);
+        }
         break;
     case IWindow::Message::KEY_S_DOWN:
-        mCamera.moveCamera(Camera::BACKWARD, deltaTime);
+        if (!mIsUiClicked)
+        {
+            mCamera.moveCamera(Camera::BACKWARD, deltaTime);
+        }
         break;
     case IWindow::Message::KEY_A_DOWN:
-        mCamera.moveCamera(Camera::LEFT, deltaTime);
+        if (!mIsUiClicked)
+        {
+            mCamera.moveCamera(Camera::LEFT, deltaTime);
+        }
         break;
     case IWindow::Message::KEY_D_DOWN:
-        mCamera.moveCamera(Camera::RIGHT, deltaTime);
+        if (!mIsUiClicked)
+        {
+            mCamera.moveCamera(Camera::RIGHT, deltaTime);
+        }
         break;
     case IWindow::Message::MOUSE_LEFT_DOWN:
         mIsLeftMouseClicked = true;
@@ -299,19 +324,11 @@ void App::renderUi()
     }
     ImGui::SameLine();
 
-    if (ImGui::Button("Remove Torus"))
-    {
-    }
-
     if (ImGui::Button("Add Point"))
     {
         mpRenderer->addRenderable(std::move(std::make_unique<Point>()));
     }
     ImGui::SameLine();
-
-    if (ImGui::Button("Remove Point"))
-    {
-    }
 
     if (newSelectedItem != -1)
     {
@@ -328,12 +345,14 @@ void App::renderUi()
 
             if (newSelectedItem != selectedItem)
             {
-                memset(nameBuffer, 0, sizeof(nameBuffer));
-                selectedRenderable->mTag.copy(nameBuffer, sizeof(nameBuffer) - 1);
+                strncpy_s(nameBuffer, selectedRenderable->mTag.c_str(), sizeof(nameBuffer) - 1);
+                nameBuffer[sizeof(nameBuffer) - 1] = '\0';
+
                 selectedItem = newSelectedItem;
             }
 
             ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
+            dataChanged |= ImGui::IsItemActive();
 
             ImGui::SameLine();
 
@@ -378,11 +397,6 @@ void App::renderUi()
     }
 
     ImGui::End();
-
-    if (mIsUiClicked)
-    {
-        puts("1");
-    }
 
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
