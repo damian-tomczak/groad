@@ -2,7 +2,7 @@ module;
 
 #include "utils.h"
 
-export module renderer;
+export module core.renderer;
 
 import window;
 import std.core;
@@ -33,6 +33,36 @@ export constexpr const char* apiToStr(const API api)
         return "INVALID_GRAPHICS_API";
     }
 }
+
+export class Renderable : public NonCopyable
+{
+public:
+    Renderable() = default;
+
+    virtual const std::vector<float>& getGeometry() const
+    {
+        return mGeometry;
+    }
+
+    virtual const std::vector<unsigned>& getTopology() const
+    {
+        return mTopology;
+    }
+
+    virtual void generateGeometry()
+    {
+        ASSERT(false);
+    }
+
+    virtual void generateTopology()
+    {
+        ASSERT(false);
+    }
+
+protected:
+    std::vector<float> mGeometry;
+    std::vector<unsigned> mTopology;
+};
 
 export class IRenderer : public NonCopyableAndMoveable
 {

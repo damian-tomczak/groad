@@ -45,12 +45,16 @@ public:
 
     void init() override;
     void onResize() override;
-    void buildGeometryBuffers(const std::vector<float>& vertexBuffer, const std::vector<unsigned>& indexBuffer);
+    void buildGeometryBuffers();
+
+    std::vector<std::unique_ptr<Renderable>> mRenderables;
 
     ComPtr<ID3D11VertexShader> mpVS;
     ComPtr<ID3D11PixelShader> mpPS;
     ComPtr<ID3D11VertexShader> mpGridVS;
     ComPtr<ID3D11PixelShader> mpGridPS;
+    std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
+    std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
     ID3D11DeviceContext* getContext() const
     {
@@ -82,16 +86,6 @@ public:
         return mpInputLayout.Get();
     }
 
-    ID3D11Buffer* const* getVertexBuffer() const
-    {
-        return mpBoxVB.GetAddressOf();
-    }
-
-    ID3D11Buffer* getIndexBuffer() const
-    {
-        return mpBoxIB.Get();
-    }
-
     ID3D11RasterizerState* getWireframeRS() const
     {
         return mpWireframeRS.Get();
@@ -107,6 +101,15 @@ public:
         return mpConstantBuffer.GetAddressOf();
     }
 
+    void addRenderable(std::unique_ptr<Renderable>&& renderable)
+    {
+        mRenderables.emplace_back(std::move(renderable));
+        mVertexBuffers.emplace_back();
+        mIndexBuffers.emplace_back();
+
+        mRebuildBuffers = true;
+    }
+
 private:
     void initCore();
     void createShaders();
@@ -119,8 +122,6 @@ private:
     ComPtr<ID3D11RenderTargetView> mpRenderTargetView;
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
-    ComPtr<ID3D11Buffer> mpBoxVB;
-    ComPtr<ID3D11Buffer> mpBoxIB;
     ComPtr<ID3D11RasterizerState> mpWireframeRS;
     ComPtr<ID3D10Blob> mpVSBlob;
     ComPtr<ID3D11Buffer> mpConstantBuffer;
@@ -128,7 +129,8 @@ private:
 
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
-    ComPtr<ID3D11Texture2D> pBackBuffer;
+
+    bool mRebuildBuffers{};
 };
 
 module :private;
@@ -166,6 +168,7 @@ void DX11Renderer::onResize()
     const auto pWindow = mpWindow.lock().get();
     ASSERT(pWindow);
 
+    ComPtr<ID3D11Texture2D> pBackBuffer;
     HR(mpSwapChain->ResizeBuffers(1, pWindow->getWidth(), pWindow->getHeight(), DXGI_FORMAT_R8G8B8A8_UNORM, 0));
     HR(mpSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(pBackBuffer.GetAddressOf())));
     HR(mpDevice->CreateRenderTargetView(pBackBuffer.Get(), 0, mpRenderTargetView.GetAddressOf()));
@@ -271,44 +274,43 @@ void DX11Renderer::initCore()
     HR(dxgiFactory->MakeWindowAssociation(sd.OutputWindow, DXGI_MWA_NO_WINDOW_CHANGES));
 }
 
-void DX11Renderer::buildGeometryBuffers(const std::vector<float>& vertexBuffer,
-                                        const std::vector<unsigned>& indexBuffer)
+void DX11Renderer::buildGeometryBuffers()
 {
-    if (mpBoxVB != nullptr)
+    if (!mRebuildBuffers)
     {
-        mpBoxVB.Reset();
+        return;
     }
 
-    if (mpBoxIB != nullptr)
+    for (unsigned int i{}; i < mRenderables.size(); ++i)
     {
-        mpBoxIB.Reset();
+        D3D11_BUFFER_DESC vbd{
+            .ByteWidth = static_cast<UINT>(sizeof(float) * mRenderables[i]->getGeometry().size()),
+            .Usage = D3D11_USAGE_DYNAMIC,
+            .BindFlags = D3D11_BIND_VERTEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+            .MiscFlags = 0,
+            .StructureByteStride = 0,
+        };
+        D3D11_SUBRESOURCE_DATA vinitData{
+            .pSysMem = mRenderables[i]->getGeometry().data(),
+        };
+        HR(mpDevice->CreateBuffer(&vbd, &vinitData, mVertexBuffers[i].GetAddressOf()));
+
+        D3D11_BUFFER_DESC ibd{
+            .ByteWidth = static_cast<UINT>(sizeof(unsigned) * mRenderables[i]->getTopology().size()),
+            .Usage = D3D11_USAGE_DYNAMIC,
+            .BindFlags = D3D11_BIND_INDEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+            .MiscFlags = 0,
+            .StructureByteStride = 0,
+        };
+        D3D11_SUBRESOURCE_DATA initData{
+            .pSysMem = mRenderables[i]->getTopology().data(),
+        };
+        HR(mpDevice->CreateBuffer(&ibd, &initData, mIndexBuffers[i].GetAddressOf()));
     }
 
-    D3D11_BUFFER_DESC vbd{
-        .ByteWidth = static_cast<UINT>(sizeof(vertexBuffer[0]) * vertexBuffer.size()),
-        .Usage = D3D11_USAGE_DYNAMIC,
-        .BindFlags = D3D11_BIND_VERTEX_BUFFER,
-        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        .MiscFlags = 0,
-        .StructureByteStride = 0,
-    };
-    D3D11_SUBRESOURCE_DATA vinitData{
-        .pSysMem = vertexBuffer.data(),
-    };
-    HR(mpDevice->CreateBuffer(&vbd, &vinitData, mpBoxVB.GetAddressOf()));
-
-    D3D11_BUFFER_DESC ibd{
-        .ByteWidth = static_cast<UINT>(sizeof(indexBuffer[0]) * indexBuffer.size()),
-        .Usage = D3D11_USAGE_DYNAMIC,
-        .BindFlags = D3D11_BIND_INDEX_BUFFER,
-        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        .MiscFlags = 0,
-        .StructureByteStride = 0,
-    };
-    D3D11_SUBRESOURCE_DATA initData{
-        .pSysMem = indexBuffer.data(),
-    };
-    HR(mpDevice->CreateBuffer(&ibd, &initData, &mpBoxIB));
+    mRebuildBuffers = false;
 }
 
 

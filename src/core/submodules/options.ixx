@@ -5,7 +5,7 @@ module;
 export module core.options;
 export import std.core;
 
-import renderer;
+import core.renderer;
 
 API strToApi(const std::string_view& str);
 

@@ -5,7 +5,7 @@ module;
 #include <d3d11.h>
 
 export module dxrenderer;
-export import renderer;
+export import core.renderer;
 
 import std.core;
 

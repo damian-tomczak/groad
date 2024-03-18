@@ -4,10 +4,11 @@ module;
 
 export module torus;
 import std.core;
+import core.renderer;
 
 using namespace DirectX;
 
-export class Torus
+export class Torus : public Renderable
 {
 public:
     Torus(float majorRadius, float minorRadius, int majorSegments, int minorSegments)
@@ -24,51 +25,17 @@ public:
     int mMinorSegments;
     bool mIsDataChanged{};
 
-    const std::vector<float>& getGeometry()
+    const std::vector<float>& getGeometry() const override
     {
-        //if (mIsDataChanged)
-        //{
-        //    generateGeometry();
-        //}
-
         return mGeometry;
     }
 
-    const std::vector<unsigned>& getTopology()
+    const std::vector<unsigned>& getTopology() const override
     {
-        //if (mIsDataChanged)
-        //{
-        //    generateTopology();
-        //}
-
         return mTopology;
     }
 
-    //void setMajorRadius(float majorRadius)
-    //{
-    //    mMajorRadius = majorRadius;
-    //    mIsDataChanged = true;
-    //}
-
-    //void setMinorRadius(float minorRadius)
-    //{
-    //    mMinorRadius = minorRadius;
-    //    mIsDataChanged = true;
-    //}
-
-    //void setMajorSegments(int majorSegments)
-    //{
-    //    mMajorSegments = majorSegments;
-    //    mIsDataChanged = true;
-    //}
-
-    //void setMinorSegments(float minorSegments)
-    //{
-    //    mMinorSegments = minorSegments;
-    //    mIsDataChanged = true;
-    //}
-
-    void generateGeometry()
+    void generateGeometry() override
     {
         mGeometry.clear();
         for (int i = 0; i <= mMajorSegments; ++i)
@@ -85,7 +52,7 @@ public:
         }
     }
 
-    void generateTopology()
+    void generateTopology() override
     {
         mTopology.clear();
         for (int i = 0; i < mMajorSegments; ++i)
@@ -101,8 +68,4 @@ public:
             }
         }
     }
-
-private:
-    std::vector<float> mGeometry;
-    std::vector<unsigned> mTopology;
 };

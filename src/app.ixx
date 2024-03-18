@@ -41,8 +41,6 @@ private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
-    Torus mTorus{0.7f, 0.2f, 100, 20};
-
     const ParsedOptions mOptions;
     Camera mCamera{0.0f, 0.5f, -10.0f};
 
@@ -100,7 +98,6 @@ void App::init()
     ASSERT(dx11renderer != nullptr);
     mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
     mpRenderer->init();
-    mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
 }
 
 void App::run()
@@ -136,6 +133,8 @@ void App::run()
 
 void App::renderScene()
 {
+    mpRenderer->buildGeometryBuffers();
+
     ID3D11DeviceContext* const pContext = mpRenderer->getContext();
 
     pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(),
@@ -145,8 +144,6 @@ void App::renderScene()
 
     pContext->IASetInputLayout(mpRenderer->getInputLayout());
     UINT vStride = sizeof(XMFLOAT3), offset = 0;
-    pContext->IASetVertexBuffers(0, 1, mpRenderer->getVertexBuffer(), &vStride, &offset);
-    pContext->IASetIndexBuffer(mpRenderer->getIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
     pContext->RSSetState(mpRenderer->getWireframeRS());
 
     XMMATRIX view = mCamera.getViewMatrix();
@@ -171,13 +168,21 @@ void App::renderScene()
     pContext->PSSetShader(mpRenderer->mpGridPS.Get(), nullptr, 0);
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     pContext->Draw(6, 0);
+
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
                                     0);
-    pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
-    pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-    pContext->DrawIndexed(static_cast<UINT>(mTorus.getTopology().size()), 0, 0);
+
+    unsigned i{};
+    for (auto& renderable : mpRenderer->mRenderables)
+    {
+        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers[i].GetAddressOf(), &vStride, &offset);
+        pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers[i].Get(), DXGI_FORMAT_R32_UINT, 0);
+        pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
+        pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
+        pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+        pContext->DrawIndexed(static_cast<UINT>(renderable->getTopology().size()), 0, 0);
+    }
 
     renderUi();
 
@@ -280,39 +285,39 @@ void App::renderUi()
     bool isGeometryChanged{};
     bool isLastItemActive{};
 
-    ImGui::Text("Major Radius:");
-    ImGui::SliderFloat("##majorRadius", &mTorus.mMajorRadius, 0.0f, 1.0f);
-    isLastItemActive = ImGui::IsItemActive();
-    mIsUiClicked |= isLastItemActive;
-    isGeometryChanged |= isLastItemActive;
+    //ImGui::Text("Major Radius:");
+    //ImGui::SliderFloat("##majorRadius", &mTorus.mMajorRadius, 0.0f, 1.0f);
+    //isLastItemActive = ImGui::IsItemActive();
+    //mIsUiClicked |= isLastItemActive;
+    //isGeometryChanged |= isLastItemActive;
 
-    ImGui::Text("Minor Radius:");
-    ImGui::SliderFloat("##minorRadius", &mTorus.mMinorRadius, 0.0f, 1.0f);
-    isLastItemActive = ImGui::IsItemActive();
-    mIsUiClicked |= isLastItemActive;
-    isGeometryChanged |= isLastItemActive;
+    //ImGui::Text("Minor Radius:");
+    //ImGui::SliderFloat("##minorRadius", &mTorus.mMinorRadius, 0.0f, 1.0f);
+    //isLastItemActive = ImGui::IsItemActive();
+    //mIsUiClicked |= isLastItemActive;
+    //isGeometryChanged |= isLastItemActive;
 
-    ImGui::Spacing();
+    //ImGui::Spacing();
 
-    bool isTopologyChanged{};
+    //bool isTopologyChanged{};
 
-    ImGui::Text("Major Segments:");
-    ImGui::SliderInt("##majorSegments", &mTorus.mMajorSegments, 3, 100);
-    isLastItemActive = ImGui::IsItemActive();
-    mIsUiClicked |= isLastItemActive;
-    isTopologyChanged |= isLastItemActive;
-    ImGui::Text("Minor Segments:");
-    ImGui::SliderInt("##minorSegments", &mTorus.mMinorSegments, 3, 100);
-    isLastItemActive = ImGui::IsItemActive();
-    mIsUiClicked |= isLastItemActive;
-    isTopologyChanged |= isLastItemActive;
+    //ImGui::Text("Major Segments:");
+    //ImGui::SliderInt("##majorSegments", &mTorus.mMajorSegments, 3, 100);
+    //isLastItemActive = ImGui::IsItemActive();
+    //mIsUiClicked |= isLastItemActive;
+    //isTopologyChanged |= isLastItemActive;
+    //ImGui::Text("Minor Segments:");
+    //ImGui::SliderInt("##minorSegments", &mTorus.mMinorSegments, 3, 100);
+    //isLastItemActive = ImGui::IsItemActive();
+    //mIsUiClicked |= isLastItemActive;
+    //isTopologyChanged |= isLastItemActive;
 
-    if (isGeometryChanged || isTopologyChanged)
-    {
-        mTorus.generateGeometry();
-        mTorus.generateTopology();
-        mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
-    }
+    //if (isGeometryChanged || isTopologyChanged)
+    //{
+    //    mTorus.generateGeometry();
+    //    mTorus.generateTopology();
+    //    mpRenderer->buildGeometryBuffers(mTorus.getGeometry(), mTorus.getTopology());
+    //}
 
     //std::vector<std::string> listItems = {"Item 1", "Item 2", "Item 3"};
     //int selectedItem = -1;
@@ -348,7 +353,7 @@ void App::renderUi()
 
     if (ImGui::Button("Add Torus"))
     {
-
+        mpRenderer->addRenderable(std::move(std::make_unique<Torus>(0.7f, 0.2f, 100, 20)));
     }
     ImGui::SameLine();
 
