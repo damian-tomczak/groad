@@ -40,19 +40,28 @@ private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
+    XMMATRIX mWorldMatrix = XMMatrixIdentity();
+
     const ParsedOptions mOptions;
     Camera mCamera{0.0f, 0.5f, -10.0f};
+    XMVECTOR mCursorPos{};
 
     std::shared_ptr<IWindow> mpWindow;
     std::unique_ptr<DX11Renderer> mpRenderer;
+
+    enum class InteractionType
+    {
+        ROTATE,
+        MOVE,
+        CURSOR,
+    } mInteractionType{};
+    inline static const char* interationsNames[] = {"ROTATE", "MOVE", "CURSOR"};
 
     bool mIsRunning{};
     bool mIsMenuEnabled{};
     bool mIsUiClicked{};
     bool mIsLeftMouseClicked{};
     bool mIsRightMouseClicked{};
-
-    XMMATRIX mWorldMatrix = XMMatrixIdentity();
 
     int mSelectedRenderableIdx = -1;
 };
@@ -143,12 +152,10 @@ void App::renderScene()
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    pContext->IASetInputLayout(mpRenderer->getInputLayout());
-    UINT vStride = sizeof(XMFLOAT3), offset = 0;
-    pContext->RSSetState(mpRenderer->getWireframeRS());
+    //pContext->RSSetState(mpRenderer->getWireframeRS());
 
-    XMMATRIX view = mCamera.getViewMatrix();
-    XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()),
+    const XMMATRIX view = mCamera.getViewMatrix();
+    const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()),
                                                         mpWindow->getAspectRatio(), 1.0f, 1000.0f);
 
     ConstantBufferData data
@@ -165,38 +172,56 @@ void App::renderScene()
     memcpy(cbData.pData, &data, sizeof(data));
     pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-    pContext->VSSetShader(mpRenderer->mpGridVS.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->mpGridPS.Get(), nullptr, 0);
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    pContext->Draw(6, 0);
+    pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
 
-    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f,
-                                    0);
-
-    pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-    pContext->Draw(6, 0);
-
-    unsigned i{};
-    for (auto& renderable : mpRenderer->mRenderables)
     {
-        data.isSelected = (i == mSelectedRenderableIdx);
+        pContext->VSSetShader(mpRenderer->mpGridVS.Get(), nullptr, 0);
+        pContext->PSSetShader(mpRenderer->mpGridPS.Get(), nullptr, 0);
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pContext->Draw(6, 0);
+    }
 
-        D3D11_MAPPED_SUBRESOURCE cbData;
+    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+    {
+        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(mCursorPos), XMVectorGetY(mCursorPos), XMVectorGetZ(mCursorPos));
+        data.model = translationMat;
+
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
         pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers[i].GetAddressOf(), &vStride, &offset);
-        pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers[i].Get(), DXGI_FORMAT_R32_UINT, 0);
+        pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
+        pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+        pContext->Draw(6, 0);
+    }
+
+    for (auto const [i, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
+    {
+        if (pRenderable == nullptr)
+        {
+            continue;
+        }
+        XMVECTOR pos = pRenderable->getPosition();
+
+        XMMATRIX translationMatrix = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
+
+        data.model = XMMatrixTranspose(translationMatrix);
+        data.isSelected = (i == mSelectedRenderableIdx);
+
+        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+        memcpy(cbData.pData, &data, sizeof(data));
+        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+
+        UINT vStride = sizeof(XMFLOAT3), offset = 0;
+        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(i).GetAddressOf(), &vStride, &offset);
+        pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.at(i).Get(), DXGI_FORMAT_R32_UINT, 0);
+        pContext->IASetInputLayout(mpRenderer->getInputLayout());
         pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
         pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
-        pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-        pContext->DrawIndexed(static_cast<UINT>(renderable->getTopology().size()), 0, 0);
-
-        i++;
+        pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
     }
 
     renderUi();
@@ -215,10 +240,8 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     //    mpRenderer->onResize();
     //    break;
     case IWindow::Message::KEY_DELETE_DOWN:
-        if (mSelectedRenderableIdx != -1)
-        {
-            mpRenderer->mRenderables[mSelectedRenderableIdx] = nullptr;
-        }
+        mpRenderer->removeRenderable(mSelectedRenderableIdx);
+        mSelectedRenderableIdx = -1;
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
@@ -246,6 +269,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         break;
     case IWindow::Message::MOUSE_LEFT_DOWN:
         mIsLeftMouseClicked = true;
+
+        if (mInteractionType == InteractionType::CURSOR)
+        {
+            mCursorPos = mCamera.getLookingAtVec();
+        }
         break;
     case IWindow::Message::MOUSE_LEFT_UP:
         mIsLeftMouseClicked = false;
@@ -257,32 +285,45 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mIsRightMouseClicked = false;
         break;
     case IWindow::Message::MOUSE_MOVE:
-    {
-        if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
-            const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
+            if (mIsLeftMouseClicked && (!mIsUiClicked))
+            {
+                const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
 
-            const float xoffset = -mouseEvent.xoffset * mouseSensitivity;
-            const float yoffset = -mouseEvent.yoffset * mouseSensitivity;
+                const float xoffset = -mouseEvent.xoffset * mouseSensitivity;
+                const float yoffset = -mouseEvent.yoffset * mouseSensitivity;
 
-            static float yaw{};
-            static float pitch{};
+                switch (mInteractionType)
+                {
+                case InteractionType::ROTATE: {
+                    static float yaw{};
+                    static float pitch{};
 
-            yaw += xoffset;
-            pitch += yoffset;
-            XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
-            XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
+                    yaw += xoffset;
+                    pitch += yoffset;
+                    XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
+                    XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
 
-            mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
-            mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
-        }
-        else if (mIsRightMouseClicked && (!mIsUiClicked))
-        {
-            const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
-            mCamera.rotateCamera(static_cast<float>(mouseEvent.xoffset), static_cast<float>(-mouseEvent.yoffset));
+                    mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
+                    mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
+                }
+                break;
+                case InteractionType::MOVE: {
+                    const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
+                    const auto pos = pRenderable->getPosition();
+
+                    pRenderable->setPosition(XMVectorAdd(pos, XMVectorSet(xoffset, yoffset, 0.0f, 0.0f)));
+                }
+                break;
+                }
+            }
+            else if (mIsRightMouseClicked && (!mIsUiClicked))
+            {
+                const auto mouseEvent = mpWindow->getEvent<IWindow::Event::MousePosition>();
+                mCamera.rotateCamera(static_cast<float>(mouseEvent.xoffset), static_cast<float>(-mouseEvent.yoffset));
+            }
         }
         break;
-    }
     case IWindow::Message::MOUSE_WHEEL:
         const auto mouseWheel = mpWindow->getEvent<IWindow::Event::MouseWheel>();
         mCamera.setZoom(static_cast<float>(mouseWheel.yoffset));
@@ -310,26 +351,9 @@ void App::renderUi()
     }
 
     ImGui::Text("CAD: ");
-
-    mIsUiClicked = false;
-
     ImGui::Spacing();
 
-    std::vector<const char*> renderableNames{};
-    for (const auto& renderable : mpRenderer->mRenderables)
-    {
-        renderableNames.emplace_back(renderable->mTag.c_str());
-    }
-
-    int newSelectedItem = -1;
-
-    ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size()));
-
-    bool isNewItemSelected = (newSelectedItem != -1) && (mSelectedRenderableIdx != newSelectedItem);
-    if (isNewItemSelected)
-    {
-        mSelectedRenderableIdx = newSelectedItem;
-    }
+    mIsUiClicked = false;
 
     if (ImGui::Button("Add Torus"))
     {
@@ -341,14 +365,35 @@ void App::renderUi()
     {
         mpRenderer->addRenderable(std::move(std::make_unique<Point>()));
     }
-    ImGui::SameLine();
+
+    std::vector<const char*> renderableNames{};
+    for (const auto& renderable : mpRenderer->mRenderables)
+    {
+        if (renderable == nullptr)
+        {
+            continue;
+        }
+
+        renderableNames.emplace_back(renderable->mTag.c_str());
+    }
+
+    int newSelectedItem = -1;
+
+    ImGui::Text("Renderables:");
+    ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size()));
+
+    bool isNewItemSelected = (newSelectedItem != -1) && (mSelectedRenderableIdx != newSelectedItem);
+    if (isNewItemSelected)
+    {
+        mSelectedRenderableIdx = newSelectedItem;
+    }
 
     if (mSelectedRenderableIdx != -1)
     {
         ImGui::Separator();
 
         bool dataChanged{};
-        auto& selectedRenderable = mpRenderer->mRenderables.at(mSelectedRenderableIdx);
+        auto selectedRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
 
         if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable.get()); pTorus != nullptr)
         {
@@ -373,6 +418,10 @@ void App::renderUi()
             }
 
             dataChanged |= ImGui::IsItemActive();
+
+            ImGui::Combo("##interactionType", reinterpret_cast<int*>(&mInteractionType), interationsNames, IM_ARRAYSIZE(interationsNames));
+
+            ImGui::Spacing();
 
             ImGui::Text("Major Radius:");
             ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);

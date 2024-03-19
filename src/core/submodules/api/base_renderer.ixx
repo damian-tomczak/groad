@@ -34,10 +34,10 @@ export constexpr const char* apiToStr(const API api)
     }
 }
 
-export class Renderable : public NonCopyable
+export class IRenderable : public NonCopyable
 {
 public:
-    Renderable(std::string_view tag) : mTag{tag}
+    IRenderable(std::string_view tag) : mTag{tag}
     {
 
     }

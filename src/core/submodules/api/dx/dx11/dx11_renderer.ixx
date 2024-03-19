@@ -10,10 +10,10 @@ module;
 #include "utils.h"
 
 export module dx11renderer;
+export import dxrenderer;
 import std.core;
 import std.filesystem;
 
-import dxrenderer;
 import platform;
 
 using namespace Microsoft::WRL;
@@ -29,6 +29,7 @@ export struct ConstantBufferData
     bool isSelected;
     char padding[15]; // TODO: alignas doesn't work why?
 };
+static_assert(sizeof(ConstantBufferData) % 16 == 0);
 
 export class DX11Renderer : public DXRenderer
 {
@@ -49,7 +50,7 @@ public:
     void onResize() override;
     void buildGeometryBuffers();
 
-    std::vector<std::unique_ptr<Renderable>> mRenderables;
+    std::vector<std::shared_ptr<Renderable>> mRenderables;
 
     ComPtr<ID3D11VertexShader> mpVS;
     ComPtr<ID3D11PixelShader> mpPS;
@@ -111,7 +112,22 @@ public:
         mVertexBuffers.emplace_back();
         mIndexBuffers.emplace_back();
 
-        mRebuildBuffers = true;
+        //mRebuildBuffers = true;
+    }
+
+    void removeRenderable(int idx)
+    {
+        if (idx != -1)
+        {
+            mRenderables.erase(mRenderables.begin() + idx);
+            mVertexBuffers.erase(mVertexBuffers.begin() + idx);
+            mIndexBuffers.erase(mIndexBuffers.begin() + idx);
+        }
+    }
+
+    std::shared_ptr<Renderable> getRenderable(int idx) const
+    {
+        return mRenderables.at(idx);
     }
 
 private:
@@ -134,7 +150,7 @@ private:
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
 
-    bool mRebuildBuffers{};
+    //bool mRebuildBuffers{};
 };
 
 module :private;
@@ -282,6 +298,11 @@ void DX11Renderer::buildGeometryBuffers()
 {
     for (unsigned int i{}; i < mRenderables.size(); ++i)
     {
+        //if (mRenderables[i] == nullptr)
+        //{
+        //    continue;
+        //}
+
         mVertexBuffers[i].Reset();
         mIndexBuffers[i].Reset();
 
@@ -312,7 +333,7 @@ void DX11Renderer::buildGeometryBuffers()
         HR(mpDevice->CreateBuffer(&ibd, &initData, mIndexBuffers[i].GetAddressOf()));
     }
 
-    mRebuildBuffers = false;
+    //mRebuildBuffers = false;
 }
 
 

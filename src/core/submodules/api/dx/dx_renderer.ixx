@@ -26,6 +26,31 @@ export namespace Colors
 }
 // clang-format on
 
+class DXRenderable;
+export using Renderable = DXRenderable;
+
+export class DXRenderable : public IRenderable
+{
+public:
+    DXRenderable(std::string_view tag) : IRenderable{tag}
+    {
+
+    }
+
+    void setPosition(XMVECTOR pos)
+    {
+        mPosition = pos;
+    }
+
+    XMVECTOR getPosition() const
+    {
+        return mPosition;
+    }
+
+protected:
+    XMVECTOR mPosition{};
+};
+
 export class DXRenderer : public IRenderer
 {
 public:

@@ -4,7 +4,7 @@ module;
 
 export module core.renderables;
 import std.core;
-import core.renderer;
+import dx11renderer;
 
 using namespace DirectX;
 

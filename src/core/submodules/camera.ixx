@@ -95,6 +95,11 @@ public:
         return mZoom;
     }
 
+    XMVECTOR getLookingAtVec(float offset = 1.0f) const
+    {
+        return mPosition + mFront * offset;
+    }
+
 private:
     void updateCameraVectors()
     {
