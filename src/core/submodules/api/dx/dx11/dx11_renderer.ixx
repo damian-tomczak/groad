@@ -26,6 +26,8 @@ export struct ConstantBufferData
     XMMATRIX invView;
     XMMATRIX proj;
     XMMATRIX invProj;
+    bool isSelected;
+    char padding[15]; // TODO: alignas doesn't work why?
 };
 
 export class DX11Renderer : public DXRenderer

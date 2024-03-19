@@ -151,7 +151,7 @@ void App::renderScene()
     XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()),
                                                         mpWindow->getAspectRatio(), 1.0f, 1000.0f);
 
-    const ConstantBufferData data
+    ConstantBufferData data
     {
         .model = XMMatrixTranspose(mWorldMatrix),
         .view = XMMatrixTranspose(view),
@@ -170,7 +170,7 @@ void App::renderScene()
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     pContext->Draw(6, 0);
 
-    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f,
+    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f,
                                     0);
 
     pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
@@ -181,6 +181,13 @@ void App::renderScene()
     unsigned i{};
     for (auto& renderable : mpRenderer->mRenderables)
     {
+        data.isSelected = (i == mSelectedRenderableIdx);
+
+        D3D11_MAPPED_SUBRESOURCE cbData;
+        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+        memcpy(cbData.pData, &data, sizeof(data));
+        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+
         pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers[i].GetAddressOf(), &vStride, &offset);
         pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers[i].Get(), DXGI_FORMAT_R32_UINT, 0);
         pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
@@ -188,6 +195,8 @@ void App::renderScene()
         pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
         pContext->DrawIndexed(static_cast<UINT>(renderable->getTopology().size()), 0, 0);
+
+        i++;
     }
 
     renderUi();
@@ -307,15 +316,19 @@ void App::renderUi()
     ImGui::Spacing();
 
     std::vector<const char*> renderableNames{};
-    static int selectedItem = -1, newSelectedItem = -1;
-
     for (const auto& renderable : mpRenderer->mRenderables)
     {
         renderableNames.emplace_back(renderable->mTag.c_str());
     }
 
-    if (ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size())))
+    int newSelectedItem = -1;
+
+    ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size()));
+
+    bool isNewItemSelected = (newSelectedItem != -1) && (mSelectedRenderableIdx != newSelectedItem);
+    if (isNewItemSelected)
     {
+        mSelectedRenderableIdx = newSelectedItem;
     }
 
     if (ImGui::Button("Add Torus"))
@@ -330,12 +343,12 @@ void App::renderUi()
     }
     ImGui::SameLine();
 
-    if (newSelectedItem != -1)
+    if (mSelectedRenderableIdx != -1)
     {
         ImGui::Separator();
 
         bool dataChanged{};
-        auto& selectedRenderable = mpRenderer->mRenderables.at(newSelectedItem);
+        auto& selectedRenderable = mpRenderer->mRenderables.at(mSelectedRenderableIdx);
 
         if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable.get()); pTorus != nullptr)
         {
@@ -343,12 +356,10 @@ void App::renderUi()
 
             static char nameBuffer[256]{};
 
-            if (newSelectedItem != selectedItem)
+            if (isNewItemSelected)
             {
                 strncpy_s(nameBuffer, selectedRenderable->mTag.c_str(), sizeof(nameBuffer) - 1);
                 nameBuffer[sizeof(nameBuffer) - 1] = '\0';
-
-                selectedItem = newSelectedItem;
             }
 
             ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
