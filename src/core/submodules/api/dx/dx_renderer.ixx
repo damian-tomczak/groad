@@ -32,7 +32,8 @@ export using Renderable = DXRenderable;
 export class DXRenderable : public IRenderable
 {
 public:
-    DXRenderable(std::string_view tag) : IRenderable{tag}
+    DXRenderable(XMVECTOR pos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), std::string_view tag = "default tag")
+        : IRenderable{tag}, mPosition{pos}
     {
 
     }

@@ -16,8 +16,8 @@ export class Point : public Renderable
     std::vector<unsigned> mTopology;
 
 public:
-    Point(float radius = 0.05f, int segments = 6)
-        : Renderable{std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
+    Point(XMVECTOR pos, float radius = 0.05f, int segments = 6)
+        : Renderable{pos, std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
     {
         generateGeometry();
         generateTopology();
@@ -36,7 +36,7 @@ public:
         return mTopology;
     }
 
-    void generateGeometry() override
+    virtual void generateGeometry() override
     {
         mGeometry.clear();
         for (int i = 0; i <= mSegments; ++i)
@@ -53,7 +53,7 @@ public:
         }
     }
 
-    void generateTopology() override
+    virtual void generateTopology() override
     {
         mTopology.clear();
         for (int i = 0; i < mSegments; ++i)
@@ -77,13 +77,14 @@ export class Torus : public Renderable
     inline static unsigned counter{};
 
 public:
-    Torus(float majorRadius, float minorRadius, int majorSegments, int minorSegments)
-        : Renderable{std::format("Torus {}", counter++).c_str()}, mMajorRadius(majorRadius), mMinorRadius(minorRadius),
-          mMajorSegments(majorSegments),
-          mMinorSegments(minorSegments)
+    Torus(XMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100, int minorSegments = 20)
+        : Renderable{pos, std::format("Torus {}", counter++).c_str()},
+        mMajorRadius(majorRadius),
+        mMinorRadius(minorRadius),
+        mMajorSegments(majorSegments),
+        mMinorSegments(minorSegments)
     {
-        generateGeometry();
-        generateTopology();
+
     }
 
     float mMajorRadius;
@@ -101,7 +102,7 @@ public:
         return mTopology;
     }
 
-    void generateGeometry() override
+    virtual void generateGeometry() override
     {
         mGeometry.clear();
         for (int i = 0; i <= mMajorSegments; ++i)
@@ -118,7 +119,7 @@ public:
         }
     }
 
-    void generateTopology() override
+    virtual void generateTopology() override
     {
         mTopology.clear();
         for (int i = 0; i < mMajorSegments; ++i)

@@ -283,7 +283,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         break;
     case IWindow::Message::MOUSE_MIDDLE_DOWN:
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
-        mCursorPos = mCamera.getLookingAtVec(4.0f);
+        mCursorPos = mCamera.getPos() + mCamera.getFront() * 4.0f;
         break;
     case IWindow::Message::MOUSE_LEFT_UP:
         mIsLeftMouseClicked = false;
@@ -294,52 +294,51 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::MOUSE_RIGHT_UP:
         mIsRightMouseClicked = false;
         break;
-    case IWindow::Message::MOUSE_MOVE:
+    case IWindow::Message::MOUSE_MOVE: {
+        const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
+
+        if ((mLastXMousePosition == std::nullopt) && (mLastYMousePosition == std::nullopt))
         {
-            const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
+            mLastXMousePosition = std::make_optional(eventData.x);
+            mLastYMousePosition = std::make_optional(eventData.y);
+        }
 
-            if ((mLastXMousePosition == std::nullopt) && (mLastYMousePosition == std::nullopt))
+        const float xOffset = (eventData.x - *mLastXMousePosition) * 10 * mouseSensitivity;
+        const float yOffset = (eventData.y - *mLastYMousePosition) * 10 * mouseSensitivity;
+
+        mLastXMousePosition = eventData.x;
+        mLastYMousePosition = eventData.y;
+
+        if (mIsLeftMouseClicked && (!mIsUiClicked))
+        {
+            switch (mInteractionType)
             {
-                mLastXMousePosition = std::make_optional(eventData.x);
-                mLastYMousePosition = std::make_optional(eventData.y);
+            case InteractionType::ROTATE: {
+                static float yaw{};
+                static float pitch{};
+
+                yaw += xOffset;
+                pitch += yOffset;
+                XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
+                XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
+
+                mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
+                mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
             }
+            break;
+            case InteractionType::MOVE: {
+                const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
+                const auto pos = pRenderable->getPosition();
 
-            const float xOffset = (eventData.x - *mLastXMousePosition) * 10 * mouseSensitivity;
-            const float yOffset = (eventData.y - *mLastYMousePosition) * 10 * mouseSensitivity;
-
-            mLastXMousePosition = eventData.x;
-            mLastYMousePosition = eventData.y;
-
-            if (mIsLeftMouseClicked && (!mIsUiClicked))
-            {
-                switch (mInteractionType)
-                {
-                case InteractionType::ROTATE: {
-                    static float yaw{};
-                    static float pitch{};
-
-                    yaw += xOffset;
-                    pitch += yOffset;
-                    XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
-                    XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
-
-                    mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
-                    mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
-                }
-                break;
-                case InteractionType::MOVE: {
-                    const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
-                    const auto pos = pRenderable->getPosition();
-
-                    pRenderable->setPosition(XMVectorAdd(pos, XMVectorSet(xOffset, yOffset, 0.0f, 0.0f)));
-                }
-                break;
-                }
+                pRenderable->setPosition(pos + XMVectorSet(xOffset, yOffset, 0.0f, 0.0f));
             }
-            else if (mIsRightMouseClicked && (!mIsUiClicked))
-            {
-                mCamera.rotateCamera(xOffset, yOffset);
+            break;
             }
+        }
+        else if (mIsRightMouseClicked && (!mIsUiClicked))
+        {
+            mCamera.rotateCamera(xOffset, yOffset);
+        }
         }
         break;
     case IWindow::Message::MOUSE_WHEEL:
@@ -378,13 +377,17 @@ void App::renderUi()
 
     if (ImGui::Button("Add Torus"))
     {
-        mpRenderer->addRenderable(std::move(std::make_unique<Torus>(0.7f, 0.2f, 100, 20)));
+        auto pTorus = std::make_unique<Torus>(mCursorPos);
+        pTorus->regenerateData();
+        mpRenderer->addRenderable(std::move(pTorus));
     }
     ImGui::SameLine();
 
     if (ImGui::Button("Add Point"))
     {
-        mpRenderer->addRenderable(std::move(std::make_unique<Point>()));
+        auto pPoint = std::make_unique<Point>(mCursorPos);
+        pPoint->regenerateData();
+        mpRenderer->addRenderable(std::move(pPoint));
     }
 
     std::vector<const char*> renderableNames{};
@@ -469,8 +472,7 @@ void App::renderUi()
 
         if (dataChanged)
         {
-            selectedRenderable->generateGeometry();
-            selectedRenderable->generateTopology();
+            selectedRenderable->regenerateData();
             mpRenderer->buildGeometryBuffers();
         }
 

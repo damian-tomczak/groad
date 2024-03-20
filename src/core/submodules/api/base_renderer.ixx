@@ -39,7 +39,6 @@ export class IRenderable : public NonCopyable
 public:
     IRenderable(std::string_view tag) : mTag{tag}
     {
-
     }
 
     std::string mTag;
@@ -54,19 +53,18 @@ public:
         return mTopology;
     }
 
-    virtual void generateGeometry()
+    void regenerateData()
     {
-        ASSERT(false);
-    }
-
-    virtual void generateTopology()
-    {
-        ASSERT(false);
+        generateGeometry();
+        generateTopology();
     }
 
 protected:
     std::vector<float> mGeometry;
     std::vector<unsigned> mTopology;
+
+    virtual void generateGeometry() = 0;
+    virtual void generateTopology() = 0;
 };
 
 export class IRenderer : public NonCopyableAndMoveable

@@ -95,9 +95,24 @@ public:
         return mZoom;
     }
 
-    XMVECTOR getLookingAtVec(float offset = 1.0f) const
+    [[nodiscard]] XMVECTOR getFront() const
     {
-        return mPosition + mFront * offset;
+        return mFront;
+    }
+
+    [[nodiscard]] XMVECTOR getRight() const
+    {
+        return mRight;
+    }
+
+    [[nodiscard]] XMVECTOR getUp() const
+    {
+        return mUp;
+    }
+
+    [[nodiscard]] XMVECTOR getPos() const
+    {
+        return mPosition;
     }
 
 private:
