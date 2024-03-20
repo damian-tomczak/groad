@@ -26,6 +26,7 @@ using namespace DirectX;
 export class App final : public NonCopyableAndMoveable
 {
     static constexpr float aspectRatioFactor = 0.25f;
+    static constexpr XMFLOAT4 backgroundColor{0.1f, 0.1f, 0.1f, 1.0f};
 
 public:
     App(const ParsedOptions&& options);
@@ -145,8 +146,6 @@ void App::run()
 
 void App::renderScene()
 {
-    static constexpr XMFLOAT4 backgroundColor{0.1f, 0.1f, 0.1f, 1.0f};
-
     mpRenderer->buildGeometryBuffers();
 
     ID3D11DeviceContext* const pContext = mpRenderer->getContext();
@@ -247,9 +246,9 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::QUIT:
         mIsRunning = false;
         break;
-    //case IWindow::Message::RESIZE:
-    //    mpRenderer->onResize();
-    //    break;
+    case IWindow::Message::RESIZE:
+        mpRenderer->onResize();
+        break;
     case IWindow::Message::KEY_DELETE_DOWN:
         mpRenderer->removeRenderable(mSelectedRenderableIdx);
         mSelectedRenderableIdx = -1;
@@ -357,7 +356,6 @@ void App::renderUi()
     mIsMenuEnabled = false;
     mIsUiClicked = false;
 
-    const ImVec2 windowSize = ImGui::GetIO().DisplaySize;
     const float menuWidth = mpWindow->getWidth() * 0.2f;
 
     ImGui::SetNextWindowPos(ImVec2{mpWindow->getWidth() - menuWidth, 0});

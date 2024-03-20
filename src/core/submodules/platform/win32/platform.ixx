@@ -130,6 +130,8 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         return true;
     case WM_SIZE:
         PostMessage(hwnd, static_cast<UINT32>(Message::RESIZE), wParam, lParam);
+        mWidth = LOWORD(lParam);
+        mHeight = HIWORD(lParam);
         return true;
     case WM_KEYDOWN:
         switch (wParam)

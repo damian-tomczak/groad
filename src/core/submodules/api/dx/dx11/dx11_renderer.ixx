@@ -202,8 +202,6 @@ void DX11Renderer::onResize()
         .SampleDesc{.Count = enable4xMsaa ? 4 : 1, .Quality = enable4xMsaa ? m4xMsaaQuality - 1 : 0},
         .Usage = D3D11_USAGE_DEFAULT,
         .BindFlags = D3D11_BIND_DEPTH_STENCIL,
-        .CPUAccessFlags = 0,
-        .MiscFlags = 0,
     };
 
     HR(mpDevice->CreateTexture2D(&depthStencilDesc, 0, mpDepthStencilBuffer.GetAddressOf()));
@@ -220,23 +218,27 @@ void DX11Renderer::onResize()
 
     mpContext->RSSetViewports(1, &mScreenViewport);
 
-    D3D11_BLEND_DESC blendDesc = {};
-    ZeroMemory(&blendDesc, sizeof(D3D11_BLEND_DESC));
-    blendDesc.RenderTarget[0].BlendEnable = TRUE;
-    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    const D3D11_BLEND_DESC blendDesc
+    {
+        .RenderTarget =
+        {{
+            .BlendEnable = true,
+            .SrcBlend = D3D11_BLEND_SRC_ALPHA,
+            .DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
+            .BlendOp = D3D11_BLEND_OP_ADD,
+            .SrcBlendAlpha = D3D11_BLEND_ONE,
+            .DestBlendAlpha = D3D11_BLEND_ZERO,
+            .BlendOpAlpha = D3D11_BLEND_OP_ADD,
+            .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL,
+        }},
+    };
 
-    ID3D11BlendState* pBlendState{};
-    HR(mpDevice->CreateBlendState(&blendDesc, &pBlendState));
+    ComPtr<ID3D11BlendState> pBlendState;
+    HR(mpDevice->CreateBlendState(&blendDesc, pBlendState.GetAddressOf()));
 
-    float blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float blendFactor[]{0.0f, 0.0f, 0.0f, 0.0f};
     UINT sampleMask = 0xffffffff;
-    mpContext->OMSetBlendState(pBlendState, blendFactor, sampleMask);
+    mpContext->OMSetBlendState(pBlendState.Get(), blendFactor, sampleMask);
 }
 
 void DX11Renderer::initCore()
