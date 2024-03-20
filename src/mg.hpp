@@ -8,7 +8,7 @@ namespace mg
 {
 inline DirectX::XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
 {
-    const float yScale = 1.0f / std::tan(fovY / 2.0f);
+    const float yScale = 1.0f / static_cast<float>(tan(fovY / 2.0f));
     const float xScale = yScale / aspectRatio;
 
     const DirectX::XMMATRIX result
@@ -44,3 +44,7 @@ inline DirectX::XMMATRIX XMMatrixLookAtLH(const DirectX::XMVECTOR& position, con
     return viewMatrix;
 }
 }
+
+#ifdef CUSTOM_MATH
+#define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
+#endif

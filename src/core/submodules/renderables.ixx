@@ -1,6 +1,6 @@
 module;
 
-#include <DirectXMath.h>
+#include "mg.hpp"
 
 export module core.renderables;
 import std.core;
@@ -16,7 +16,7 @@ export class Point : public Renderable
     std::vector<unsigned> mTopology;
 
 public:
-    Point(XMVECTOR pos, float radius = 0.05f, int segments = 6)
+    Point(XMVECTOR pos, float radius = 0.5f, int segments = 50)
         : Renderable{pos, std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
     {
         generateGeometry();

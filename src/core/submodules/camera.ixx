@@ -3,8 +3,6 @@ module;
 #include "utils.h"
 #include "mg.hpp"
 
-#include <DirectXMath.h>
-
 export module core.camera;
 import std.core;
 

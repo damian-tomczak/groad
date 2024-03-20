@@ -48,6 +48,10 @@ public:
         return mPosition;
     }
 
+    float mPitch{};
+    float mYaw{};
+    float mScale = 1.f;
+
 protected:
     XMVECTOR mPosition{};
 };

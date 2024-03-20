@@ -1,6 +1,5 @@
 module;
 
-#include <DirectXMath.h>
 #include <Windows.h>
 
 #include <d3d11.h>
@@ -41,8 +40,6 @@ private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
 
-    XMMATRIX mWorldMatrix = XMMatrixIdentity();
-
     const ParsedOptions mOptions;
     Camera mCamera{0.0f, 0.5f, -10.0f};
     XMVECTOR mCursorPos{};
@@ -54,8 +51,9 @@ private:
     {
         ROTATE,
         MOVE,
+        SCALE,
     } mInteractionType{};
-    inline static const char* interationsNames[] = {"ROTATE", "MOVE"};
+    inline static const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE"};
 
     bool mIsRunning{};
     bool mIsMenuEnabled{};
@@ -63,10 +61,10 @@ private:
     bool mIsLeftMouseClicked{};
     bool mIsRightMouseClicked{};
 
-    int mSelectedRenderableIdx = -1;
-
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
+
+    std::unordered_set<unsigned> mSelectedRenderables;
 };
 
 module :private;
@@ -154,14 +152,15 @@ void App::renderScene()
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    pContext->RSSetState(mpRenderer->getWireframeRS());
+    //pContext->RSSetState(mpRenderer->getWireframeRS());
 
+    const XMMATRIX identity = XMMatrixIdentity();
     const XMMATRIX view = mCamera.getViewMatrix();
     const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 1.0f, 1000.0f);
 
     ConstantBufferData data
     {
-        .model = XMMatrixTranspose(mWorldMatrix),
+        .model = XMMatrixTranspose(identity),
         .view = XMMatrixTranspose(view),
         .invView = XMMatrixTranspose(XMMatrixInverse(nullptr, view)),
         .proj = XMMatrixTranspose(proj),
@@ -206,9 +205,15 @@ void App::renderScene()
         }
         XMVECTOR pos = pRenderable->getPosition();
 
-        XMMATRIX translationMatrix = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
+        XMMATRIX model = XMMatrixIdentity();
+        XMMATRIX translation = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
+        XMMATRIX scale = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
+        XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mPitch));
+        XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mYaw));
 
-        data.model = XMMatrixTranspose(translationMatrix);
+        model = scale * rotationX * rotationY * translation;
+
+        data.model = XMMatrixTranspose(model);
         data.isSelected = (i == mSelectedRenderableIdx);
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
@@ -310,28 +315,28 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
         if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
+            if ((mSelectedRenderableIdx == -1))
+            {
+                break;
+            }
+
+            const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
+
             switch (mInteractionType)
             {
             case InteractionType::ROTATE: {
-                static float yaw{};
-                static float pitch{};
-
-                yaw += xOffset;
-                pitch += yOffset;
-                XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(yaw));
-                XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pitch));
-
-                mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationY);
-                mWorldMatrix = XMMatrixMultiply(mWorldMatrix, rotationX);
+                pRenderable->mPitch += xOffset;
+                pRenderable->mYaw += yOffset;
             }
             break;
             case InteractionType::MOVE: {
-                const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
                 const auto pos = pRenderable->getPosition();
 
-                pRenderable->setPosition(pos + XMVectorSet(xOffset, yOffset, 0.0f, 0.0f));
+                pRenderable->setPosition(pos + XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f));
             }
             break;
+            case InteractionType::SCALE:
+                pRenderable->mScale += yOffset * 0.1f;
             }
         }
         else if (mIsRightMouseClicked && (!mIsUiClicked))
@@ -464,7 +469,7 @@ void App::renderUi()
             dataChanged |= ImGui::IsItemActive();
 
             ImGui::Text("Segments:");
-            ImGui::SliderInt("##segments", &pPoint->mSegments, 0, 100);
+            ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
             dataChanged |= ImGui::IsItemActive();
         }
 

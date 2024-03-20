@@ -1,6 +1,6 @@
 module;
 
-#include <DirectXMath.h>
+#include "mg.hpp"
 #include <DirectXPackedVector.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
@@ -127,7 +127,12 @@ public:
 
     std::shared_ptr<Renderable> getRenderable(int idx) const
     {
-        return mRenderables.at(idx);
+        if (idx != -1)
+        {
+            return mRenderables.at(idx);
+        }
+
+        return nullptr;
     }
 
 private:
