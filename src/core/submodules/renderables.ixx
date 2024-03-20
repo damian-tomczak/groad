@@ -19,8 +19,7 @@ public:
     Point(XMVECTOR pos, float radius = 0.5f, int segments = 50)
         : Renderable{pos, std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
     {
-        generateGeometry();
-        generateTopology();
+
     }
 
     float mRadius;

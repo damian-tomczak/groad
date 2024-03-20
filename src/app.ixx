@@ -64,7 +64,7 @@ private:
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
 
-    std::unordered_set<unsigned> mSelectedRenderables;
+    std::vector<int> mSelectedRenderables;
 };
 
 module :private;
@@ -214,7 +214,7 @@ void App::renderScene()
         model = scale * rotationX * rotationY * translation;
 
         data.model = XMMatrixTranspose(model);
-        data.isSelected = (i == mSelectedRenderableIdx);
+        data.isSelected = std::ranges::find(mSelectedRenderables, i) != mSelectedRenderables.end();
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
@@ -255,8 +255,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mpRenderer->onResize();
         break;
     case IWindow::Message::KEY_DELETE_DOWN:
-        mpRenderer->removeRenderable(mSelectedRenderableIdx);
-        mSelectedRenderableIdx = -1;
+        for (auto idx : mSelectedRenderables)
+        {
+            mpRenderer->removeRenderable(idx);
+            mSelectedRenderables.erase(mSelectedRenderables.begin() + idx);
+        }
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
@@ -315,12 +318,12 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
         if (mIsLeftMouseClicked && (!mIsUiClicked))
         {
-            if ((mSelectedRenderableIdx == -1))
+            if (mSelectedRenderables.empty())
             {
                 break;
             }
 
-            const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
+            const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderables.back());
 
             switch (mInteractionType)
             {
@@ -409,20 +412,28 @@ void App::renderUi()
     ImGui::Text("Renderables:");
     ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size()));
 
-    bool isNewItemSelected = (newSelectedItem != -1) && (mSelectedRenderableIdx != newSelectedItem);
-    if (isNewItemSelected)
+    bool isNewItemSelected{};
+    if (newSelectedItem != -1)
     {
-        mSelectedRenderableIdx = newSelectedItem;
+        if (std::ranges::find(mSelectedRenderables, newSelectedItem) == mSelectedRenderables.end())
+        {
+            mSelectedRenderables.push_back(newSelectedItem);
+            isNewItemSelected = true;
+        }
+        else
+        {
+            mSelectedRenderables.erase(std::remove(mSelectedRenderables.begin(), mSelectedRenderables.end(), newSelectedItem), mSelectedRenderables.end());
+        }
     }
 
-    if (mSelectedRenderableIdx != -1)
+    if (!mSelectedRenderables.empty())
     {
         ImGui::Separator();
 
         bool dataChanged{};
-        auto selectedRenderable = mpRenderer->getRenderable(mSelectedRenderableIdx);
+        auto selectedRenderable = mpRenderer->getRenderable(mSelectedRenderables.back());
 
-        ImGui::Text("Selected item: %s",selectedRenderable->mTag.c_str());
+        ImGui::Text("Selected item: %s", selectedRenderable->mTag.c_str());
 
          static char nameBuffer[256]{};
 
