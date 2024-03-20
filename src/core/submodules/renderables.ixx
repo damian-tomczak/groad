@@ -12,10 +12,63 @@ export class Point : public Renderable
 {
     inline static unsigned counter{};
 
-public:
-    Point() : Renderable{std::format("Point {}", counter++).c_str()}
-    {
+    std::vector<float> mGeometry;
+    std::vector<unsigned> mTopology;
 
+public:
+    Point(float radius = 0.05f, int segments = 6)
+        : Renderable{std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
+    {
+        generateGeometry();
+        generateTopology();
+    }
+
+    float mRadius;
+    int mSegments;
+
+    const std::vector<float>& getGeometry() const override
+    {
+        return mGeometry;
+    }
+
+    const std::vector<unsigned>& getTopology() const override
+    {
+        return mTopology;
+    }
+
+    void generateGeometry() override
+    {
+        mGeometry.clear();
+        for (int i = 0; i <= mSegments; ++i)
+        {
+            float theta = (i / static_cast<float>(mSegments)) * std::numbers::pi_v<float>;
+            for (int j = 0; j <= mSegments; ++j)
+            {
+                float phi = (j / static_cast<float>(mSegments)) * 2 * std::numbers::pi_v<float>;
+                float x = mRadius * std::sin(theta) * std::cos(phi);
+                float y = mRadius * std::sin(theta) * std::sin(phi);
+                float z = mRadius * std::cos(theta);
+                mGeometry.insert(mGeometry.end(), {x, y, z});
+            }
+        }
+    }
+
+    void generateTopology() override
+    {
+        mTopology.clear();
+        for (int i = 0; i < mSegments; ++i)
+        {
+            for (int j = 0; j < mSegments; ++j)
+            {
+                unsigned first = i * (mSegments + 1) + j;
+                unsigned nextInSegment = first + 1;
+                unsigned nextRow = first + (mSegments + 1);
+                unsigned nextRowNextInSegment = nextRow + 1;
+
+                mTopology.insert(mTopology.end(), {first, nextInSegment, nextRow});
+                mTopology.insert(mTopology.end(), {nextInSegment, nextRowNextInSegment, nextRow});
+            }
+        }
     }
 };
 
@@ -37,7 +90,6 @@ public:
     float mMinorRadius;
     int mMajorSegments;
     int mMinorSegments;
-    bool mIsDataChanged{};
 
     const std::vector<float>& getGeometry() const override
     {

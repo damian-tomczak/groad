@@ -174,59 +174,46 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         break;
     case WM_LBUTTONDOWN:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_LEFT_DOWN), wParam, lParam);
-        return true;
+        goto setMousePositionLabel;
     case WM_LBUTTONUP:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_LEFT_UP), wParam, lParam);
-        return true;
-    case WM_RBUTTONDOWN:
-        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_DOWN), wParam, lParam);
-        return true;
-    case WM_RBUTTONUP:
-        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_UP), wParam, lParam);
-        return true;
+        goto setMousePositionLabel;
     case WM_MBUTTONDOWN:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MIDDLE_DOWN), wParam, lParam);
-        return true;
+        goto setMousePositionLabel;
     case WM_MBUTTONUP:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MIDDLE_UP), wParam, lParam);
-        return true;
-    case WM_MOUSEMOVE: {
+        goto setMousePositionLabel;
+    case WM_RBUTTONDOWN:
+        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_DOWN), wParam, lParam);
+        goto setMousePositionLabel;
+    case WM_RBUTTONUP:
+        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_UP), wParam, lParam);
+        goto setMousePositionLabel;
+    case WM_MOUSEMOVE:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MOVE), wParam, lParam);
-
-        const int currentXMousePos = GET_X_LPARAM(lParam);
-        const int currentYMousePos = GET_Y_LPARAM(lParam);
-
-        if ((mLastXMousePosition == std::nullopt) && (mLastYMousePosition == std::nullopt))
-        {
-            mLastXMousePosition = std::make_optional(currentXMousePos);
-            mLastYMousePosition = std::make_optional(currentYMousePos);
-        }
-
-        const int xoffset = currentXMousePos - *mLastXMousePosition;
-        const int yoffset = currentYMousePos - *mLastYMousePosition;
-
-        const Event::MousePosition mousePosition{
-            .xoffset = xoffset,
-            .yoffset = yoffset,
-        };
-
-        mLastXMousePosition = currentXMousePos;
-        mLastYMousePosition = currentYMousePos;
-
-        mEventData = mousePosition;
-
-        return true;
-    }
+        goto setMousePositionLabel;
     case WM_MOUSEWHEEL: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_WHEEL), wParam, lParam);
 
         const Event::MouseWheel mouseWheel{
-            .yoffset = GET_WHEEL_DELTA_WPARAM(wParam),
+            .yOffset = GET_WHEEL_DELTA_WPARAM(wParam),
         };
         mEventData = mouseWheel;
 
         return true;
     }
+    setMousePositionLabel:
+        const int x = GET_X_LPARAM(lParam);
+        const int y = GET_Y_LPARAM(lParam);
+
+        const Event::MousePosition mousePosition{
+            .x = x,
+            .y = y,
+        };
+
+        mEventData = mousePosition;
+        return true;
     }
 
     return false;

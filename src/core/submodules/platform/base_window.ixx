@@ -18,13 +18,13 @@ public:
     {
         struct MousePosition
         {
-            int xoffset;
-            int yoffset;
+            int x;
+            int y;
         };
 
         struct MouseWheel
         {
-            int yoffset;
+            int yOffset;
         };
     };
     // clang-format off
@@ -65,10 +65,10 @@ public:
         KEY_DELETE_UP,
         MOUSE_LEFT_DOWN,
         MOUSE_LEFT_UP,
-        MOUSE_RIGHT_DOWN,
-        MOUSE_RIGHT_UP,
         MOUSE_MIDDLE_DOWN,
         MOUSE_MIDDLE_UP,
+        MOUSE_RIGHT_DOWN,
+        MOUSE_RIGHT_UP,
         MOUSE_WHEEL,
         MOUSE_MOVE,
     };
@@ -91,7 +91,7 @@ public:
     }
 
     template <typename EventType>
-    [[nodiscard]] EventType getEvent() const
+    [[nodiscard]] EventType getEventData() const
     {
         ASSERT(std::holds_alternative<EventType>(mEventData));
         return std::get<EventType>(mEventData);
@@ -103,7 +103,4 @@ protected:
     EventData mEventData;
     unsigned mWidth;
     unsigned mHeight;
-
-    std::optional<int> mLastXMousePosition;
-    std::optional<int> mLastYMousePosition;
 };

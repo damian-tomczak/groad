@@ -255,8 +255,7 @@ void DX11Renderer::initCore()
         ERR("Direct11 unsupported");
     }
 
-    mpDevice->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, 4,
-                                               &m4xMsaaQuality); // 4x Msaa is always supported
+    mpDevice->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, 8, &m4xMsaaQuality); // 4x Msaa is always supported
     ASSERT(m4xMsaaQuality > 0);
 
     const auto pWindow = dynamic_cast<Win32Window*>(mpWindow.lock().get());
