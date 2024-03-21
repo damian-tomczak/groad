@@ -209,8 +209,10 @@ void App::renderScene()
         XMMATRIX model = XMMatrixIdentity();
         XMMATRIX translation = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
         XMMATRIX scale = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
-        XMMATRIX rotationX = XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mPitch));
-        XMMATRIX rotationY = XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mYaw));
+        XMMATRIX rotationX =
+            XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mPitch));
+        XMMATRIX rotationY =
+            XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mYaw));
 
         model = scale * rotationX * rotationY * translation;
 
@@ -330,8 +332,8 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             switch (mInteractionType)
             {
             case InteractionType::ROTATE: {
-                pRenderable->mPitch += xOffset;
-                pRenderable->mYaw += yOffset;
+                pRenderable->mPitch += yOffset;
+                pRenderable->mYaw += xOffset;
             }
             break;
             case InteractionType::MOVE: {
@@ -341,7 +343,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             }
             break;
             case InteractionType::SCALE:
-                pRenderable->mScale += yOffset * 0.1f;
+                pRenderable->mScale += -yOffset * 0.1f;
             }
         }
         else if (mIsRightMouseClicked && (!mIsUiClicked))
@@ -380,6 +382,7 @@ void App::renderUi()
     ImGui::Spacing();
 
     ImGui::Combo("##interactionType", reinterpret_cast<int*>(&mInteractionType), interationsNames, IM_ARRAYSIZE(interationsNames));
+    mIsUiClicked |= ImGui::IsItemActive();
 
     ImGui::Spacing();
 
@@ -398,21 +401,24 @@ void App::renderUi()
         mpRenderer->addRenderable(std::move(pPoint));
     }
 
-    std::vector<const char*> renderableNames{};
-    for (const auto& renderable : mpRenderer->mRenderables)
+    std::vector<std::string> renderableNames{};
+    for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
     {
-        if (renderable == nullptr)
-        {
-            continue;
-        }
+        const bool isSelected = std::ranges::find(mSelectedRenderables, mpRenderer->mRenderables.at(i)->id) != mSelectedRenderables.end();
+        renderableNames.emplace_back(mpRenderer->mRenderables.at(i)->mTag + (isSelected ? "   [X]" : "") + (mLastSelectedRenderable == i ? " <-" : ""));
+    }
 
-        renderableNames.emplace_back(renderable->mTag.c_str());
+    std::vector<const char*> renderableNamesPtrs{};
+    for (const auto& name : renderableNames)
+    {
+        renderableNamesPtrs.push_back(name.c_str());
     }
 
     int newSelectedItem = -1;
 
     ImGui::Text("Renderables:");
-    ImGui::ListBox("##objects", &newSelectedItem, renderableNames.data(), static_cast<int>(renderableNames.size()));
+    ImGui::ListBox("##objects", &newSelectedItem, renderableNamesPtrs.data(), static_cast<int>(renderableNamesPtrs.size()));
+    mIsUiClicked |= ImGui::IsItemActive();
 
     bool isNewItemSelected{};
     if (newSelectedItem != -1)
