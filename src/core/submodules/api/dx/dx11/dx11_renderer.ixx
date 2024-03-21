@@ -124,8 +124,6 @@ public:
             if (mRenderables.at(i)->id == id)
             {
                 mRenderables.erase(mRenderables.begin() + i);
-                mVertexBuffers.at(i).Reset();
-                mIndexBuffers.at(i).Reset();
                 mVertexBuffers.erase(mVertexBuffers.begin() + i);
                 mIndexBuffers.erase(mIndexBuffers.begin() + i);
             }

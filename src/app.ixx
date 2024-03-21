@@ -70,6 +70,10 @@ private:
 
     XMMATRIX mView = XMMatrixIdentity();
     XMMATRIX mProj = XMMatrixIdentity();
+
+    XMVECTOR mCentroid;
+    float mCentroidPitch{};
+    float mCentroidYaw{};
 };
 
 module :private;
@@ -210,17 +214,30 @@ void App::renderScene()
         {
             continue;
         }
-        XMVECTOR pos = pRenderable->getPosition();
 
+        XMVECTOR pos = pRenderable->getPosition();
         XMMATRIX model = XMMatrixIdentity();
         XMMATRIX translation = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
-        XMMATRIX scale = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
-        XMMATRIX rotationX =
-            XMMatrixRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mPitch));
-        XMMATRIX rotationY =
-            XMMatrixRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), XMConvertToRadians(pRenderable->mYaw));
+        model = translation;
 
-        model = scale * rotationX * rotationY * translation;
+        XMMATRIX scale = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
+        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+        XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+        XMMATRIX combinedRotationMatrix = yawRotationMatrix * pitchRotationMatrix;
+
+        if (mSelectedRenderables.size() == 1)
+        {
+            model = scale * combinedRotationMatrix * translation;
+        }
+        else
+        {
+            XMVECTOR translationToRotationPoint = mCentroid - pos;
+
+            XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-translationToRotationPoint);
+            XMMATRIX translationBack = XMMatrixTranslationFromVector(translationToRotationPoint);
+
+            model = scale * translationToOrigin * combinedRotationMatrix * translationBack * model;
+        }
 
         data.model = XMMatrixTranspose(model);
         data.flags = (std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end()) ? 1 : 0;
@@ -248,7 +265,7 @@ void App::renderScene()
         pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
     }
 
-    if (mpRenderer->mRenderables.size() > 1)
+    if (mSelectedRenderables.size() > 1)
     {
         pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
@@ -259,9 +276,9 @@ void App::renderScene()
         }
 
         float numPositions = static_cast<float>(mpRenderer->mRenderables.size());
-        XMVECTOR centroid = XMVectorScale(sum, 1.0f / numPositions);
+        mCentroid = XMVectorScale(sum, 1.0f / numPositions);
 
-        auto pPoint = std::make_unique<Point>(centroid, 0.1f, 25, false);
+        auto pPoint = std::make_unique<Point>(mCentroid, 0.1f, 25, false);
         pPoint->regenerateData();
         IRenderable::Id id = pPoint->id;
         mpRenderer->addRenderable(std::move(pPoint));
@@ -269,7 +286,7 @@ void App::renderScene()
 
         mpRenderer->buildGeometryBuffers();
 
-        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(centroid), XMVectorGetY(centroid), XMVectorGetZ(centroid));
+        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(mCentroid), XMVectorGetY(mCentroid), XMVectorGetZ(mCentroid));
         data.model = XMMatrixTranspose(translationMat);
         data.flags = 2;
 
@@ -426,21 +443,24 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 break;
             }
 
-            const auto pRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
-
-            switch (mInteractionType)
+            for (const auto selectedRenderableId : mSelectedRenderables)
             {
-            case InteractionType::ROTATE:
-                pRenderable->mPitch += yOffset;
-                pRenderable->mYaw += xOffset;
-            break;
-            case InteractionType::MOVE:
-                const auto pos = pRenderable->getPosition();
-                pRenderable->setPosition(pos + XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f));
-            break;
-            case InteractionType::SCALE:
-                pRenderable->mScale += -yOffset * 0.1f;
-            break;
+                const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+
+                switch (mInteractionType)
+                {
+                case InteractionType::ROTATE:
+                    pRenderable->mPitch += yOffset;
+                    pRenderable->mYaw += xOffset;
+                    break;
+                case InteractionType::MOVE:
+                    const auto pos = pRenderable->getPosition();
+                    pRenderable->setPosition(pos + XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f));
+                    break;
+                case InteractionType::SCALE:
+                    pRenderable->mScale += -yOffset * 0.1f;
+                    break;
+                }
             }
         }
         else if (mIsRightMouseClicked && (!mIsUiClicked))
@@ -502,7 +522,7 @@ void App::renderUi()
     for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
     {
         const bool isSelected = std::ranges::find(mSelectedRenderables, mpRenderer->mRenderables.at(i)->id) != mSelectedRenderables.end();
-        renderableNames.emplace_back(mpRenderer->mRenderables.at(i)->mTag + (isSelected ? "   [X]" : "") + (mLastSelectedRenderable == i ? " <-" : ""));
+        renderableNames.emplace_back(mpRenderer->mRenderables.at(i)->mTag + (isSelected ? "   [X]" : "") + (mLastSelectedRenderable == mpRenderer->mRenderables.at(i)->id ? " <-" : ""));
     }
 
     std::vector<const char*> renderableNamesPtrs{};
