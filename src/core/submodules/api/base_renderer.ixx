@@ -45,6 +45,7 @@ public:
 
     std::string mTag;
     Id id;
+    bool isVisible = true;
 
     virtual const std::vector<float>& getGeometry() const
     {

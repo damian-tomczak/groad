@@ -6,6 +6,8 @@
 
 namespace mg
 {
+    using namespace DirectX;
+
 inline DirectX::XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
 {
     const float yScale = 1.0f / static_cast<float>(tan(fovY / 2.0f));
@@ -42,6 +44,24 @@ inline DirectX::XMMATRIX XMMatrixLookAtLH(const DirectX::XMVECTOR& position, con
     };
 
     return viewMatrix;
+}
+
+inline bool rayIntersectsSphere(const DirectX::XMVECTOR& rayOrigin, const DirectX::XMVECTOR& rayDir,
+                                const DirectX::XMVECTOR& sphereCenter, float sphereRadius)
+{
+    // Calculate the vector from the ray origin to the sphere center
+    XMVECTOR oc = XMVectorSubtract(sphereCenter, rayOrigin);
+
+    // Calculate coefficients for the quadratic equation
+    float a = XMVectorGetX(XMVector3Dot(rayDir, rayDir));
+    float b = 2.0f * XMVectorGetX(XMVector3Dot(oc, rayDir));
+    float c = XMVectorGetX(XMVector3Dot(oc, oc)) - sphereRadius * sphereRadius;
+
+    // Calculate discriminant
+    float discriminant = b * b - 4 * a * c;
+
+    // If discriminant is negative, ray does not intersect the sphere
+    return discriminant >= 0;
 }
 }
 

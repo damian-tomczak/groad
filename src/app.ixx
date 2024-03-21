@@ -52,8 +52,9 @@ private:
         ROTATE,
         MOVE,
         SCALE,
+        SELECT,
     } mInteractionType{};
-    inline static const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE"};
+    inline static const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELECT"};
 
     bool mIsRunning{};
     bool mIsMenuEnabled{};
@@ -66,6 +67,9 @@ private:
 
     std::unordered_set<IRenderable::Id> mSelectedRenderables;
     IRenderable::Id mLastSelectedRenderable = -1;
+
+    XMMATRIX mView = XMMatrixIdentity();
+    XMMATRIX mProj = XMMatrixIdentity();
 };
 
 module :private;
@@ -156,16 +160,16 @@ void App::renderScene()
     //pContext->RSSetState(mpRenderer->getWireframeRS());
 
     const XMMATRIX identity = XMMatrixIdentity();
-    const XMMATRIX view = mCamera.getViewMatrix();
-    const XMMATRIX proj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 1.0f, 1000.0f);
+    mView = mCamera.getViewMatrix();
+    mProj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 1.0f, 1000.0f);
 
     ConstantBufferData data
     {
         .model = XMMatrixTranspose(identity),
-        .view = XMMatrixTranspose(view),
-        .invView = XMMatrixTranspose(XMMatrixInverse(nullptr, view)),
-        .proj = XMMatrixTranspose(proj),
-        .invProj = XMMatrixTranspose(XMMatrixInverse(nullptr, proj)),
+        .view = XMMatrixTranspose(mView),
+        .invView = XMMatrixTranspose(XMMatrixInverse(nullptr, mView)),
+        .proj = XMMatrixTranspose(mProj),
+        .invProj = XMMatrixTranspose(XMMatrixInverse(nullptr, mProj)),
     };
 
     D3D11_MAPPED_SUBRESOURCE cbData;
@@ -200,6 +204,8 @@ void App::renderScene()
 
     for (auto const [i, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
     {
+        pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
         if (pRenderable == nullptr)
         {
             continue;
@@ -217,7 +223,7 @@ void App::renderScene()
         model = scale * rotationX * rotationY * translation;
 
         data.model = XMMatrixTranspose(model);
-        data.isSelected = std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end();
+        data.flags = (std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end()) ? 1 : 0;
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
@@ -240,6 +246,49 @@ void App::renderScene()
         }
 
         pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
+    }
+
+    if (mpRenderer->mRenderables.size() > 1)
+    {
+        pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+        XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        for (const auto& pRenderable : mpRenderer->mRenderables)
+        {
+            sum = XMVectorAdd(sum, pRenderable->getPosition());
+        }
+
+        float numPositions = static_cast<float>(mpRenderer->mRenderables.size());
+        XMVECTOR centroid = XMVectorScale(sum, 1.0f / numPositions);
+
+        auto pPoint = std::make_unique<Point>(centroid, 0.1f, 25, false);
+        pPoint->regenerateData();
+        IRenderable::Id id = pPoint->id;
+        mpRenderer->addRenderable(std::move(pPoint));
+        pPoint.reset();
+
+        mpRenderer->buildGeometryBuffers();
+
+        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(centroid), XMVectorGetY(centroid), XMVectorGetZ(centroid));
+        data.model = XMMatrixTranspose(translationMat);
+        data.flags = 2;
+
+        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+        memcpy(cbData.pData, &data, sizeof(data));
+        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+
+        UINT vStride = sizeof(XMFLOAT3), offset = 0;
+        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.back().GetAddressOf(), &vStride, &offset);
+        pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.back().Get(), DXGI_FORMAT_R32_UINT, 0);
+
+        pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
+        pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        auto pTest = mpRenderer->getRenderable(id);
+        pContext->DrawIndexed(static_cast<UINT>(pTest->getTopology().size()), 0, 0);
+
+        mpRenderer->removeRenderable(id);
     }
 
     renderUi();
@@ -289,8 +338,58 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             mCamera.moveCamera(Camera::RIGHT, deltaTime);
         }
         break;
-    case IWindow::Message::MOUSE_LEFT_DOWN:
-        mIsLeftMouseClicked = true;
+    case IWindow::Message::MOUSE_LEFT_DOWN: {
+            mIsLeftMouseClicked = true;
+
+            if (mInteractionType == InteractionType::SELECT)
+            {
+                const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
+
+                float mouseX = (float)eventData.x;
+                float mouseY = (float)eventData.y;
+                float x = (2.0f * mouseX) / mpWindow->getWidth() - 1.0f;
+                float y = 1.0f - (2.0f * mouseY) / mpWindow->getHeight();
+                float z = 1.0f;
+
+                XMVECTOR rayNDC = XMVectorSet(x, y, z, 1.0f);
+
+                XMMATRIX projMatrix = mProj;
+                XMMATRIX viewMatrix = mView;
+                XMMATRIX invProjMatrix = XMMatrixInverse(nullptr, projMatrix);
+                XMMATRIX invViewMatrix = XMMatrixInverse(nullptr, viewMatrix);
+
+                XMVECTOR rayClip = XMVectorSet(x, y, -1.0f, 1.0f);
+                XMVECTOR rayView = XMVector4Transform(
+                    rayClip, invProjMatrix);
+
+                rayView = XMVectorSetW(rayView, 0.0f);
+
+                XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMatrix);
+                rayWorld = XMVector3Normalize(rayWorld);
+
+                XMVECTOR rayOrigin = mCamera.getPos();
+                XMVECTOR rayDir = rayWorld;
+
+                for (const auto& pRenderable : mpRenderer->mRenderables)
+                {
+                    auto pPoint = dynamic_cast<Point*>(pRenderable.get());
+                    if (pPoint == nullptr)
+                    {
+                        continue;
+                    }
+
+                    const auto renderablePos = pRenderable->getPosition();
+                    const auto radius = pPoint->mRadius;
+
+                    const bool intersection = mg::rayIntersectsSphere(rayOrigin, rayDir, renderablePos, radius);
+
+                    if (intersection)
+                    {
+                        mSelectedRenderables.insert(pRenderable->id);
+                    }
+                }
+            }
+        }
         break;
     case IWindow::Message::MOUSE_MIDDLE_DOWN:
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
@@ -331,19 +430,17 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
             switch (mInteractionType)
             {
-            case InteractionType::ROTATE: {
+            case InteractionType::ROTATE:
                 pRenderable->mPitch += yOffset;
                 pRenderable->mYaw += xOffset;
-            }
             break;
-            case InteractionType::MOVE: {
+            case InteractionType::MOVE:
                 const auto pos = pRenderable->getPosition();
-
                 pRenderable->setPosition(pos + XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f));
-            }
             break;
             case InteractionType::SCALE:
                 pRenderable->mScale += -yOffset * 0.1f;
+            break;
             }
         }
         else if (mIsRightMouseClicked && (!mIsUiClicked))
@@ -464,7 +561,7 @@ void App::renderUi()
             selectedRenderable->mTag = nameBuffer;
         }
 
-        if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable.get()); pTorus != nullptr)
+        if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable); pTorus != nullptr)
         {
             ImGui::Text("Major Radius:");
             ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
@@ -484,7 +581,7 @@ void App::renderUi()
             ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
             dataChanged |= ImGui::IsItemActive();
         }
-        else if (auto pPoint = dynamic_cast<Point*>(selectedRenderable.get()); pPoint != nullptr)
+        else if (auto pPoint = dynamic_cast<Point*>(selectedRenderable); pPoint != nullptr)
         {
             ImGui::Text("Radius:");
             ImGui::SliderFloat("##radius", &pPoint->mRadius, 0.1f, 10.0f);

@@ -26,8 +26,7 @@ export struct ConstantBufferData
     XMMATRIX invView;
     XMMATRIX proj;
     XMMATRIX invProj;
-    bool isSelected;
-    char padding[15]; // TODO: alignas doesn't work why?
+    int flags;
 };
 static_assert(sizeof(ConstantBufferData) % 16 == 0);
 
@@ -50,7 +49,7 @@ public:
     void onResize() override;
     void buildGeometryBuffers();
 
-    std::vector<std::shared_ptr<Renderable>> mRenderables;
+    std::vector<std::unique_ptr<Renderable>> mRenderables;
 
     ComPtr<ID3D11VertexShader> mpVS;
     ComPtr<ID3D11PixelShader> mpPS;
@@ -58,6 +57,9 @@ public:
     ComPtr<ID3D11PixelShader> mpGridPS;
     ComPtr<ID3D11VertexShader> mpCursorVS;
     ComPtr<ID3D11PixelShader> mpCursorPS;
+    ComPtr<ID3D11VertexShader> mpCentroidVS;
+    ComPtr<ID3D11PixelShader> mpCentroidPS;
+
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
@@ -122,20 +124,22 @@ public:
             if (mRenderables.at(i)->id == id)
             {
                 mRenderables.erase(mRenderables.begin() + i);
+                mVertexBuffers.at(i).Reset();
+                mIndexBuffers.at(i).Reset();
                 mVertexBuffers.erase(mVertexBuffers.begin() + i);
                 mIndexBuffers.erase(mIndexBuffers.begin() + i);
             }
         }
     }
 
-    std::shared_ptr<Renderable> getRenderable(IRenderable::Id id) const
+    Renderable* getRenderable(IRenderable::Id id) const
     {
         auto it = std::find_if(mRenderables.begin(), mRenderables.end(),
                                [id](const auto& item) { return item->id == id; });
 
         if (it != mRenderables.end())
         {
-            return *it;
+            return it->get();
         }
 
         return nullptr;
@@ -414,6 +418,15 @@ void DX11Renderer::createShaders()
     compileShader("cursor_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
                                    &mpCursorPS));
+
+    compileShader("centroid_vs.hlsl", "vs_5_0", compiledShader);
+    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                    mpCentroidVS.GetAddressOf()));
+
+    compileShader("centroid_ps.hlsl", "ps_5_0", compiledShader);
+    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                   &mpCentroidPS));
+
 
     D3D11_BUFFER_DESC constantBufferDesc
     {

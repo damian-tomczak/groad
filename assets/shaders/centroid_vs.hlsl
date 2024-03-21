@@ -7,27 +7,18 @@ cbuffer CBuffer: register(b0) {
     int flags;
 };
 
-struct VertexIn
-{
-    float3 pos : POSITION;
-};
-
 struct VertexOut
 {
     float4 pos : SV_POSITION;
-    bool isSelected : BOOLEAN1;
-    bool isCentroid : BOOLEAN2;
+    float PointSize : PSIZE;
 };
 
-VertexOut main(VertexIn vin)
+VertexOut main()
 {
     VertexOut vout;
     matrix mvp = mul(model, view);
     mvp = mul(mvp, proj);
-    vout.pos = mul(float4(vin.pos, 1.0f), mvp);
-
-    vout.isSelected = flags == 1;
-    vout.isCentroid = flags == 2;
-
+    vout.pos = mul(float4(1.0f, 1.0f, 1.0f, 1.0f), mvp);
+    vout.PointSize = 400;
     return vout;
 }

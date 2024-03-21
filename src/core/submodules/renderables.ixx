@@ -10,14 +10,14 @@ using namespace DirectX;
 
 export class Point : public Renderable
 {
-    inline static unsigned counter{};
+    inline static unsigned counter = 1;
 
     std::vector<float> mGeometry;
     std::vector<unsigned> mTopology;
 
 public:
-    Point(XMVECTOR pos, float radius = 0.5f, int segments = 50)
-        : Renderable{pos, std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
+    Point(XMVECTOR pos, float radius = 0.5f, int segments = 50, bool wo = true)
+        : Renderable{pos, std::format("Point {}", wo ? counter++ : 0).c_str()}, mRadius(radius), mSegments(segments)
     {
 
     }
@@ -73,7 +73,7 @@ public:
 
 export class Torus : public Renderable
 {
-    inline static unsigned counter{};
+    inline static unsigned counter = 1;
 
 public:
     Torus(XMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100, int minorSegments = 20)

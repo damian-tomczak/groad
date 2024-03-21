@@ -4,6 +4,7 @@ cbuffer CBuffer: register(b0) {
     matrix invView;
     matrix proj;
     matrix invProj;
+    int flags;
 };
 
 struct VertexInput {
