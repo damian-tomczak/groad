@@ -37,11 +37,14 @@ export constexpr const char* apiToStr(const API api)
 export class IRenderable : public NonCopyable
 {
 public:
-    IRenderable(std::string_view tag) : mTag{tag}
+    using Id = unsigned;
+
+    IRenderable(std::string_view tag) : mTag{tag}, id{counter++}
     {
     }
 
     std::string mTag;
+    Id id;
 
     virtual const std::vector<float>& getGeometry() const
     {
@@ -65,6 +68,9 @@ protected:
 
     virtual void generateGeometry() = 0;
     virtual void generateTopology() = 0;
+
+private:
+    inline static Id counter = 0;
 };
 
 export class IRenderer : public NonCopyableAndMoveable

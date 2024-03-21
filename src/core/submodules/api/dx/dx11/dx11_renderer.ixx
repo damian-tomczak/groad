@@ -115,21 +115,27 @@ public:
         //mRebuildBuffers = true;
     }
 
-    void removeRenderable(int idx)
+    void removeRenderable(IRenderable::Id id)
     {
-        if (idx != -1)
+        for (int i{}; i < mRenderables.size(); ++i)
         {
-            mRenderables.erase(mRenderables.begin() + idx);
-            mVertexBuffers.erase(mVertexBuffers.begin() + idx);
-            mIndexBuffers.erase(mIndexBuffers.begin() + idx);
+            if (mRenderables.at(i)->id == id)
+            {
+                mRenderables.erase(mRenderables.begin() + i);
+                mVertexBuffers.erase(mVertexBuffers.begin() + i);
+                mIndexBuffers.erase(mIndexBuffers.begin() + i);
+            }
         }
     }
 
-    std::shared_ptr<Renderable> getRenderable(int idx) const
+    std::shared_ptr<Renderable> getRenderable(IRenderable::Id id) const
     {
-        if (idx != -1)
+        auto it = std::find_if(mRenderables.begin(), mRenderables.end(),
+                               [id](const auto& item) { return item->id == id; });
+
+        if (it != mRenderables.end())
         {
-            return mRenderables.at(idx);
+            return *it;
         }
 
         return nullptr;

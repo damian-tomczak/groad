@@ -64,7 +64,8 @@ private:
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
 
-    std::vector<int> mSelectedRenderables;
+    std::unordered_set<IRenderable::Id> mSelectedRenderables;
+    IRenderable::Id mLastSelectedRenderable = -1;
 };
 
 module :private;
@@ -214,7 +215,7 @@ void App::renderScene()
         model = scale * rotationX * rotationY * translation;
 
         data.model = XMMatrixTranspose(model);
-        data.isSelected = std::ranges::find(mSelectedRenderables, i) != mSelectedRenderables.end();
+        data.isSelected = std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end();
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
@@ -255,11 +256,12 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mpRenderer->onResize();
         break;
     case IWindow::Message::KEY_DELETE_DOWN:
-        for (auto idx : mSelectedRenderables)
+        for (auto it = mSelectedRenderables.begin(); it != mSelectedRenderables.end(); it = mSelectedRenderables.begin())
         {
-            mpRenderer->removeRenderable(idx);
-            mSelectedRenderables.erase(mSelectedRenderables.begin() + idx);
+            mpRenderer->removeRenderable(*it);
+            mSelectedRenderables.erase(*it);
         }
+        mLastSelectedRenderable = -1;
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
@@ -323,7 +325,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 break;
             }
 
-            const auto pRenderable = mpRenderer->getRenderable(mSelectedRenderables.back());
+            const auto pRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
 
             switch (mInteractionType)
             {
@@ -415,23 +417,26 @@ void App::renderUi()
     bool isNewItemSelected{};
     if (newSelectedItem != -1)
     {
-        if (std::ranges::find(mSelectedRenderables, newSelectedItem) == mSelectedRenderables.end())
+        const auto newId = mpRenderer->mRenderables.at(newSelectedItem)->id;
+        if (!mSelectedRenderables.contains(newId))
         {
-            mSelectedRenderables.push_back(newSelectedItem);
+            mSelectedRenderables.insert(newId);
+            mLastSelectedRenderable = newId;
             isNewItemSelected = true;
         }
         else
         {
-            mSelectedRenderables.erase(std::remove(mSelectedRenderables.begin(), mSelectedRenderables.end(), newSelectedItem), mSelectedRenderables.end());
+            mSelectedRenderables.erase(newId);
+            mLastSelectedRenderable = -1;
         }
     }
 
-    if (!mSelectedRenderables.empty())
+    if (mLastSelectedRenderable != -1)
     {
         ImGui::Separator();
 
         bool dataChanged{};
-        auto selectedRenderable = mpRenderer->getRenderable(mSelectedRenderables.back());
+        auto selectedRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
 
         ImGui::Text("Selected item: %s", selectedRenderable->mTag.c_str());
 
