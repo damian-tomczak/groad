@@ -6,14 +6,14 @@
 
 namespace mg
 {
-    using namespace DirectX;
+using namespace DirectX;
 
-inline DirectX::XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
+inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
 {
     const float yScale = 1.0f / static_cast<float>(tan(fovY / 2.0f));
     const float xScale = yScale / aspectRatio;
 
-    const DirectX::XMMATRIX result
+    const XMMATRIX result
     {
         xScale, 0.0f,   0.0f,                           0.0f,
         0.0f,   yScale, 0.0f,                           0.0f,
@@ -24,47 +24,47 @@ inline DirectX::XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio,
     return result;
 }
 
-inline DirectX::XMMATRIX XMMatrixLookAtLH(const DirectX::XMVECTOR& position, const DirectX::XMVECTOR& target,
-                                   const DirectX::XMVECTOR& up)
+inline XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& focusPosition,
+                                 const XMVECTOR& upDirection)
 {
-    DirectX::XMVECTOR zAxis = DirectX::XMVector3Normalize(DirectX::XMVectorSubtract(target, position));
-    DirectX::XMVECTOR xAxis = DirectX::XMVector3Normalize(DirectX::XMVector3Cross(up, zAxis));
-    DirectX::XMVECTOR yAxis = DirectX::XMVector3Cross(zAxis, xAxis);
+    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(focusPosition, eyePosition));
 
-    DirectX::XMVECTOR negPos = DirectX::XMVectorNegate(position);
-    float tx = DirectX::XMVectorGetX(DirectX::XMVector3Dot(xAxis, negPos));
-    float ty = DirectX::XMVectorGetY(DirectX::XMVector3Dot(yAxis, negPos));
-    float tz = DirectX::XMVectorGetZ(DirectX::XMVector3Dot(zAxis, negPos));
+    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(upDirection, zAxis));
 
-    const DirectX::XMMATRIX viewMatrix
-    {
-        DirectX::XMVectorGetX(xAxis), DirectX::XMVectorGetY(xAxis), DirectX::XMVectorGetZ(xAxis), 0,
-        DirectX::XMVectorGetX(yAxis), DirectX::XMVectorGetY(yAxis), DirectX::XMVectorGetZ(yAxis), 0,
-        DirectX::XMVectorGetX(zAxis), DirectX::XMVectorGetY(zAxis), DirectX::XMVectorGetZ(zAxis), 0, tx, ty, tz, 1,
+    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
+
+    XMVECTOR eyeDotX = -XMVector3Dot(eyePosition, xAxis);
+    XMVECTOR eyeDotY = -XMVector3Dot(eyePosition, yAxis);
+    XMVECTOR eyeDotZ = -XMVector3Dot(eyePosition, zAxis);
+
+    XMMATRIX viewMatrix = {
+        XMVectorSetByIndex(xAxis, XMVectorGetX(eyeDotX), 3),
+        XMVectorSetByIndex(yAxis, XMVectorGetX(eyeDotY), 3),
+        XMVectorSetByIndex(zAxis, XMVectorGetX(eyeDotZ), 3),
+        XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f)
     };
 
-    return viewMatrix;
+    return XMMatrixTranspose(viewMatrix);
 }
 
-inline bool rayIntersectsSphere(const DirectX::XMVECTOR& rayOrigin, const DirectX::XMVECTOR& rayDir,
-                                const DirectX::XMVECTOR& sphereCenter, float sphereRadius)
+inline bool rayIntersectsSphere(const XMVECTOR& rayOrigin, const XMVECTOR& rayDir,
+                                const XMVECTOR& sphereCenter, float sphereRadius)
 {
-    // Calculate the vector from the ray origin to the sphere center
     XMVECTOR oc = XMVectorSubtract(sphereCenter, rayOrigin);
 
-    // Calculate coefficients for the quadratic equation
     float a = XMVectorGetX(XMVector3Dot(rayDir, rayDir));
     float b = 2.0f * XMVectorGetX(XMVector3Dot(oc, rayDir));
     float c = XMVectorGetX(XMVector3Dot(oc, oc)) - sphereRadius * sphereRadius;
 
-    // Calculate discriminant
     float discriminant = b * b - 4 * a * c;
 
-    // If discriminant is negative, ray does not intersect the sphere
     return discriminant >= 0;
 }
 }
 
+#define CUSTOM_MATH
+
 #ifdef CUSTOM_MATH
 #define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
+#define XMMatrixLookAtLH mg::XMMatrixLookAtLH
 #endif

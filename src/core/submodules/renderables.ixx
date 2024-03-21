@@ -59,13 +59,11 @@ public:
         {
             for (int j = 0; j < mSegments; ++j)
             {
-                unsigned first = i * (mSegments + 1) + j;
-                unsigned nextInSegment = first + 1;
-                unsigned nextRow = first + (mSegments + 1);
-                unsigned nextRowNextInSegment = nextRow + 1;
+                unsigned first = (i * (mSegments + 1)) + j;
+                unsigned second = first + mSegments + 1;
 
-                mTopology.insert(mTopology.end(), {first, nextInSegment, nextRow});
-                mTopology.insert(mTopology.end(), {nextInSegment, nextRowNextInSegment, nextRow});
+                mTopology.insert(mTopology.end(), {first, second, first + 1});
+                mTopology.insert(mTopology.end(), {second, second + 1, first + 1});
             }
         }
     }

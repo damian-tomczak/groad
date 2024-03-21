@@ -34,6 +34,7 @@ public:
     void init();
     void run();
 
+    void updateScene(float dt);
     void renderScene();
 
 private:
@@ -147,8 +148,24 @@ void App::run()
             msg = mpWindow->getMessage();
         }
 
+        updateScene(dt);
         renderScene();
     }
+}
+
+void App::updateScene(float dt)
+{
+    //if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 3)
+    //{
+    //    return;
+    //}
+
+    //for (const auto selectedRenderableId : mSelectedRenderables)
+    //{
+    //    const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+
+    //    pRenderable->mYaw += 0.5f * dt;
+    //}
 }
 
 void App::renderScene()
@@ -215,31 +232,39 @@ void App::renderScene()
             continue;
         }
 
-        XMVECTOR pos = pRenderable->getPosition();
-        XMMATRIX model = XMMatrixIdentity();
-        XMMATRIX translation = XMMatrixTranslation(XMVectorGetX(pos), XMVectorGetY(pos), XMVectorGetZ(pos));
-        model = translation;
+        XMVECTOR localPos = pRenderable->mLocalPos;
+        XMVECTOR worldPos = pRenderable->mWorldPos;
 
-        XMMATRIX scale = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
+        XMMATRIX model = XMMatrixIdentity();
+
+        XMMATRIX scaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
         XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
         XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
         XMMATRIX combinedRotationMatrix = yawRotationMatrix * pitchRotationMatrix;
 
-        if (mSelectedRenderables.size() == 1)
+        XMMATRIX localTranslation =
+            XMMatrixTranslation(XMVectorGetX(localPos), XMVectorGetY(localPos), XMVectorGetZ(localPos));
+        XMMATRIX worldTranslation =
+            XMMatrixTranslation(XMVectorGetX(worldPos), XMVectorGetY(worldPos), XMVectorGetZ(worldPos));
+
+        XMMATRIX translationMat = localTranslation * worldTranslation;
+
+        if (mSelectedRenderables.size() > 1)
         {
-            model = scale * combinedRotationMatrix * translation;
-        }
-        else
-        {
-            XMVECTOR translationToRotationPoint = mCentroid - pos;
+            XMVECTOR translationToRotationPoint = mCentroid - (worldPos + localPos);
 
             XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-translationToRotationPoint);
             XMMATRIX translationBack = XMMatrixTranslationFromVector(translationToRotationPoint);
 
-            model = scale * translationToOrigin * combinedRotationMatrix * translationBack * model;
+            model = translationToOrigin * scaleMat * combinedRotationMatrix * translationBack * translationMat;
+        }
+        else
+        {
+            model = scaleMat * combinedRotationMatrix * translationMat;
         }
 
         data.model = XMMatrixTranspose(model);
+
         data.flags = (std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end()) ? 1 : 0;
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
@@ -270,12 +295,13 @@ void App::renderScene()
         pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
         XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        for (const auto& pRenderable : mpRenderer->mRenderables)
+        for (const auto& selectedRenderableId : mSelectedRenderables)
         {
-            sum = XMVectorAdd(sum, pRenderable->getPosition());
+            const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+            sum = XMVectorAdd(sum, pRenderable->mLocalPos + pRenderable->mWorldPos);
         }
 
-        float numPositions = static_cast<float>(mpRenderer->mRenderables.size());
+        float numPositions = static_cast<float>(mSelectedRenderables.size());
         mCentroid = XMVectorScale(sum, 1.0f / numPositions);
 
         auto pPoint = std::make_unique<Point>(mCentroid, 0.1f, 25, false);
@@ -362,8 +388,8 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             {
                 const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
 
-                float mouseX = (float)eventData.x;
-                float mouseY = (float)eventData.y;
+                float mouseX = static_cast<float>(eventData.x);
+                float mouseY = static_cast<float>(eventData.y);
                 float x = (2.0f * mouseX) / mpWindow->getWidth() - 1.0f;
                 float y = 1.0f - (2.0f * mouseY) / mpWindow->getHeight();
                 float z = 1.0f;
@@ -395,7 +421,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                         continue;
                     }
 
-                    const auto renderablePos = pRenderable->getPosition();
+                    const auto renderablePos = pRenderable->mWorldPos;
                     const auto radius = pPoint->mRadius;
 
                     const bool intersection = mg::rayIntersectsSphere(rayOrigin, rayDir, renderablePos, radius);
@@ -450,12 +476,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 switch (mInteractionType)
                 {
                 case InteractionType::ROTATE:
-                    pRenderable->mPitch += yOffset;
-                    pRenderable->mYaw += xOffset;
+                    pRenderable->mPitch += yOffset * 0.2f;
+                    pRenderable->mYaw += xOffset * 0.2f;
                     break;
                 case InteractionType::MOVE:
-                    const auto pos = pRenderable->getPosition();
-                    pRenderable->setPosition(pos + XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f));
+                    pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
                     break;
                 case InteractionType::SCALE:
                     pRenderable->mScale += -yOffset * 0.1f;
@@ -559,62 +584,75 @@ void App::renderUi()
         ImGui::Separator();
 
         bool dataChanged{};
-        auto selectedRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
+        auto pSelectedRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
 
-        ImGui::Text("Selected item: %s", selectedRenderable->mTag.c_str());
+        ImGui::Text("Selected item: %s", pSelectedRenderable->mTag.c_str());
 
          static char nameBuffer[256]{};
 
         if (isNewItemSelected)
         {
-            strncpy_s(nameBuffer, selectedRenderable->mTag.c_str(), sizeof(nameBuffer) - 1);
+            strncpy_s(nameBuffer, pSelectedRenderable->mTag.c_str(), sizeof(nameBuffer) - 1);
             nameBuffer[sizeof(nameBuffer) - 1] = '\0';
         }
 
-        ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
-        dataChanged |= ImGui::IsItemActive();
+        dataChanged |= ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
 
         ImGui::SameLine();
 
         if (ImGui::Button("Rename"))
         {
-            selectedRenderable->mTag = nameBuffer;
+            pSelectedRenderable->mTag = nameBuffer;
         }
 
-        if (auto pTorus = dynamic_cast<Torus*>(selectedRenderable); pTorus != nullptr)
+        float localPos[3];
+        float worldPos[3];
+
+        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(localPos), pSelectedRenderable->mLocalPos);
+        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(worldPos), pSelectedRenderable->mWorldPos);
+
+        ImGui::Text("Local Position:");
+        if (ImGui::InputFloat3("##localPos", localPos))
+        {
+            pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
+            dataChanged = true;
+        }
+
+        ImGui::Text("World Position:");
+        if (ImGui::InputFloat3("##worldPos", worldPos))
+        {
+            pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
+            dataChanged = true;
+        }
+
+        if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
         {
             ImGui::Text("Major Radius:");
-            ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
 
             ImGui::Text("Minor Radius:");
-            ImGui::SliderFloat("##minorRadius", &pTorus->mMinorRadius, 0.0f, 1.0f);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderFloat("##minorRadius", &pTorus->mMinorRadius, 0.0f, 1.0f);
 
             ImGui::Spacing();
 
             ImGui::Text("Major Segments:");
-            ImGui::SliderInt("##majorSegments", &pTorus->mMajorSegments, 3, 100);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderInt("##majorSegments", &pTorus->mMajorSegments, 3, 100);
 
             ImGui::Text("Minor Segments:");
-            ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
         }
-        else if (auto pPoint = dynamic_cast<Point*>(selectedRenderable); pPoint != nullptr)
+        else if (auto pPoint = dynamic_cast<Point*>(pSelectedRenderable); pPoint != nullptr)
         {
             ImGui::Text("Radius:");
-            ImGui::SliderFloat("##radius", &pPoint->mRadius, 0.1f, 10.0f);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderFloat("##radius", &pPoint->mRadius, 0.1f, 10.0f);
 
             ImGui::Text("Segments:");
-            ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
-            dataChanged |= ImGui::IsItemActive();
+            dataChanged |= ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
         }
 
         if (dataChanged)
         {
-            selectedRenderable->regenerateData();
+            pSelectedRenderable->regenerateData();
             mpRenderer->buildGeometryBuffers();
         }
 

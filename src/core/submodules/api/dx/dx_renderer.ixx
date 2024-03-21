@@ -32,28 +32,20 @@ export using Renderable = DXRenderable;
 export class DXRenderable : public IRenderable
 {
 public:
-    DXRenderable(XMVECTOR pos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), std::string_view tag = "default tag")
-        : IRenderable{tag}, mPosition{pos}
+    DXRenderable(XMVECTOR worldPos = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), std::string_view tag = "default tag")
+        : IRenderable{tag}, mWorldPos{worldPos}
     {
 
     }
 
-    void setPosition(XMVECTOR pos)
-    {
-        mPosition = pos;
-    }
-
-    XMVECTOR getPosition() const
-    {
-        return mPosition;
-    }
+    XMVECTOR mLocalPos{};
+    XMVECTOR mWorldPos{};
 
     float mPitch{};
     float mYaw{};
     float mScale = 1.f;
 
 protected:
-    XMVECTOR mPosition{};
 };
 
 export class DXRenderer : public IRenderer
