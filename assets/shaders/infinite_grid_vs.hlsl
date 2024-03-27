@@ -25,7 +25,7 @@ static const float3 gridPlane[6] = {
 float3 UnprojectPoint(float x, float y, float z, matrix view, matrix projection) {
     matrix viewInv = invView;
     matrix projInv = invProj;
-    float4 unprojectedPoint = mul(mul(float4(x, y, z, 1.0), projInv), viewInv);
+    float4 unprojectedPoint = mul(mul(viewInv, projInv), float4(x, y, z, 1.0));
     return unprojectedPoint.xyz / unprojectedPoint.w;
 }
 

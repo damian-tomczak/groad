@@ -43,6 +43,7 @@ public:
 
     float mPitch{};
     float mYaw{};
+    float mRoll{};
     float mScale = 1.f;
 
 protected:

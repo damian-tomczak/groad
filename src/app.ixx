@@ -1,6 +1,7 @@
 module;
 
 #include <Windows.h>
+#include <cmath>
 
 #include <d3d11.h>
 
@@ -26,6 +27,7 @@ export class App final : public NonCopyableAndMoveable
 {
     static constexpr float aspectRatioFactor = 0.25f;
     static constexpr XMFLOAT4 backgroundColor{0.1f, 0.1f, 0.1f, 1.0f};
+    static constexpr int renderablesListWidth = 19;
 
 public:
     App(const ParsedOptions&& options);
@@ -67,17 +69,25 @@ private:
     std::optional<int> mLastYMousePosition;
 
     std::unordered_set<IRenderable::Id> mSelectedRenderables;
-    IRenderable::Id mLastSelectedRenderable = -1;
 
     XMMATRIX mView = XMMatrixIdentity();
     XMMATRIX mProj = XMMatrixIdentity();
 
-    XMVECTOR mCentroid;
-    float mCentroidPitch{};
-    float mCentroidYaw{};
+    XMVECTOR mPivotPos{};
+    float mPivotPitch{};
+    float mPivotYaw{};
+    float mPivotRoll{};
 };
 
 module :private;
+
+void PrintXMVECTOR(DirectX::XMVECTOR v)
+{
+    DirectX::XMFLOAT4 vec;
+    DirectX::XMStoreFloat4(&vec, v);
+
+    std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ", " << vec.w << ")" << std::endl;
+}
 
 App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 {
@@ -155,17 +165,17 @@ void App::run()
 
 void App::updateScene(float dt)
 {
-    //if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 3)
-    //{
-    //    return;
-    //}
+    if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 2)
+    {
+        return;
+    }
 
-    //for (const auto selectedRenderableId : mSelectedRenderables)
-    //{
-    //    const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+    for (const auto selectedRenderableId : mSelectedRenderables)
+    {
+        const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
 
-    //    pRenderable->mYaw += 0.5f * dt;
-    //}
+        mPivotYaw += 0.5f * dt;
+    }
 }
 
 void App::renderScene()
@@ -178,19 +188,17 @@ void App::renderScene()
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-    //pContext->RSSetState(mpRenderer->getWireframeRS());
-
     const XMMATRIX identity = XMMatrixIdentity();
     mView = mCamera.getViewMatrix();
     mProj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 1.0f, 1000.0f);
 
     ConstantBufferData data
     {
-        .model = XMMatrixTranspose(identity),
-        .view = XMMatrixTranspose(mView),
-        .invView = XMMatrixTranspose(XMMatrixInverse(nullptr, mView)),
-        .proj = XMMatrixTranspose(mProj),
-        .invProj = XMMatrixTranspose(XMMatrixInverse(nullptr, mProj)),
+        .model = identity,
+        .view = mView,
+        .invView = XMMatrixInverse(nullptr, mView),
+        .proj = mProj,
+        .invProj = XMMatrixInverse(nullptr, mProj),
     };
 
     D3D11_MAPPED_SUBRESOURCE cbData;
@@ -206,12 +214,11 @@ void App::renderScene()
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pContext->Draw(6, 0);
     }
-
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     {
-        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(mCursorPos), XMVectorGetY(mCursorPos), XMVectorGetZ(mCursorPos));
-        data.model = XMMatrixTranspose(translationMat);
+        const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
+        data.model = translationMat;
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
@@ -225,45 +232,47 @@ void App::renderScene()
 
     for (auto const [i, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
     {
-        pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-
         if (pRenderable == nullptr)
         {
             continue;
         }
 
-        XMVECTOR localPos = pRenderable->mLocalPos;
         XMVECTOR worldPos = pRenderable->mWorldPos;
 
         XMMATRIX model = XMMatrixIdentity();
 
         XMMATRIX scaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
+
         XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
         XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-        XMMATRIX combinedRotationMatrix = yawRotationMatrix * pitchRotationMatrix;
+        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
 
-        XMMATRIX localTranslation =
-            XMMatrixTranslation(XMVectorGetX(localPos), XMVectorGetY(localPos), XMVectorGetZ(localPos));
-        XMMATRIX worldTranslation =
-            XMMatrixTranslation(XMVectorGetX(worldPos), XMVectorGetY(worldPos), XMVectorGetZ(worldPos));
-
-        XMMATRIX translationMat = localTranslation * worldTranslation;
+        XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+        XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
         if (mSelectedRenderables.size() > 1)
         {
-            XMVECTOR translationToRotationPoint = mCentroid - (worldPos + localPos);
+            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
+            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
+            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
 
-            XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-translationToRotationPoint);
-            XMMATRIX translationBack = XMMatrixTranslationFromVector(translationToRotationPoint);
-
-            model = translationToOrigin * scaleMat * combinedRotationMatrix * translationBack * translationMat;
-        }
-        else
-        {
-            model = scaleMat * combinedRotationMatrix * translationMat;
+            pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
         }
 
-        data.model = XMMatrixTranspose(model);
+        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
+
+        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
+        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
+
+        model = scaleMat * localRotationMat * translationToOrigin * pivotRotationMat * translationBack * worldTranslation;
+
+        XMVECTOR scale, rotation, translation;
+        ASSERT(XMMatrixDecompose(&scale, &rotation, &translation, model));
+
+        data.model = model;
+
+        std::cout << "Rendering " << i << "\n";
+        PrintXMVECTOR(translation);
 
         data.flags = (std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end()) ? 1 : 0;
 
@@ -292,8 +301,6 @@ void App::renderScene()
 
     if (mSelectedRenderables.size() > 1)
     {
-        pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-
         XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
         for (const auto& selectedRenderableId : mSelectedRenderables)
         {
@@ -302,9 +309,9 @@ void App::renderScene()
         }
 
         float numPositions = static_cast<float>(mSelectedRenderables.size());
-        mCentroid = XMVectorScale(sum, 1.0f / numPositions);
+        mPivotPos = XMVectorScale(sum, 1.0f / numPositions);
 
-        auto pPoint = std::make_unique<Point>(mCentroid, 0.1f, 25, false);
+        auto pPoint = std::make_unique<Point>(mPivotPos, 0.1f, 25, false);
         pPoint->regenerateData();
         IRenderable::Id id = pPoint->id;
         mpRenderer->addRenderable(std::move(pPoint));
@@ -312,8 +319,8 @@ void App::renderScene()
 
         mpRenderer->buildGeometryBuffers();
 
-        const XMMATRIX translationMat = XMMatrixTranslation(XMVectorGetX(mCentroid), XMVectorGetY(mCentroid), XMVectorGetZ(mCentroid));
-        data.model = XMMatrixTranspose(translationMat);
+        const XMMATRIX translationMat = XMMatrixTranslationFromVector(mPivotPos);
+        data.model = translationMat;
         data.flags = 2;
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
@@ -355,7 +362,6 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             mpRenderer->removeRenderable(*it);
             mSelectedRenderables.erase(*it);
         }
-        mLastSelectedRenderable = -1;
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
@@ -462,10 +468,15 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mLastXMousePosition = eventData.x;
         mLastYMousePosition = eventData.y;
 
-        if (mIsLeftMouseClicked && (!mIsUiClicked))
+        if (mIsLeftMouseClicked && (!mIsUiClicked) && !(mSelectedRenderables.empty()))
         {
-            if (mSelectedRenderables.empty())
+            const float pitchOffset = yOffset * 0.2f;
+            const float yawOffset = xOffset * 0.2f;
+
+            if ((mSelectedRenderables.size() > 1) && (mInteractionType == InteractionType::ROTATE))
             {
+                mPivotPitch += pitchOffset;
+                mPivotYaw += yawOffset;
                 break;
             }
 
@@ -476,8 +487,8 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 switch (mInteractionType)
                 {
                 case InteractionType::ROTATE:
-                    pRenderable->mPitch += yOffset * 0.2f;
-                    pRenderable->mYaw += xOffset * 0.2f;
+                    pRenderable->mPitch += pitchOffset;
+                    pRenderable->mYaw   += yawOffset;
                     break;
                 case InteractionType::MOVE:
                     pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
@@ -499,6 +510,34 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
         break;
     };
+}
+
+XMVECTOR ToEulerAngles(XMVECTOR q)
+{
+    XMVECTOR angles = XMVectorSet(0, 0, 0, 0);
+    float pitch{}, yaw{}, roll{};
+
+    float qx = XMVectorGetX(q);
+    float qy = XMVectorGetY(q);
+    float qz = XMVectorGetZ(q);
+    float qw = XMVectorGetW(q);
+
+    // roll (x-axis rotation)
+    float sinr_cosp = 2 * (qw * qx + qy * qz);
+    float cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
+    roll = std::atan2(sinr_cosp, cosr_cosp);
+
+    // pitch (y-axis rotation)
+    float sinp = std::sqrt(1 + 2 * (qw * qy - qx * qz));
+    float cosp = std::sqrt(1 - 2 * (qw * qy - qx * qz));
+    pitch = 2 * std::atan2(sinp, cosp) - std::numbers::pi_v<float> / 2;
+
+    // yaw (z-axis rotation)
+    float siny_cosp = 2 * (qw * qz + qx * qy);
+    float cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
+    yaw = std::atan2(siny_cosp, cosy_cosp);
+
+    return XMVectorSet(pitch, yaw, roll, 0);
 }
 
 void App::renderUi()
@@ -547,7 +586,12 @@ void App::renderUi()
     for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
     {
         const bool isSelected = std::ranges::find(mSelectedRenderables, mpRenderer->mRenderables.at(i)->id) != mSelectedRenderables.end();
-        renderableNames.emplace_back(mpRenderer->mRenderables.at(i)->mTag + (isSelected ? "   [X]" : "") + (mLastSelectedRenderable == mpRenderer->mRenderables.at(i)->id ? " <-" : ""));
+
+        std::ostringstream renderableName;
+        renderableName << std::left << std::setw(renderablesListWidth) << mpRenderer->mRenderables.at(i)->mTag
+                       << (isSelected ? "[X]" : "");
+
+        renderableNames.emplace_back(renderableName.str());
     }
 
     std::vector<const char*> renderableNamesPtrs{};
@@ -556,35 +600,100 @@ void App::renderUi()
         renderableNamesPtrs.push_back(name.c_str());
     }
 
-    int newSelectedItem = -1;
+    int newSelectedItemId = -1;
 
     ImGui::Text("Renderables:");
-    ImGui::ListBox("##objects", &newSelectedItem, renderableNamesPtrs.data(), static_cast<int>(renderableNamesPtrs.size()));
+    ImGui::ListBox("##objects", &newSelectedItemId, renderableNamesPtrs.data(), static_cast<int>(renderableNamesPtrs.size()));
     mIsUiClicked |= ImGui::IsItemActive();
 
     bool isNewItemSelected{};
-    if (newSelectedItem != -1)
+    if (newSelectedItemId != -1)
     {
-        const auto newId = mpRenderer->mRenderables.at(newSelectedItem)->id;
+        int i = 0;
+        for (const auto renderableSelectedId : mSelectedRenderables)
+        {
+            const std::unique_ptr<Renderable>& pSelectedRenderable = mpRenderer->mRenderables.at(renderableSelectedId);
+
+            XMVECTOR worldPos = pSelectedRenderable->mWorldPos;
+
+            XMMATRIX model = XMMatrixIdentity();
+
+            XMMATRIX scaleMat =
+                XMMatrixScaling(pSelectedRenderable->mScale, pSelectedRenderable->mScale, pSelectedRenderable->mScale);
+
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pSelectedRenderable->mPitch);
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pSelectedRenderable->mYaw);
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pSelectedRenderable->mRoll);
+
+            XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+            XMMATRIX pivotRotationMat = XMMatrixIdentity();
+
+            if (mSelectedRenderables.size() > 1)
+            {
+                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
+                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
+                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
+
+                pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+            }
+
+            XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
+
+            XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
+            XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
+
+            model = scaleMat * localRotationMat * translationToOrigin * pivotRotationMat * translationBack *
+                    worldTranslation;
+
+
+            XMVECTOR scale, rotationQuat, translation;
+            ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
+            pSelectedRenderable->mWorldPos = translation;
+            float pitch{}, yaw{}, roll{};
+            XMVECTOR xrot = XMVectorSet(1, 0, 0, 0);
+            XMVECTOR yrot = XMVectorSet(0, 1, 0, 0);
+            XMVECTOR zrot = XMVectorSet(0, 0, 1, 0);
+            XMQuaternionToAxisAngle(&xrot, &pitch, rotationQuat);
+            XMQuaternionToAxisAngle(&yrot, &yaw, rotationQuat);
+            XMQuaternionToAxisAngle(&zrot, &roll, rotationQuat);
+            pSelectedRenderable->mPitch = pitch;
+            pSelectedRenderable->mYaw = yaw;
+            pSelectedRenderable->mRoll = roll;
+            //ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
+            //XMVECTOR rotationEuler = ToEulerAngles(rotationQuat);
+            //pSelectedRenderable->mPitch = XMVectorGetX(rotationEuler);
+            //pSelectedRenderable->mYaw = XMVectorGetY(rotationEuler);
+            //pSelectedRenderable->mRoll = XMVectorGetZ(rotationEuler);
+
+            std::cout << "Erasing " << i << "\n";
+            PrintXMVECTOR(translation);
+            i++;
+        }
+
+        mPivotPitch = 0;
+        mPivotYaw = 0;
+        mPivotRoll = 0;
+
+        const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->id;
         if (!mSelectedRenderables.contains(newId))
         {
             mSelectedRenderables.insert(newId);
-            mLastSelectedRenderable = newId;
             isNewItemSelected = true;
         }
         else
         {
             mSelectedRenderables.erase(newId);
-            mLastSelectedRenderable = -1;
         }
     }
 
-    if (mLastSelectedRenderable != -1)
+    if (mSelectedRenderables.size() == 1)
     {
         ImGui::Separator();
 
+        const IRenderable::Id selectedRenderableId = *mSelectedRenderables.begin();
+
         bool dataChanged{};
-        auto pSelectedRenderable = mpRenderer->getRenderable(mLastSelectedRenderable);
+        auto pSelectedRenderable = mpRenderer->getRenderable(selectedRenderableId);
 
         ImGui::Text("Selected item: %s", pSelectedRenderable->mTag.c_str());
 
@@ -597,6 +706,7 @@ void App::renderUi()
         }
 
         dataChanged |= ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
+        mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::SameLine();
 
@@ -607,9 +717,13 @@ void App::renderUi()
 
         float localPos[3];
         float worldPos[3];
+        float rotation[3];
 
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(localPos), pSelectedRenderable->mLocalPos);
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(worldPos), pSelectedRenderable->mWorldPos);
+        rotation[0] = pSelectedRenderable->mPitch;
+        rotation[1] = pSelectedRenderable->mYaw;
+        rotation[2] = pSelectedRenderable->mRoll;
 
         ImGui::Text("Local Position:");
         if (ImGui::InputFloat3("##localPos", localPos))
@@ -625,29 +739,44 @@ void App::renderUi()
             dataChanged = true;
         }
 
+        ImGui::Text("Rotation:");
+        if (ImGui::InputFloat3("##rotation", rotation))
+        {
+            dataChanged = true;
+        }
+
         if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
         {
             ImGui::Text("Major Radius:");
             dataChanged |= ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
+            mIsUiClicked |= ImGui::IsItemActive();
 
             ImGui::Text("Minor Radius:");
             dataChanged |= ImGui::SliderFloat("##minorRadius", &pTorus->mMinorRadius, 0.0f, 1.0f);
+            mIsUiClicked |= ImGui::IsItemActive();
 
             ImGui::Spacing();
 
             ImGui::Text("Major Segments:");
             dataChanged |= ImGui::SliderInt("##majorSegments", &pTorus->mMajorSegments, 3, 100);
+            mIsUiClicked |= ImGui::IsItemActive();
 
             ImGui::Text("Minor Segments:");
             dataChanged |= ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
+            mIsUiClicked |= ImGui::IsItemActive();
+
         }
         else if (auto pPoint = dynamic_cast<Point*>(pSelectedRenderable); pPoint != nullptr)
         {
             ImGui::Text("Radius:");
             dataChanged |= ImGui::SliderFloat("##radius", &pPoint->mRadius, 0.1f, 10.0f);
+            mIsUiClicked |= ImGui::IsItemActive();
+
 
             ImGui::Text("Segments:");
             dataChanged |= ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
+            mIsUiClicked |= ImGui::IsItemActive();
+
         }
 
         if (dataChanged)

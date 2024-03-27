@@ -25,10 +25,7 @@ static const float3 axisLines[6] = {
 VertexOut main(VertexInput input)
 {
     VertexOut vout;
-    float3 p = axisLines[input.vertexID];
-    matrix mvp = mul(model, view);
-    mvp = mul(mvp, proj);
-    vout.pos = mul(float4(p, 1.0), mvp);
+    vout.pos = mul(mul(mul(proj, view), model), float4(axisLines[input.vertexID], 1.0));
 
     float3 color = axisLines[input.vertexID + ((input.vertexID % 2 == 0 ) ? 1 : 0)];
     vout.color = float4(color, 1.0);

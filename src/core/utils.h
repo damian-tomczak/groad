@@ -31,17 +31,13 @@ using namespace std::literals;
 #define WARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
 
-#ifndef NDEBUG
-#define ASSERT(x)                                                                                                      \
-    if (!(x))                                                                                                          \
-    {                                                                                                                  \
-        ERR("Assert occured: " #x);                                                                                    \
-    }
-#else
-#define ASSERT(x)
-#endif
-
 // clang-format off
+#define ASSERT(x)                   \
+    if (!(x))                       \
+    {                               \
+        ERR("Assert occured: " #x); \
+    }
+
 #define HR(x)                                                                   \
     if (const auto hr = x; FAILED(hr))                                          \
     {                                                                           \

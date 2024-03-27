@@ -12,9 +12,6 @@ export class Point : public Renderable
 {
     inline static unsigned counter = 1;
 
-    std::vector<float> mGeometry;
-    std::vector<unsigned> mTopology;
-
 public:
     Point(XMVECTOR pos, float radius = 0.5f, int segments = 50, bool wo = true)
         : Renderable{pos, std::format("Point {}", wo ? counter++ : 0).c_str()}, mRadius(radius), mSegments(segments)
@@ -25,17 +22,7 @@ public:
     float mRadius;
     int mSegments;
 
-    const std::vector<float>& getGeometry() const override
-    {
-        return mGeometry;
-    }
-
-    const std::vector<unsigned>& getTopology() const override
-    {
-        return mTopology;
-    }
-
-    virtual void generateGeometry() override
+    void generateGeometry() override
     {
         mGeometry.clear();
         for (int i = 0; i <= mSegments; ++i)
@@ -52,7 +39,7 @@ public:
         }
     }
 
-    virtual void generateTopology() override
+    void generateTopology() override
     {
         mTopology.clear();
         for (int i = 0; i < mSegments; ++i)
@@ -89,17 +76,7 @@ public:
     int mMajorSegments;
     int mMinorSegments;
 
-    const std::vector<float>& getGeometry() const override
-    {
-        return mGeometry;
-    }
-
-    const std::vector<unsigned>& getTopology() const override
-    {
-        return mTopology;
-    }
-
-    virtual void generateGeometry() override
+    void generateGeometry() override
     {
         mGeometry.clear();
         for (int i = 0; i <= mMajorSegments; ++i)
@@ -116,7 +93,7 @@ public:
         }
     }
 
-    virtual void generateTopology() override
+    void generateTopology() override
     {
         mTopology.clear();
         for (int i = 0; i < mMajorSegments; ++i)

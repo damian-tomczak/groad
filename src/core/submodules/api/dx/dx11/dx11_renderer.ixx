@@ -93,11 +93,6 @@ public:
         return mpInputLayout.Get();
     }
 
-    ID3D11RasterizerState* getWireframeRS() const
-    {
-        return mpWireframeRS.Get();
-    }
-
     ID3D11Buffer* getConstantBuffer() const
     {
         return mpConstantBuffer.Get();
@@ -155,7 +150,6 @@ private:
     ComPtr<ID3D11RenderTargetView> mpRenderTargetView;
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
-    ComPtr<ID3D11RasterizerState> mpWireframeRS;
     ComPtr<ID3D10Blob> mpVSBlob;
     ComPtr<ID3D11Buffer> mpConstantBuffer;
     ComPtr<ID3D11InputLayout> mpInputLayout;
@@ -175,15 +169,6 @@ void DX11Renderer::init()
 
     createShaders();
     buildVertexLayout();
-
-    D3D11_RASTERIZER_DESC wireframeDesc{
-        .FillMode = D3D11_FILL_SOLID,
-        .CullMode = D3D11_CULL_NONE,
-        .FrontCounterClockwise = false,
-        .DepthClipEnable = true,
-    };
-
-    HR(mpDevice->CreateRasterizerState(&wireframeDesc, &mpWireframeRS));
 
     ImGui_ImplDX11_Init(mpDevice.Get(), mpContext.Get());
 }
@@ -320,6 +305,8 @@ void DX11Renderer::buildGeometryBuffers()
         mVertexBuffers[i].Reset();
         mIndexBuffers[i].Reset();
 
+        const auto t = mRenderables[i]->getGeometry();
+
         D3D11_BUFFER_DESC vbd{
             .ByteWidth = static_cast<UINT>(sizeof(float) * mRenderables[i]->getGeometry().size()),
             .Usage = D3D11_USAGE_DYNAMIC,
@@ -329,7 +316,7 @@ void DX11Renderer::buildGeometryBuffers()
             .StructureByteStride = 0,
         };
         D3D11_SUBRESOURCE_DATA vinitData{
-            .pSysMem = mRenderables[i]->getGeometry().data(),
+            .pSysMem = t.data(),
         };
         HR(mpDevice->CreateBuffer(&vbd, &vinitData, mVertexBuffers[i].GetAddressOf()));
 
@@ -416,14 +403,6 @@ void DX11Renderer::createShaders()
     compileShader("cursor_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
                                    &mpCursorPS));
-
-    compileShader("centroid_vs.hlsl", "vs_5_0", compiledShader);
-    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                    mpCentroidVS.GetAddressOf()));
-
-    compileShader("centroid_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                   &mpCentroidPS));
 
 
     D3D11_BUFFER_DESC constantBufferDesc
