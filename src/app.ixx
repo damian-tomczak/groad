@@ -166,17 +166,7 @@ void App::run()
 
 void App::updateScene(float dt)
 {
-    //if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 2)
-    //{
-    //    return;
-    //}
 
-    //for (const auto selectedRenderableId : mSelectedRenderables)
-    //{
-    //    const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
-
-    //    mPivotYaw += 0.5f * dt;
-    //}
 }
 
 void App::renderScene()
@@ -238,8 +228,6 @@ void App::renderScene()
             continue;
         }
 
-        XMVECTOR worldPos = pRenderable->mWorldPos;
-
         XMMATRIX model = XMMatrixIdentity();
 
         XMMATRIX localScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
@@ -252,7 +240,10 @@ void App::renderScene()
         XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
         XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
-        if (mSelectedRenderables.size() > 1)
+        XMMATRIX translationToOrigin = XMMatrixIdentity();
+        XMMATRIX translationBack = XMMatrixIdentity();
+
+        if (mSelectedRenderables.contains(pRenderable->id))
         {
             XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
             XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
@@ -261,17 +252,17 @@ void App::renderScene()
             pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
 
             pivotScaleMat = XMMatrixScaling(mPivotScale, mPivotScale, mPivotScale);
+
+            translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
+            translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
         }
 
-        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
-
-        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
-        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
+        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
 
 // clang-format off
-            model = localScaleMat * localRotationMat *
-                    translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
-                    worldTranslation;
+        model = localScaleMat * localRotationMat *
+                translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
+                worldTranslation;
 // clang-format on
 
         data.model = model;
@@ -423,16 +414,13 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
                 for (const auto& pRenderable : mpRenderer->mRenderables)
                 {
-                    auto pPoint = dynamic_cast<Point*>(pRenderable.get());
+                    const auto pPoint = dynamic_cast<Point*>(pRenderable.get());
                     if (pPoint == nullptr)
                     {
                         continue;
                     }
 
-                    const auto renderablePos = pRenderable->mWorldPos;
-                    const auto radius = pPoint->mRadius;
-
-                    const bool intersection = mg::rayIntersectsSphere(rayOrigin, rayDir, renderablePos, radius);
+                    const bool intersection = mg::rayIntersectsSphere(rayOrigin, rayDir, pRenderable->mWorldPos, pPoint->mRadius);
 
                     if (intersection)
                     {
@@ -445,6 +433,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::MOUSE_MIDDLE_DOWN:
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
         mCursorPos = mCamera.getPos() + mCamera.getFront() * 4.0f;
+
+        for (auto& pRenderable : mpRenderer->mRenderables)
+        {
+            pRenderable->mLocalPos = pRenderable->mWorldPos - mCursorPos;
+        }
         break;
     case IWindow::Message::MOUSE_LEFT_UP:
         mIsLeftMouseClicked = false;
@@ -606,7 +599,10 @@ void App::renderUi()
             XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
             XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
-            if (mSelectedRenderables.size() > 1)
+            XMMATRIX translationToOrigin = XMMatrixIdentity();
+            XMMATRIX translationBack = XMMatrixIdentity();
+
+            if (mSelectedRenderables.contains(pRenderable->id))
             {
                 XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
                 XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
@@ -615,26 +611,23 @@ void App::renderUi()
                 pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
 
                 pivotScaleMat = XMMatrixScaling(mPivotScale, mPivotScale, mPivotScale);
+
+                translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
+                translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
             }
 
             XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
 
-            XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
-            XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
-
-// clang-format off
+            // clang-format off
             model = localScaleMat * localRotationMat *
                     translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
                     worldTranslation;
-// clang-format on
+            // clang-format on
 
-            XMVECTOR scale, rotationQuat, translation;
-            ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
-            pRenderable->mWorldPos = translation;
+            pRenderable->mWorldPos = model.r[3];
 
             const XMMATRIX scaleMat = localScaleMat * pivotScaleMat;
-            ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, scaleMat));
-            pRenderable->mScale = XMVectorGetX(scale);
+            pRenderable->mScale = XMVectorGetX(scaleMat.r[0]);
 
             const XMMATRIX rotationMat = localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
             const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
@@ -706,6 +699,7 @@ void App::renderUi()
         if (ImGui::InputFloat3("##localPos", localPos))
         {
             pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
+            pSelectedRenderable->mWorldPos = pSelectedRenderable->mLocalPos - mCursorPos;
         }
         mIsUiClicked |= ImGui::IsItemActive();
 
@@ -713,6 +707,7 @@ void App::renderUi()
         if (ImGui::InputFloat3("##worldPos", worldPos))
         {
             pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
+            pSelectedRenderable->mLocalPos = pSelectedRenderable->mWorldPos - mCursorPos;
         }
         mIsUiClicked |= ImGui::IsItemActive();
 

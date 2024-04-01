@@ -57,15 +57,13 @@ inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float ne
     const float yScale = 1.0f / static_cast<float>(tan(fovY / 2.0f));
     const float xScale = yScale / aspectRatio;
 
-    const XMMATRIX result
+    return
     {
         xScale, 0.0f,   0.0f,                           0.0f,
         0.0f,   yScale, 0.0f,                           0.0f,
         0.0f,   0.0f,   farZ / (farZ - nearZ),          1.0f,
-        0.0f,   0.0f,   -nearZ * farZ / (farZ - nearZ), 0.0f
+        0.0f,   0.0f,   -nearZ * farZ / (farZ - nearZ), 0.0f,
     };
-
-    return result;
 }
 
 inline XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& focusPosition,
@@ -81,7 +79,8 @@ inline XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& fo
     XMVECTOR eyeDotY = -XMVector3Dot(eyePosition, yAxis);
     XMVECTOR eyeDotZ = -XMVector3Dot(eyePosition, zAxis);
 
-    XMMATRIX viewMatrix = {
+    XMMATRIX viewMatrix
+    {
         XMVectorSetByIndex(xAxis, XMVectorGetX(eyeDotX), 3),
         XMVectorSetByIndex(yAxis, XMVectorGetX(eyeDotY), 3),
         XMVectorSetByIndex(zAxis, XMVectorGetX(eyeDotZ), 3),
@@ -104,11 +103,23 @@ inline bool rayIntersectsSphere(const XMVECTOR& rayOrigin, const XMVECTOR& rayDi
 
     return discriminant >= 0;
 }
+
+inline XMMATRIX XMMatrixScaling(float sx, float sy, float sz)
+{
+    return
+    {
+        sx, 0.0f, 0.0f, 0.0f,
+        0.0f, sy, 0.0f, 0.0f,
+        0.0f, 0.0f, sz, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+}
 }
 
-// #define CUSTOM_MATH
+#define CUSTOM_MATH
 
 #ifdef CUSTOM_MATH
 #define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
 #define XMMatrixLookAtLH mg::XMMatrixLookAtLH
+#define XMMatrixScaling mg::XMMatrixScaling
 #endif
