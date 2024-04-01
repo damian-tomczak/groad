@@ -74,7 +74,9 @@ private:
     XMMATRIX mProj = XMMatrixIdentity();
 
     XMVECTOR mPivotPos{};
-    XMVECTOR mPivotEulerAngles{};
+    float mPivotPitch{};
+    float mPivotYaw{};
+    float mPivotRoll{};
 };
 
 module :private;
@@ -235,36 +237,37 @@ void App::renderScene()
             continue;
         }
 
+        XMVECTOR worldPos = pRenderable->mWorldPos;
+
         XMMATRIX model = XMMatrixIdentity();
 
-        XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+        XMMATRIX localScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
         XMMATRIX pivotScaleMat = XMMatrixIdentity();
 
-        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(XMVectorGetX(pRenderable->mEulerAngles));
-        XMMATRIX yawRotationMatrix = XMMatrixRotationY(XMVectorGetY(pRenderable->mEulerAngles));
-        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(XMVectorGetZ(pRenderable->mEulerAngles));
+        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+        XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
 
         XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
         XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
         if (mSelectedRenderables.size() > 1)
         {
-            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(XMVectorGetX(mPivotEulerAngles));
-            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(XMVectorGetY(mPivotEulerAngles));
-            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(XMVectorGetZ(mPivotEulerAngles));
+            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
+            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
+            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
 
             pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
 
-            pivotScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            pivotScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
         }
 
-        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
 
-        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
-        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
+        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
+        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
 
-        model = localScaleMat * localRotationMat *
-                translationToOrigin * pivotRotationMat * translationBack *
+        model = localScaleMat * localRotationMat * translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
                 worldTranslation;
 
         data.model = model;
@@ -470,7 +473,8 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
             if ((mSelectedRenderables.size() > 1) && (mInteractionType == InteractionType::ROTATE))
             {
-                mPivotEulerAngles = mPivotEulerAngles + XMVectorSet(pitchOffset, yawOffset, 0, 0);
+                mPivotPitch += pitchOffset;
+                mPivotYaw += yawOffset;
                 break;
             }
 
@@ -481,14 +485,14 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 switch (mInteractionType)
                 {
                 case InteractionType::ROTATE:
-                    pRenderable->mEulerAngles += XMVectorSet(pitchOffset, yawOffset, 0, 0);
+                    pRenderable->mPitch += pitchOffset;
+                    pRenderable->mYaw   += yawOffset;
                     break;
                 case InteractionType::MOVE:
                     pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
                     break;
                 case InteractionType::SCALE:
-                    const float scaleValue = -yOffset * 0.1f;
-                    pRenderable->mScale += XMVectorSet(scaleValue, scaleValue, scaleValue, 1);
+                    pRenderable->mScale += -yOffset * 0.1f;
                     break;
                 }
             }
@@ -584,25 +588,25 @@ void App::renderUi()
 
             XMMATRIX model = XMMatrixIdentity();
 
-            XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            XMMATRIX localScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
             XMMATRIX pivotScaleMat = XMMatrixIdentity();
 
-            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(XMVectorGetX(pRenderable->mEulerAngles));
-            XMMATRIX yawRotationMatrix = XMMatrixRotationY(XMVectorGetY(pRenderable->mEulerAngles));
-            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(XMVectorGetZ(pRenderable->mEulerAngles));
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
 
             XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
             XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
             if (mSelectedRenderables.size() > 1)
             {
-                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(XMVectorGetX(mPivotEulerAngles));
-                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(XMVectorGetY(mPivotEulerAngles));
-                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(XMVectorGetX(mPivotEulerAngles));
+                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
+                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
+                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
 
                 pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
 
-                pivotScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+                pivotScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
             }
 
             XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
@@ -610,20 +614,24 @@ void App::renderUi()
             XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
             XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
 
-            model = localScaleMat * localRotationMat *
-                    translationToOrigin * pivotRotationMat * translationBack *
-                    worldTranslation;
+            model = localScaleMat * localRotationMat * translationToOrigin * pivotScaleMat * pivotRotationMat *
+                    translationBack * worldTranslation;
 
             XMVECTOR scale, rotationQuat, translation;
             ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
             pRenderable->mWorldPos = translation;
-            //pRenderable->mScale = scale;
 
             XMMATRIX rotationMat = localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
-            pRenderable->mEulerAngles = mg::getPitchYawRollFromRotationMat(rotationMat);
+            const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
+
+            pRenderable->mPitch = pitch;
+            pRenderable->mYaw = yaw;
+            pRenderable->mRoll = roll;
         }
 
-        mPivotEulerAngles = XMVectorZero();
+        mPivotPitch = 0;
+        mPivotYaw = 0;
+        mPivotRoll = 0;
 
         const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->id;
         if (!mSelectedRenderables.contains(newId))
@@ -669,12 +677,12 @@ void App::renderUi()
         float localPos[3];
         float worldPos[3];
         float rotation[3];
-        float scale[3];
 
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(localPos), pSelectedRenderable->mLocalPos);
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(worldPos), pSelectedRenderable->mWorldPos);
-        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(rotation), pSelectedRenderable->mEulerAngles);
-        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(scale),    pSelectedRenderable->mScale);
+        rotation[0] = pSelectedRenderable->mPitch;
+        rotation[1] = pSelectedRenderable->mYaw;
+        rotation[2] = pSelectedRenderable->mRoll;
 
         ImGui::Text("Local Position:");
         if (ImGui::InputFloat3("##localPos", localPos))
@@ -682,7 +690,6 @@ void App::renderUi()
             pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
             dataChanged = true;
         }
-        dataChanged |= ImGui::IsItemActive();
 
         ImGui::Text("World Position:");
         if (ImGui::InputFloat3("##worldPos", worldPos))
@@ -690,23 +697,15 @@ void App::renderUi()
             pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
             dataChanged = true;
         }
-        dataChanged |= ImGui::IsItemActive();
 
         ImGui::Text("Rotation:");
         if (ImGui::InputFloat3("##rotation", rotation))
         {
-            pSelectedRenderable->mEulerAngles = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(rotation));
+            pSelectedRenderable->mPitch = rotation[0];
+            pSelectedRenderable->mYaw = rotation[1];
+            pSelectedRenderable->mRoll = rotation[2];
             dataChanged = true;
         }
-        dataChanged |= ImGui::IsItemActive();
-
-        ImGui::Text("Scale:");
-        if (ImGui::InputFloat3("##scale", scale))
-        {
-            pSelectedRenderable->mScale = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(scale));
-            dataChanged = true;
-        }
-        dataChanged |= ImGui::IsItemActive();
 
         if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
         {

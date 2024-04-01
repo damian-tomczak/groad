@@ -10,7 +10,7 @@ namespace mg
 {
 using namespace DirectX;
 
-inline XMVECTOR getPitchYawRollFromRotationMat(XMMATRIX _rotationMat)
+inline std::tuple<float, float, float> getPitchYawRollFromRotationMat(XMMATRIX _rotationMat)
 {
     XMFLOAT4X4 rotationMat;
     XMStoreFloat4x4(&rotationMat, _rotationMat);
@@ -49,7 +49,7 @@ inline XMVECTOR getPitchYawRollFromRotationMat(XMMATRIX _rotationMat)
         roll = 0.0f;
     }
 
-    return XMVectorSet(-pitch, -yaw, -roll, 0);
+    return {-pitch, -yaw, -roll};
 }
 
 inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
