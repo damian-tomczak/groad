@@ -40,11 +40,8 @@ public:
 
     XMVECTOR mLocalPos{};
     XMVECTOR mWorldPos{};
-
-    float mPitch{};
-    float mYaw{};
-    float mRoll{};
-    float mScale = 1.f;
+    XMVECTOR mEulerAngles{};
+    XMVECTOR mScale = XMVectorSet(1.f, 1.f, 1.f, 1.f);
 
 protected:
 };

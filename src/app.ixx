@@ -74,9 +74,7 @@ private:
     XMMATRIX mProj = XMMatrixIdentity();
 
     XMVECTOR mPivotPos{};
-    float mPivotPitch{};
-    float mPivotYaw{};
-    float mPivotRoll{};
+    XMVECTOR mPivotEulerAngles{};
 };
 
 module :private;
@@ -165,17 +163,17 @@ void App::run()
 
 void App::updateScene(float dt)
 {
-    if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 2)
-    {
-        return;
-    }
+    //if (mInteractionType != InteractionType::ROTATE || mpRenderer->mRenderables.size() < 2)
+    //{
+    //    return;
+    //}
 
-    for (const auto selectedRenderableId : mSelectedRenderables)
-    {
-        const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+    //for (const auto selectedRenderableId : mSelectedRenderables)
+    //{
+    //    const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
 
-        mPivotYaw += 0.5f * dt;
-    }
+    //    mPivotYaw += 0.5f * dt;
+    //}
 }
 
 void App::renderScene()
@@ -237,42 +235,39 @@ void App::renderScene()
             continue;
         }
 
-        XMVECTOR worldPos = pRenderable->mWorldPos;
-
         XMMATRIX model = XMMatrixIdentity();
 
-        XMMATRIX scaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
+        XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+        XMMATRIX pivotScaleMat = XMMatrixIdentity();
 
-        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
-        XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
+        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(XMVectorGetX(pRenderable->mEulerAngles));
+        XMMATRIX yawRotationMatrix = XMMatrixRotationY(XMVectorGetY(pRenderable->mEulerAngles));
+        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(XMVectorGetZ(pRenderable->mEulerAngles));
 
         XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
         XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
         if (mSelectedRenderables.size() > 1)
         {
-            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
-            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
-            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
+            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(XMVectorGetX(mPivotEulerAngles));
+            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(XMVectorGetY(mPivotEulerAngles));
+            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(XMVectorGetZ(mPivotEulerAngles));
 
             pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+
+            pivotScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
         }
 
-        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
+        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
 
-        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
-        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
+        XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
+        XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
 
-        model = scaleMat * localRotationMat * translationToOrigin * pivotRotationMat * translationBack * worldTranslation;
-
-        XMVECTOR scale, rotation, translation;
-        ASSERT(XMMatrixDecompose(&scale, &rotation, &translation, model));
+        model = localScaleMat * localRotationMat *
+                translationToOrigin * pivotRotationMat * translationBack *
+                worldTranslation;
 
         data.model = model;
-
-        std::cout << "Rendering " << i << "\n";
-        PrintXMVECTOR(translation);
 
         data.flags = (std::ranges::find(mSelectedRenderables, pRenderable->id) != mSelectedRenderables.end()) ? 1 : 0;
 
@@ -280,7 +275,7 @@ void App::renderScene()
         memcpy(cbData.pData, &data, sizeof(data));
         pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-        UINT vStride = sizeof(XMFLOAT3), offset = 0;
+        const UINT vStride{sizeof(XMFLOAT3)}, offset{};
         pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(i).GetAddressOf(), &vStride, &offset);
         pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.at(i).Get(), DXGI_FORMAT_R32_UINT, 0);
         pContext->IASetInputLayout(mpRenderer->getInputLayout());
@@ -343,7 +338,7 @@ void App::renderScene()
 
     renderUi();
 
-    mpRenderer->getSwapchain()->Present(0, 0);
+    mpRenderer->getSwapchain()->Present(1, 0);
 }
 
 void App::processInput(IWindow::Message msg, float deltaTime)
@@ -475,8 +470,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
             if ((mSelectedRenderables.size() > 1) && (mInteractionType == InteractionType::ROTATE))
             {
-                mPivotPitch += pitchOffset;
-                mPivotYaw += yawOffset;
+                mPivotEulerAngles = mPivotEulerAngles + XMVectorSet(pitchOffset, yawOffset, 0, 0);
                 break;
             }
 
@@ -487,14 +481,14 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 switch (mInteractionType)
                 {
                 case InteractionType::ROTATE:
-                    pRenderable->mPitch += pitchOffset;
-                    pRenderable->mYaw   += yawOffset;
+                    pRenderable->mEulerAngles += XMVectorSet(pitchOffset, yawOffset, 0, 0);
                     break;
                 case InteractionType::MOVE:
                     pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
                     break;
                 case InteractionType::SCALE:
-                    pRenderable->mScale += -yOffset * 0.1f;
+                    const float scaleValue = -yOffset * 0.1f;
+                    pRenderable->mScale += XMVectorSet(scaleValue, scaleValue, scaleValue, 1);
                     break;
                 }
             }
@@ -510,34 +504,6 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
         break;
     };
-}
-
-XMVECTOR ToEulerAngles(XMVECTOR q)
-{
-    XMVECTOR angles = XMVectorSet(0, 0, 0, 0);
-    float pitch{}, yaw{}, roll{};
-
-    float qx = XMVectorGetX(q);
-    float qy = XMVectorGetY(q);
-    float qz = XMVectorGetZ(q);
-    float qw = XMVectorGetW(q);
-
-    // roll (x-axis rotation)
-    float sinr_cosp = 2 * (qw * qx + qy * qz);
-    float cosr_cosp = 1 - 2 * (qx * qx + qy * qy);
-    roll = std::atan2(sinr_cosp, cosr_cosp);
-
-    // pitch (y-axis rotation)
-    float sinp = std::sqrt(1 + 2 * (qw * qy - qx * qz));
-    float cosp = std::sqrt(1 - 2 * (qw * qy - qx * qz));
-    pitch = 2 * std::atan2(sinp, cosp) - std::numbers::pi_v<float> / 2;
-
-    // yaw (z-axis rotation)
-    float siny_cosp = 2 * (qw * qz + qx * qy);
-    float cosy_cosp = 1 - 2 * (qy * qy + qz * qz);
-    yaw = std::atan2(siny_cosp, cosy_cosp);
-
-    return XMVectorSet(pitch, yaw, roll, 0);
 }
 
 void App::renderUi()
@@ -612,29 +578,31 @@ void App::renderUi()
         int i = 0;
         for (const auto renderableSelectedId : mSelectedRenderables)
         {
-            const std::unique_ptr<Renderable>& pSelectedRenderable = mpRenderer->mRenderables.at(renderableSelectedId);
+            const std::unique_ptr<Renderable>& pRenderable = mpRenderer->mRenderables.at(renderableSelectedId);
 
-            XMVECTOR worldPos = pSelectedRenderable->mWorldPos;
+            XMVECTOR worldPos = pRenderable->mWorldPos;
 
             XMMATRIX model = XMMatrixIdentity();
 
-            XMMATRIX scaleMat =
-                XMMatrixScaling(pSelectedRenderable->mScale, pSelectedRenderable->mScale, pSelectedRenderable->mScale);
+            XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            XMMATRIX pivotScaleMat = XMMatrixIdentity();
 
-            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pSelectedRenderable->mPitch);
-            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pSelectedRenderable->mYaw);
-            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pSelectedRenderable->mRoll);
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(XMVectorGetX(pRenderable->mEulerAngles));
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(XMVectorGetY(pRenderable->mEulerAngles));
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(XMVectorGetZ(pRenderable->mEulerAngles));
 
             XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
             XMMATRIX pivotRotationMat = XMMatrixIdentity();
 
             if (mSelectedRenderables.size() > 1)
             {
-                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
-                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
-                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
+                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(XMVectorGetX(mPivotEulerAngles));
+                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(XMVectorGetY(mPivotEulerAngles));
+                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(XMVectorGetX(mPivotEulerAngles));
 
                 pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+
+                pivotScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
             }
 
             XMMATRIX worldTranslation = XMMatrixTranslationFromVector(worldPos);
@@ -642,37 +610,20 @@ void App::renderUi()
             XMMATRIX translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - worldPos));
             XMMATRIX translationBack = XMMatrixTranslationFromVector((mPivotPos - worldPos));
 
-            model = scaleMat * localRotationMat * translationToOrigin * pivotRotationMat * translationBack *
+            model = localScaleMat * localRotationMat *
+                    translationToOrigin * pivotRotationMat * translationBack *
                     worldTranslation;
-
 
             XMVECTOR scale, rotationQuat, translation;
             ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
-            pSelectedRenderable->mWorldPos = translation;
-            float pitch{}, yaw{}, roll{};
-            XMVECTOR xrot = XMVectorSet(1, 0, 0, 0);
-            XMVECTOR yrot = XMVectorSet(0, 1, 0, 0);
-            XMVECTOR zrot = XMVectorSet(0, 0, 1, 0);
-            XMQuaternionToAxisAngle(&xrot, &pitch, rotationQuat);
-            XMQuaternionToAxisAngle(&yrot, &yaw, rotationQuat);
-            XMQuaternionToAxisAngle(&zrot, &roll, rotationQuat);
-            pSelectedRenderable->mPitch = pitch;
-            pSelectedRenderable->mYaw = yaw;
-            pSelectedRenderable->mRoll = roll;
-            //ASSERT(XMMatrixDecompose(&scale, &rotationQuat, &translation, model));
-            //XMVECTOR rotationEuler = ToEulerAngles(rotationQuat);
-            //pSelectedRenderable->mPitch = XMVectorGetX(rotationEuler);
-            //pSelectedRenderable->mYaw = XMVectorGetY(rotationEuler);
-            //pSelectedRenderable->mRoll = XMVectorGetZ(rotationEuler);
+            pRenderable->mWorldPos = translation;
+            //pRenderable->mScale = scale;
 
-            std::cout << "Erasing " << i << "\n";
-            PrintXMVECTOR(translation);
-            i++;
+            XMMATRIX rotationMat = localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
+            pRenderable->mEulerAngles = mg::getPitchYawRollFromRotationMat(rotationMat);
         }
 
-        mPivotPitch = 0;
-        mPivotYaw = 0;
-        mPivotRoll = 0;
+        mPivotEulerAngles = XMVectorZero();
 
         const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->id;
         if (!mSelectedRenderables.contains(newId))
@@ -718,12 +669,12 @@ void App::renderUi()
         float localPos[3];
         float worldPos[3];
         float rotation[3];
+        float scale[3];
 
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(localPos), pSelectedRenderable->mLocalPos);
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(worldPos), pSelectedRenderable->mWorldPos);
-        rotation[0] = pSelectedRenderable->mPitch;
-        rotation[1] = pSelectedRenderable->mYaw;
-        rotation[2] = pSelectedRenderable->mRoll;
+        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(rotation), pSelectedRenderable->mEulerAngles);
+        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(scale),    pSelectedRenderable->mScale);
 
         ImGui::Text("Local Position:");
         if (ImGui::InputFloat3("##localPos", localPos))
@@ -731,6 +682,7 @@ void App::renderUi()
             pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
             dataChanged = true;
         }
+        dataChanged |= ImGui::IsItemActive();
 
         ImGui::Text("World Position:");
         if (ImGui::InputFloat3("##worldPos", worldPos))
@@ -738,12 +690,23 @@ void App::renderUi()
             pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
             dataChanged = true;
         }
+        dataChanged |= ImGui::IsItemActive();
 
         ImGui::Text("Rotation:");
         if (ImGui::InputFloat3("##rotation", rotation))
         {
+            pSelectedRenderable->mEulerAngles = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(rotation));
             dataChanged = true;
         }
+        dataChanged |= ImGui::IsItemActive();
+
+        ImGui::Text("Scale:");
+        if (ImGui::InputFloat3("##scale", scale))
+        {
+            pSelectedRenderable->mScale = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(scale));
+            dataChanged = true;
+        }
+        dataChanged |= ImGui::IsItemActive();
 
         if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
         {
