@@ -121,10 +121,10 @@ inline XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& fo
 
     return
     {
-        xAxis,
-        yAxis,
-        zAxis,
-        XMVectorSet(tx, ty, tz, 1.0f),
+        XMVectorSet(XMVectorGetX(xAxis), XMVectorGetX(yAxis), XMVectorGetX(zAxis), 0.0f),
+        XMVectorSet(XMVectorGetY(xAxis), XMVectorGetY(yAxis), XMVectorGetY(zAxis), 0.0f),
+        XMVectorSet(XMVectorGetZ(xAxis), XMVectorGetZ(yAxis), XMVectorGetZ(zAxis), 0.0f),
+        XMVectorSet(tx,                  ty,                  tz,                  1.0f)
     };
 }
 
