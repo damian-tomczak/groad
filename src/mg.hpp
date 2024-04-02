@@ -6,39 +6,69 @@
 #include <tuple>
 #include <numbers>
 
-using DirectX::XMVECTOR;
-using DirectX::XMMATRIX;
+#define CUSTOM_MATH
+
+#ifdef CUSTOM_MATH
+using DirectX::FXMVECTOR;
 using DirectX::XMFLOAT4X4;
+using DirectX::XMMATRIX;
+using DirectX::XMVECTOR;
+using DirectX::XMVectorGetW;
 using DirectX::XMVectorGetX;
 using DirectX::XMVectorGetY;
 using DirectX::XMVectorGetZ;
-using DirectX::XMVectorGetW;
-using DirectX::XMVector3Dot;
-using DirectX::XMVectorSubtract;
+using DirectX::XMVectorReplicate;
 using DirectX::XMVectorSet;
-using DirectX::XMVector3Cross;
-
-#define CUSTOM_MATH
+using DirectX::XMVectorSubtract;
+#else
+using namespace DirectX;
+#endif
 
 // clang-format off
 
 namespace mg
 {
-bool rayIntersectsSphere(const XMVECTOR& rayOrigin, const XMVECTOR& rayDir, const XMVECTOR& sphereCenter,
+bool rayIntersectsSphere(FXMVECTOR rayOrigin, FXMVECTOR rayDir, FXMVECTOR sphereCenter,
                          float sphereRadius);
 std::tuple<float, float, float> getPitchYawRollFromRotationMat(XMMATRIX _rotationMat);
 
 XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ);
-XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& focusPosition, const XMVECTOR& upDirection);
+XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePosition, FXMVECTOR focusPosition, FXMVECTOR upDirection);
 XMMATRIX XMMatrixScaling(float sx, float sy, float sz);
 XMMATRIX XMMatrixRotationX(float angleRadians);
 XMMATRIX XMMatrixRotationY(float angleRadians);
 XMMATRIX XMMatrixRotationZ(float angleRadians);
-XMVECTOR XMVectorScale(const XMVECTOR& v, float scale);
-XMVECTOR XMVector3Normalize(const XMVECTOR& v);
+XMVECTOR XMVectorScale(FXMVECTOR v, float scale);
+XMVECTOR XMVector3Normalize(FXMVECTOR v);
+XMVECTOR XMVector3Dot(FXMVECTOR v1, FXMVECTOR v2);
+XMVECTOR XMVector3Cross(FXMVECTOR v1, FXMVECTOR v2);
+}
 
+#ifdef CUSTOM_MATH
+#define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
+#define XMMatrixLookAtLH         mg::XMMatrixLookAtLH
+#define XMMatrixScaling          mg::XMMatrixScaling
+#define XMMatrixRotationX        mg::XMMatrixRotationX
+#define XMMatrixRotationY        mg::XMMatrixRotationY
+#define XMMatrixRotationZ        mg::XMMatrixRotationZ
+#define XMVectorScale            mg::XMVectorScale
+#define XMVector3Normalize       mg::XMVector3Normalize
+#define XMVector3Dot             mg::XMVector3Dot
+#define XMVector3Cross           mg::XMVector3Cross
+#else
+#define XMMatrixPerspectiveFovLH DirectX::XMMatrixPerspectiveFovLH
+#define XMMatrixLookAtLH         DirectX::XMMatrixLookAtLH
+#define XMMatrixScaling          DirectX::XMMatrixScaling
+#define XMMatrixRotationX        DirectX::XMMatrixRotationX
+#define XMMatrixRotationY        DirectX::XMMatrixRotationY
+#define XMMatrixRotationZ        DirectX::XMMatrixRotationZ
+#define XMVectorScale            DirectX::XMVectorScale
+#define XMVector3Normalize       DirectX::XMVector3Normalize
+#define XMVector3Dot             DirectX::XMVector3Dot
+#define XMVector3Cross           DirectX::XMVector3Cross
+#endif
 
-inline bool rayIntersectsSphere(const XMVECTOR& rayOrigin, const XMVECTOR& rayDir, const XMVECTOR& sphereCenter,
+inline bool mg::rayIntersectsSphere(FXMVECTOR rayOrigin, FXMVECTOR rayDir, FXMVECTOR sphereCenter,
                                 float sphereRadius)
 {
     XMVECTOR oc = XMVectorSubtract(sphereCenter, rayOrigin);
@@ -52,7 +82,7 @@ inline bool rayIntersectsSphere(const XMVECTOR& rayOrigin, const XMVECTOR& rayDi
     return discriminant >= 0;
 }
 
-inline std::tuple<float, float, float> getPitchYawRollFromRotationMat(XMMATRIX _rotationMat)
+inline std::tuple<float, float, float> mg::getPitchYawRollFromRotationMat(XMMATRIX _rotationMat)
 {
     XMFLOAT4X4 rotationMat;
     XMStoreFloat4x4(&rotationMat, _rotationMat);
@@ -94,6 +124,7 @@ inline std::tuple<float, float, float> getPitchYawRollFromRotationMat(XMMATRIX _
     return {-pitch, -yaw, -roll};
 }
 
+#ifdef CUSTOM_MATH
 inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ)
 {
     const float yScale = 1.0f / static_cast<float>(tan(fovY / 2.0f));
@@ -108,8 +139,7 @@ inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float ne
     };
 }
 
-inline XMMATRIX XMMatrixLookAtLH(const XMVECTOR& eyePosition, const XMVECTOR& focusPosition,
-                                 const XMVECTOR& upDirection)
+inline XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePosition, FXMVECTOR focusPosition, FXMVECTOR upDirection)
 {
     XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(focusPosition, eyePosition));
     XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(upDirection, zAxis));
@@ -181,12 +211,12 @@ inline XMMATRIX XMMatrixRotationZ(float angleRadians)
     };
 }
 
-inline XMVECTOR XMVectorScale(const XMVECTOR& v, float scale)
+inline XMVECTOR XMVectorScale(FXMVECTOR v, float scale)
 {
     return {XMVectorGetX(v) * scale, XMVectorGetY(v) * scale, XMVectorGetZ(v) * scale, XMVectorGetW(v) * scale};
 }
 
-inline XMVECTOR XMVector3Normalize(const XMVECTOR& v)
+inline XMVECTOR XMVector3Normalize(FXMVECTOR v)
 {
     const float magSquare =
         XMVectorGetX(v) * XMVectorGetX(v) + XMVectorGetY(v) * XMVectorGetY(v) + XMVectorGetZ(v) * XMVectorGetZ(v);
@@ -200,26 +230,32 @@ inline XMVECTOR XMVector3Normalize(const XMVECTOR& v)
 
     return v;
 }
+
+inline XMVECTOR XMVector3Dot(FXMVECTOR v1, FXMVECTOR v2)
+{
+    float x1 = XMVectorGetX(v1);
+    float y1 = XMVectorGetY(v1);
+    float z1 = XMVectorGetZ(v1);
+
+    float x2 = XMVectorGetX(v2);
+    float y2 = XMVectorGetY(v2);
+    float z2 = XMVectorGetZ(v2);
+
+    float dotProduct = x1 * x2 + y1 * y2 + z1 * z2;
+
+    return XMVectorReplicate(dotProduct);
 }
 
-#ifdef CUSTOM_MATH
-#define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
-#define XMMatrixLookAtLH         mg::XMMatrixLookAtLH
-#define XMMatrixScaling          mg::XMMatrixScaling
-#define XMMatrixRotationX        mg::XMMatrixRotationX
-#define XMMatrixRotationY        mg::XMMatrixRotationY
-#define XMMatrixRotationZ        mg::XMMatrixRotationZ
-#define XMVectorScale            mg::XMVectorScale
-#define XMVector3Normalize       mg::XMVector3Normalize
-#else
-#define XMMatrixPerspectiveFovLH DirectX::XMMatrixPerspectiveFovLH
-#define XMMatrixLookAtLH         DirectX::XMMatrixLookAtLH
-#define XMMatrixScaling          DirectX::XMMatrixScaling
-#define XMMatrixRotationX        DirectX::XMMatrixRotationX
-#define XMMatrixRotationY        DirectX::XMMatrixRotationY
-#define XMMatrixRotationZ        DirectX::XMMatrixRotationZ
-#define XMVectorScale            DirectX::XMVectorScale
-#define XMVector3Normalize       DirectX::XMVector3Normalize
-#endif
+inline XMVECTOR XMVector3Cross(FXMVECTOR v1, FXMVECTOR v2)
+{
+    float x1 = XMVectorGetX(v1), y1 = XMVectorGetY(v1), z1 = XMVectorGetZ(v1);
+    float x2 = XMVectorGetX(v2), y2 = XMVectorGetY(v2), z2 = XMVectorGetZ(v2);
 
+    float cx = y1 * z2 - z1 * y2;
+    float cy = z1 * x2 - x1 * z2;
+    float cz = x1 * y2 - y1 * x2;
+
+    return {cx, cy, cz, 0};
+}
+#endif
 // clang-format on
