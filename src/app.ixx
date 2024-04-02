@@ -82,14 +82,6 @@ private:
 
 module :private;
 
-void PrintXMVECTOR(DirectX::XMVECTOR v)
-{
-    DirectX::XMFLOAT4 vec;
-    DirectX::XMStoreFloat4(&vec, v);
-
-    std::cout << "(" << vec.x << ", " << vec.y << ", " << vec.z << ", " << vec.w << ")" << std::endl;
-}
-
 App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 {
     const char* apiStr = apiToStr(mOptions.api);

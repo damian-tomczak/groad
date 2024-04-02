@@ -56,16 +56,16 @@ public:
         switch (direction)
         {
         case FORWARD:
-            mPosition = XMVectorAdd(mPosition, XMVectorScale(mFront, velocity));
+            mPosition += XMVectorScale(mFront, velocity);
             break;
         case BACKWARD:
-            mPosition = XMVectorSubtract(mPosition, XMVectorScale(mFront, velocity));
+            mPosition -= XMVectorScale(mFront, velocity);
             break;
         case LEFT:
-            mPosition = XMVectorSubtract(mPosition, XMVectorScale(mRight, velocity));
+            mPosition -= XMVectorScale(mRight, velocity);
             break;
         case RIGHT:
-            mPosition = XMVectorAdd(mPosition, XMVectorScale(mRight, velocity));
+            mPosition += XMVectorScale(mRight, velocity);
             break;
         default:
             ASSERT(false);
