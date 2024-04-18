@@ -22,6 +22,7 @@ import dx11renderer;
 
 using namespace std::chrono;
 using namespace DirectX;
+namespace fs = std::filesystem;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -134,24 +135,51 @@ void App::run()
     LARGE_INTEGER previousTime;
     QueryPerformanceCounter(&previousTime);
 
+#ifndef NDEBUG
+    auto lastShadersCompilationTime = fs::file_time_type::clock::now();
+    const fs::path shaderPaths{ASSETS_PATH "shaders/"};
+#endif
+
     while (mIsRunning)
     {
+#ifndef NDEBUG
+        bool shouldRecompileShaders = false;
+        for (const auto& entry : fs::directory_iterator(shaderPaths))
+        {
+            if (fs::is_regular_file(entry.status()))
+            {
+                const auto lastModified = fs::last_write_time(entry);
+                if (lastModified > lastShadersCompilationTime)
+                {
+                    shouldRecompileShaders = true;
+                    lastShadersCompilationTime = fs::file_time_type::clock::now();
+                }
+            }
+        }
+
+        if (shouldRecompileShaders)
+        {
+            WARN("Starting recompiling shaders!");
+            mpRenderer->createShaders();
+            WARN("Shaders recompiled!");
+        }
+#endif
         LARGE_INTEGER nowTime;
         QueryPerformanceCounter(&nowTime);
 
         double elapsedTime = static_cast<double>(nowTime.QuadPart - previousTime.QuadPart) / frequency.QuadPart;
-        float dt = static_cast<float>(elapsedTime);
+        float deltaTime = static_cast<float>(elapsedTime);
 
         previousTime = nowTime;
 
         IWindow::Message msg = mpWindow->getMessage();
         while (msg != IWindow::Message::EMPTY)
         {
-            processInput(msg, dt);
+            processInput(msg, deltaTime);
             msg = mpWindow->getMessage();
         }
 
-        updateScene(dt);
+        updateScene(deltaTime);
         renderScene();
     }
 }

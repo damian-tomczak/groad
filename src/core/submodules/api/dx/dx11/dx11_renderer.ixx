@@ -139,9 +139,10 @@ public:
         return nullptr;
     }
 
+    void createShaders();
+
 private:
     void initCore();
-    void createShaders();
     void buildVertexLayout();
 
     ComPtr<ID3D11Device> mpDevice;

@@ -78,7 +78,7 @@ void log(const std::string_view msg, const LogLevel level)
     // clang-format on
 
     std::lock_guard lock{ioMutex};
-    if (level > LogLevel::INFO)
+    if (level > LogLevel::WARNING)
     {
         std::clog << out.str();
 
