@@ -56,6 +56,7 @@ public:
     ComPtr<ID3D11VertexShader> mpGridVS;
     ComPtr<ID3D11PixelShader> mpGridPS;
     ComPtr<ID3D11VertexShader> mpCursorVS;
+    ComPtr<ID3D11GeometryShader> mpCursorGS;
     ComPtr<ID3D11PixelShader> mpCursorPS;
     ComPtr<ID3D11VertexShader> mpCentroidVS;
     ComPtr<ID3D11PixelShader> mpCentroidPS;
@@ -383,26 +384,25 @@ void DX11Renderer::createShaders()
     ComPtr<ID3D10Blob> compiledShader;
 
     compileShader("torus_vs.hlsl", "vs_5_0", mpVSBlob);
-    HR(mpDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, mpVS.GetAddressOf()));
+    HR(mpDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, &mpVS));
 
     compileShader("torus_ps.hlsl", "ps_5_0", compiledShader);
     HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
 
     compileShader("infinite_grid_vs.hlsl", "vs_5_0", compiledShader);
-    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                    mpGridVS.GetAddressOf()));
+    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpGridVS));
 
     compileShader("infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                   &mpGridPS));
+    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpGridPS));
 
     compileShader("cursor_vs.hlsl", "vs_5_0", compiledShader);
-    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                    mpCursorVS.GetAddressOf()));
+    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorVS));
+
+    compileShader("cursor_gs.hlsl", "gs_5_0", compiledShader);
+    HR(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorGS));
 
     compileShader("cursor_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                   &mpCursorPS));
+    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorPS));
 
 
     D3D11_BUFFER_DESC constantBufferDesc

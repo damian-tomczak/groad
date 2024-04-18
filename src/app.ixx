@@ -190,6 +190,7 @@ void App::renderScene()
     pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
     pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+    pContext->GSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
 
     {
         pContext->VSSetShader(mpRenderer->mpGridVS.Get(), nullptr, 0);
@@ -208,9 +209,11 @@ void App::renderScene()
         pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
         pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
+        pContext->GSSetShader(mpRenderer->mpCursorGS.Get(), nullptr, 0);
         pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
         pContext->Draw(6, 0);
+        pContext->GSSetShader(nullptr, nullptr, 0);
     }
 
     for (auto const [i, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
@@ -339,7 +342,14 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         mIsRunning = false;
         break;
     case IWindow::Message::RESIZE:
-        mpRenderer->onResize();
+    {
+        const int width = mpWindow->getWidth();
+        const int height = mpWindow->getHeight();
+        if ((width != 0) && (height != 0))
+        {
+            mpRenderer->onResize();
+        }
+    }
         break;
     case IWindow::Message::KEY_DELETE_DOWN:
         for (auto it = mSelectedRenderables.begin(); it != mSelectedRenderables.end(); it = mSelectedRenderables.begin())
@@ -507,6 +517,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
 void App::renderUi()
 {
+
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -547,29 +558,35 @@ void App::renderUi()
         mpRenderer->addRenderable(std::move(pPoint));
     }
 
-    std::vector<std::string> renderableNames{};
-    for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
-    {
-        const bool isSelected = std::ranges::find(mSelectedRenderables, mpRenderer->mRenderables.at(i)->id) != mSelectedRenderables.end();
-
-        std::ostringstream renderableName;
-        renderableName << std::left << std::setw(renderablesListWidth) << mpRenderer->mRenderables.at(i)->mTag
-                       << (isSelected ? "[X]" : "");
-
-        renderableNames.emplace_back(renderableName.str());
-    }
-
-    std::vector<const char*> renderableNamesPtrs{};
-    for (const auto& name : renderableNames)
-    {
-        renderableNamesPtrs.push_back(name.c_str());
-    }
-
     int newSelectedItemId = -1;
 
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    ImVec4 backgroundColor = style.Colors[ImGuiCol_WindowBg];
+    backgroundColor.z *= 2.2f;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, backgroundColor);
+    const float renderablesHeight = mpWindow->getHeight() * 0.2f;
+
     ImGui::Text("Renderables:");
-    ImGui::ListBox("##objects", &newSelectedItemId, renderableNamesPtrs.data(), static_cast<int>(renderableNamesPtrs.size()));
-    mIsUiClicked |= ImGui::IsItemActive();
+    ImGui::BeginChild("Scrolling", ImVec2{menuWidth * 0.9f, renderablesHeight});
+
+    for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
+    {
+        const auto& pRenderable = mpRenderer->mRenderables.at(i);
+
+        if (ImGui::Selectable(pRenderable->mTag.c_str(), mSelectedRenderables.contains(pRenderable->id)))
+        {
+            newSelectedItemId = i;
+            mIsUiClicked |= ImGui::IsItemActive();
+        }
+    }
+
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
 
     bool isNewItemSelected{};
     if (newSelectedItemId != -1)
@@ -647,7 +664,11 @@ void App::renderUi()
         }
     }
 
-    ImGui::Separator();
+    if (mSelectedRenderables.size() > 0)
+    {
+        ImGui::Separator();
+        ImGui::Spacing();
+    }
 
     if (mSelectedRenderables.size() == 1)
     {
