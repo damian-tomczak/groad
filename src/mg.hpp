@@ -6,7 +6,7 @@
 #include <tuple>
 #include <numbers>
 
-#define CUSTOM_MATH
+//#define CUSTOM_MATH
 
 #ifdef CUSTOM_MATH
 using DirectX::FXMVECTOR;

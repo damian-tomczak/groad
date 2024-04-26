@@ -121,12 +121,5 @@ private:
 
         XMVECTOR front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians), sinf(yawRadians) * cosf(pitchRadians), 0.0f);
         mFront = XMVector3Normalize(front);
-
-        //mRight = XMVector3Normalize(XMVector3Cross(mFront, mUp));
-        //mUp = XMVector3Normalize(XMVector3Cross(mRight, mFront));
-
-        XMFLOAT4 up;
-        XMStoreFloat4(&up, mUp);
-        std::cout << std::format("{} {} {} {}", up.x, up.y, up.z, up.w).data() << "\n";
     }
 };

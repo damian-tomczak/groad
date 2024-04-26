@@ -49,17 +49,20 @@ public:
     void onResize() override;
     void buildGeometryBuffers();
 
-    std::vector<std::unique_ptr<Renderable>> mRenderables;
-
     ComPtr<ID3D11VertexShader> mpVS;
     ComPtr<ID3D11PixelShader> mpPS;
+
     ComPtr<ID3D11VertexShader> mpGridVS;
     ComPtr<ID3D11PixelShader> mpGridPS;
+
     ComPtr<ID3D11VertexShader> mpCursorVS;
     ComPtr<ID3D11GeometryShader> mpCursorGS;
     ComPtr<ID3D11PixelShader> mpCursorPS;
-    ComPtr<ID3D11VertexShader> mpCentroidVS;
-    ComPtr<ID3D11PixelShader> mpCentroidPS;
+
+    ComPtr<ID3D11VertexShader> mpBezierC0VS;
+    ComPtr<ID3D11HullShader> mpBezierC0HS;
+    ComPtr<ID3D11DomainShader> mpBezierC0DS;
+    ComPtr<ID3D11PixelShader> mpBezierC0PS;
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
@@ -89,9 +92,14 @@ public:
         return mpDepthStencilView.Get();
     }
 
-    ID3D11InputLayout* getInputLayout() const
+    ID3D11InputLayout* getDefaultInputLayout() const
     {
-        return mpInputLayout.Get();
+        return mpDefaultInputLayout.Get();
+    }
+
+    ID3D11InputLayout* getBezierInputLayout() const
+    {
+        return mpBezierInputLayout.Get();
     }
 
     ID3D11Buffer* getConstantBuffer() const
@@ -104,7 +112,7 @@ public:
         return mpConstantBuffer.GetAddressOf();
     }
 
-    void addRenderable(std::unique_ptr<Renderable>&& renderable)
+    void addRenderable(std::unique_ptr<IRenderable>&& renderable)
     {
         mRenderables.emplace_back(std::move(renderable));
         mVertexBuffers.emplace_back();
@@ -126,10 +134,10 @@ public:
         }
     }
 
-    Renderable* getRenderable(IRenderable::Id id) const
+    IRenderable* getRenderable(IRenderable::Id id) const override
     {
-        auto it = std::find_if(mRenderables.begin(), mRenderables.end(),
-                               [id](const auto& item) { return item->id == id; });
+        auto it =
+            std::find_if(mRenderables.begin(), mRenderables.end(), [id](const auto& item) { return item->id == id; });
 
         if (it != mRenderables.end())
         {
@@ -152,9 +160,12 @@ private:
     ComPtr<ID3D11RenderTargetView> mpRenderTargetView;
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
-    ComPtr<ID3D10Blob> mpVSBlob;
+    ComPtr<ID3D10Blob> mpDefaultVSBlob;
+    ComPtr<ID3D10Blob> mpBezierVSBlob;
+
     ComPtr<ID3D11Buffer> mpConstantBuffer;
-    ComPtr<ID3D11InputLayout> mpInputLayout;
+    ComPtr<ID3D11InputLayout> mpDefaultInputLayout;
+    ComPtr<ID3D11InputLayout> mpBezierInputLayout;
 
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
@@ -299,18 +310,25 @@ void DX11Renderer::buildGeometryBuffers()
 {
     for (unsigned int i{}; i < mRenderables.size(); ++i)
     {
+        auto& pRenderable = mRenderables[i];
         //if (mRenderables[i] == nullptr)
         //{
         //    continue;
         //}
 
+        const std::vector<float>& geometry = pRenderable->getGeometry();
+        const std::vector<unsigned>& topology = pRenderable->getTopology();
+
+        if (geometry.size() == 0)
+        {
+            continue;
+        }
+
         mVertexBuffers[i].Reset();
         mIndexBuffers[i].Reset();
 
-        const auto t = mRenderables[i]->getGeometry();
-
         D3D11_BUFFER_DESC vbd{
-            .ByteWidth = static_cast<UINT>(sizeof(float) * mRenderables[i]->getGeometry().size()),
+            .ByteWidth = static_cast<UINT>(sizeof(float) * geometry.size()),
             .Usage = D3D11_USAGE_DYNAMIC,
             .BindFlags = D3D11_BIND_VERTEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
@@ -318,12 +336,17 @@ void DX11Renderer::buildGeometryBuffers()
             .StructureByteStride = 0,
         };
         D3D11_SUBRESOURCE_DATA vinitData{
-            .pSysMem = t.data(),
+            .pSysMem = geometry.data(),
         };
-        HR(mpDevice->CreateBuffer(&vbd, &vinitData, mVertexBuffers[i].GetAddressOf()));
+        HR(mpDevice->CreateBuffer(&vbd, &vinitData, &mVertexBuffers[i]));
+
+        if (topology.size() == 0)
+        {
+            continue;
+        }
 
         D3D11_BUFFER_DESC ibd{
-            .ByteWidth = static_cast<UINT>(sizeof(unsigned) * mRenderables[i]->getTopology().size()),
+            .ByteWidth = static_cast<UINT>(sizeof(unsigned) * topology.size()),
             .Usage = D3D11_USAGE_DYNAMIC,
             .BindFlags = D3D11_BIND_INDEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
@@ -331,9 +354,9 @@ void DX11Renderer::buildGeometryBuffers()
             .StructureByteStride = 0,
         };
         D3D11_SUBRESOURCE_DATA initData{
-            .pSysMem = mRenderables[i]->getTopology().data(),
+            .pSysMem = topology.data(),
         };
-        HR(mpDevice->CreateBuffer(&ibd, &initData, mIndexBuffers[i].GetAddressOf()));
+        HR(mpDevice->CreateBuffer(&ibd, &initData, &mIndexBuffers[i]));
     }
 
     //mRebuildBuffers = false;
@@ -342,9 +365,13 @@ void DX11Renderer::buildGeometryBuffers()
 
 void DX11Renderer::createShaders()
 {
+    static bool firstCall = true;
+
     namespace fs = std::filesystem;
 
     auto compileShader = [](const fs::path shaderPath, const std::string_view shaderModel, ComPtr<ID3D10Blob>& shaderBlob) {
+        shaderBlob.Reset();
+
         static constexpr std::string_view shaderEntryPoint{"main"};
         static const fs::path shaderPaths{ASSETS_PATH "shaders/"};
 
@@ -376,35 +403,101 @@ void DX11Renderer::createShaders()
                          << (containMessage ? ":" : "")
                          << (containMessage ? reinterpret_cast<char*>(compilationMsgs->GetBufferPointer()) : "");
 
-            ERR(errorMessage.str());
+            if (firstCall)
+            {
+                ERR(errorMessage.str());
+            }
+            else
+            {
+                WARN(errorMessage.str());
+            }
         }
 
         compilationMsgs.Reset();
     };
 
+    auto checkShader = [](const HRESULT hr) {
+        if (FAILED(hr))
+        {
+            const std::string msg = std::format("Shader creation error: {}({})", std::system_category().message(hr), hr);
+
+            if (firstCall)
+            {
+                ERR(msg);
+            }
+            else
+            {
+                WARN(msg);
+            }
+        }
+    };
+
     ComPtr<ID3D10Blob> compiledShader;
 
-    compileShader("torus_vs.hlsl", "vs_5_0", mpVSBlob);
-    HR(mpDevice->CreateVertexShader(mpVSBlob->GetBufferPointer(), mpVSBlob->GetBufferSize(), nullptr, &mpVS));
+#pragma region torus
+    compileShader("torus/torus_vs.hlsl", "vs_5_0", mpDefaultVSBlob);
+    checkShader(mpDevice->CreateVertexShader(mpDefaultVSBlob->GetBufferPointer(), mpDefaultVSBlob->GetBufferSize(), nullptr, &mpVS));
 
-    compileShader("torus_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpPS));
+    compileShader("torus/torus_ps.hlsl", "ps_5_0", compiledShader);
+    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr,
+                                   &mpPS));
+#pragma endregion
 
-    compileShader("infinite_grid_vs.hlsl", "vs_5_0", compiledShader);
-    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpGridVS));
+#pragma region grid
+    compileShader("grid/infinite_grid_vs.hlsl", "vs_5_0", compiledShader);
+    checkShader(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                             nullptr,
+                                    &mpGridVS));
 
-    compileShader("infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpGridPS));
+    compileShader("grid/infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
+    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr,
+                                   &mpGridPS));
+#pragma endregion
 
-    compileShader("cursor_vs.hlsl", "vs_5_0", compiledShader);
-    HR(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorVS));
+#pragma region cursor
+    compileShader("cursor/cursor_vs.hlsl", "vs_5_0", compiledShader);
+    checkShader(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                             nullptr,
+                                    &mpCursorVS));
 
-    compileShader("cursor_gs.hlsl", "gs_5_0", compiledShader);
-    HR(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorGS));
+    compileShader("cursor/cursor_gs.hlsl", "gs_5_0", compiledShader);
+    checkShader(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                               nullptr,
+                                      &mpCursorGS));
 
-    compileShader("cursor_ps.hlsl", "ps_5_0", compiledShader);
-    HR(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr, &mpCursorPS));
+    compileShader("cursor/cursor_ps.hlsl", "ps_5_0", compiledShader);
+    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr,
+                                   &mpCursorPS));
+#pragma endregion
 
+
+#pragma region beziers
+#pragma region bezier_c0
+    compileShader("beziers/bezier_c0/bezier_c0_vs.hlsl", "vs_5_0", mpBezierVSBlob);
+    checkShader(mpDevice->CreateVertexShader(mpBezierVSBlob->GetBufferPointer(), mpBezierVSBlob->GetBufferSize(),
+                                             nullptr, &mpBezierC0VS));
+
+    compileShader("beziers/bezier_c0/bezier_c0_hs.hlsl", "hs_5_0", compiledShader);
+    checkShader(mpDevice->CreateHullShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                  &mpBezierC0HS));
+
+    compileShader("beziers/bezier_c0/bezier_c0_ds.hlsl", "ds_5_0", compiledShader);
+    checkShader(mpDevice->CreateDomainShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                             nullptr,
+                                    &mpBezierC0DS));
+
+    compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", compiledShader);
+    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr, &mpBezierC0PS));
+#pragma endregion bezier_c0
+
+#pragma region bezier_c2
+
+#pragma endregion bezier_c2
+#pragma endregion
 
     D3D11_BUFFER_DESC constantBufferDesc
     {
@@ -414,16 +507,35 @@ void DX11Renderer::createShaders()
         .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
     };
     HR(mpDevice->CreateBuffer(&constantBufferDesc, nullptr, &mpConstantBuffer));
+
+    firstCall = false;
 }
 
 
 void DX11Renderer::buildVertexLayout()
 {
-    std::array vertexDesc
+    // clang-format off
     {
-        D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    };
+        std::array description
+        {
+            D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
 
-    HR(mpDevice->CreateInputLayout(vertexDesc.data(), static_cast<UINT>(vertexDesc.size()), mpVSBlob->GetBufferPointer(),
-        mpVSBlob->GetBufferSize(), &mpInputLayout));
+        HR(mpDevice->CreateInputLayout(description.data(), static_cast<UINT>(description.size()), mpDefaultVSBlob->GetBufferPointer(),
+            mpDefaultVSBlob->GetBufferSize(), &mpDefaultInputLayout));
+    }
+
+    {
+        std::array description
+        {
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,                  D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0, 3 * sizeof(float),  D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 2, DXGI_FORMAT_R32G32B32_FLOAT, 0, 6 * sizeof(float),  D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 3, DXGI_FORMAT_R32G32B32_FLOAT, 0, 9 * sizeof(float),  D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+
+        HR(mpDevice->CreateInputLayout(description.data(), static_cast<UINT>(description.size()),
+            mpBezierVSBlob->GetBufferPointer(), mpBezierVSBlob->GetBufferSize(), &mpBezierInputLayout));
+    }
+    // clang-format on
 }

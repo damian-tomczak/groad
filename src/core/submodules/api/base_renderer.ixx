@@ -1,11 +1,29 @@
 module;
 
+#include <DirectXMath.h>
+
 #include "utils.h"
 
 export module core.renderer;
 
 import window;
 import std.core;
+
+using namespace DirectX;
+
+// clang-format off
+export namespace Colors
+{
+    inline constexpr XMFLOAT4 White  {1.0f, 1.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Black  {0.0f, 0.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Red    {1.0f, 0.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Green  {0.0f, 1.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Blue   {0.0f, 0.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Yellow {1.0f, 1.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Cyan   {0.0f, 1.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Magenta{1.0f, 0.0f, 1.0f, 1.0f};
+}
+// clang-format on
 
 export enum class API : uint8_t
 {
@@ -39,13 +57,21 @@ export class IRenderable : public NonCopyable
 public:
     using Id = unsigned;
 
-    IRenderable(std::string_view tag) : mTag{tag}, id{counter++}
+    IRenderable(FXMVECTOR pos, std::string_view tag) : mTag{tag}, id{counter++}, mWorldPos{pos}
     {
     }
 
     std::string mTag;
     Id id;
     bool isVisible = true;
+
+    XMVECTOR mLocalPos{};
+    XMVECTOR mWorldPos{};
+
+    float mPitch{};
+    float mYaw{};
+    float mRoll{};
+    float mScale = 1.f;
 
     virtual const std::vector<float>& getGeometry() const
     {
@@ -67,12 +93,19 @@ protected:
     std::vector<float> mGeometry;
     std::vector<unsigned> mTopology;
 
-    virtual void generateGeometry() = 0;
-    virtual void generateTopology() = 0;
+    virtual void generateGeometry()
+    {
+    }
+
+    virtual void generateTopology()
+    {
+    }
 
 private:
     inline static Id counter = 0;
 };
+
+
 
 export class IRenderer : public NonCopyableAndMoveable
 {
@@ -91,6 +124,9 @@ public:
     virtual void onResize() = 0;
 
     static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
+    virtual class IRenderable* getRenderable(IRenderable::Id id) const = 0;
+
+    std::vector<std::unique_ptr<IRenderable>> mRenderables;
 
 protected:
     std::weak_ptr<IWindow> mpWindow;
