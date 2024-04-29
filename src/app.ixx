@@ -381,7 +381,7 @@ void App::renderScene()
         }
         else
         {
-            pContext->Draw(1, 0);
+            pContext->Draw(2, 0);
         }
     }
 

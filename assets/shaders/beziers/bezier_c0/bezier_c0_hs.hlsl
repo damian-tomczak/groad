@@ -1,38 +1,35 @@
 struct VSOutput
 {
-	float3 controlPoint0 : CONTROL_POINTS_0;
-	float3 controlPoint1 : CONTROL_POINTS_1;
-	float3 controlPoint2 : CONTROL_POINTS_2;
-	float3 controlPoint3 : CONTROL_POINTS_3;
+    float3 controlPoint0 : CONTROL_POINTS_0;
+    float3 controlPoint1 : CONTROL_POINTS_1;
+    float3 controlPoint2 : CONTROL_POINTS_2;
+    float3 controlPoint3 : CONTROL_POINTS_3;
 };
 
 struct HSOutput
 {
-	float3 controlPoint0 : CONTROL_POINTS_0;
-	float3 controlPoint1 : CONTROL_POINTS_1;
-	float3 controlPoint2 : CONTROL_POINTS_2;
-	float3 controlPoint3 : CONTROL_POINTS_3;
+    float3 controlPoint0 : CONTROL_POINTS_0;
+    float3 controlPoint1 : CONTROL_POINTS_1;
 };
 
 struct HSConstantDataOutput
 {
-	float EdgeTessFactor[2] : SV_TessFactor;
+    float EdgeTessFactor[2] : SV_TessFactor;
 };
 
-#define NUM_CONTROL_POINTS 1
+#define NUM_CONTROL_POINTS 2  // We only need two control points for the line
 
 HSConstantDataOutput CalcHSPatchConstants(
-	InputPatch<VSOutput, NUM_CONTROL_POINTS> ip,
-	uint PatchID : SV_PrimitiveID)
+    InputPatch<VSOutput, 4> ip,  // Use 4 because we still have 4 input control points
+    uint PatchID : SV_PrimitiveID)
 {
-	HSConstantDataOutput Output;
+    HSConstantDataOutput Output;
 
-	Output.EdgeTessFactor[0] = 1;
+    // Simple tessellation factor for a single line segment
+    Output.EdgeTessFactor[0] = 1.0;
+    Output.EdgeTessFactor[1] = 1.0;  // Not used in isoline domain but must be defined
 
-	float avgDepth = -0.25 * (ip[0].controlPoint0.z + ip[0].controlPoint1.z + ip[0].controlPoint2.z + ip[0].controlPoint3.z);
-	Output.EdgeTessFactor[1] = -16 * log10(0.01 * avgDepth) + 12;
-
-	return Output;
+    return Output;
 }
 
 [domain("isoline")]
@@ -41,16 +38,15 @@ HSConstantDataOutput CalcHSPatchConstants(
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
 HSOutput main(
-	InputPatch<VSOutput, NUM_CONTROL_POINTS> ip,
-	uint i : SV_OutputControlPointID,
-	uint PatchID : SV_PrimitiveID )
+    InputPatch<VSOutput, 4> ip,  // Original input still has 4 control points
+    uint i : SV_OutputControlPointID,
+    uint PatchID : SV_PrimitiveID)
 {
-	HSOutput o = (HSOutput) 0;
+    HSOutput o;
 
-	o.controlPoint0 = ip[i].controlPoint0;
-	o.controlPoint1 = ip[i].controlPoint1;
-	o.controlPoint2 = ip[i].controlPoint2;
-	o.controlPoint3 = ip[i].controlPoint3;
+    // Output control points 0 and 3 from the input as a line
+    o.controlPoint0 = ip[0].controlPoint0;  // First control point
+    o.controlPoint1 = ip[0].controlPoint3;  // Third control point (not second)
 
-	return o;
+    return o;
 }
