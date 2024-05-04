@@ -55,14 +55,15 @@ export constexpr const char* apiToStr(const API api)
 export class IRenderable : public NonCopyable
 {
 public:
-    using Id = unsigned;
+    using Id = int;
+    static constexpr Id invalidId = -1;
 
-    IRenderable(FXMVECTOR pos, std::string_view tag) : mTag{tag}, id{counter++}, mWorldPos{pos}
+    IRenderable(FXMVECTOR pos, std::string_view tag) : mTag{tag}, mId{counter++}, mWorldPos{pos}
     {
     }
 
     std::string mTag;
-    Id id;
+    Id mId;
     bool isVisible = true;
 
     XMVECTOR mLocalPos{};
@@ -124,7 +125,7 @@ public:
     virtual void onResize() = 0;
 
     static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
-    virtual class IRenderable* getRenderable(IRenderable::Id id) const = 0;
+    virtual class IRenderable* getRenderable(IRenderable::Id mId) const = 0;
 
     std::vector<std::unique_ptr<IRenderable>> mRenderables;
 

@@ -109,10 +109,10 @@ export
         }
     };
 
-    class Bezier : public IRenderable
+    class IBezier : public IRenderable
     {
     public:
-        Bezier(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, std::string_view tag)
+        IBezier(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, std::string_view tag)
             : IRenderable{XMVectorZero(), tag}, mControlPointRenderableIds{selectedRenderableIds}
         {
         }
@@ -126,9 +126,9 @@ export
             return mControlPointRenderableIds;
         }
 
-        void insertControlPoint(const IRenderable::Id id)
+        void insertControlPoint(const IRenderable::Id mId)
         {
-            mControlPointRenderableIds.insert(id);
+            mControlPointRenderableIds.insert(mId);
             generateGeometry();
         }
 
@@ -136,7 +136,7 @@ export
         std::unordered_set<IRenderable::Id> mControlPointRenderableIds;
     };
 
-    class BezierC0 final : public Bezier
+    class BezierC0 final : public IBezier
     {
         inline static unsigned counter = 1;
 
@@ -144,7 +144,7 @@ export
 
     public:
         BezierC0(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, const IRenderer* pRenderer)
-            : Bezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str()}, mpRenderer{pRenderer}
+            : IBezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str()}, mpRenderer{pRenderer}
         {
         }
 
@@ -154,7 +154,7 @@ export
 
             unsigned idx = 0;
 
-            for (const auto id : mControlPointRenderableIds)
+            for (const auto mId : mControlPointRenderableIds)
             {
                 if ((idx != 0) && (idx % controlPointsNumber == 0))
                 {
@@ -163,7 +163,7 @@ export
                     idx++;
                 }
 
-                const XMVECTOR positionVec = mpRenderer->getRenderable(id)->mWorldPos;
+                const XMVECTOR positionVec = mpRenderer->getRenderable(mId)->mWorldPos;
                 XMFLOAT3 position;
                 XMStoreFloat3(&position, positionVec);
                 mGeometry.push_back(position);

@@ -64,6 +64,7 @@ public:
     ComPtr<ID3D11VertexShader> mpBezierC0VS;
     ComPtr<ID3D11HullShader> mpBezierC0HS;
     ComPtr<ID3D11DomainShader> mpBezierC0DS;
+    ComPtr<ID3D11GeometryShader> mpBezierC0BorderGS;
     ComPtr<ID3D11PixelShader> mpBezierC0PS;
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
@@ -114,20 +115,40 @@ public:
         return mpConstantBuffer.GetAddressOf();
     }
 
-    void addRenderable(std::unique_ptr<IRenderable>&& renderable)
+    void addRenderable(std::unique_ptr<IRenderable>&& renderable, const IRenderable::Id parentId = IRenderable::invalidId)
     {
-        mRenderables.emplace_back(std::move(renderable));
-        mVertexBuffers.emplace_back();
-        mIndexBuffers.emplace_back();
+        if (parentId != IRenderable::invalidId)
+        {
+            const auto it = std::find_if(mRenderables.begin(), mRenderables.end(),
+                                   [&](const auto& item) { return item->mId == parentId; });
+
+            if (it != mRenderables.end())
+            {
+                size_t index = std::distance(mRenderables.begin(), it);
+                mRenderables.insert(it, std::move(renderable));
+                mVertexBuffers.insert(mVertexBuffers.begin() + index, ComPtr<ID3D11Buffer>());
+                mIndexBuffers.insert(mIndexBuffers.begin() + index, ComPtr<ID3D11Buffer>());
+            }
+            else
+            {
+                ASSERT(false);
+            }
+        }
+        else
+        {
+            mRenderables.emplace_back(std::move(renderable));
+            mVertexBuffers.emplace_back();
+            mIndexBuffers.emplace_back();
+        }
 
         //mRebuildBuffers = true;
     }
 
-    void removeRenderable(IRenderable::Id id)
+    void removeRenderable(IRenderable::Id mId)
     {
         for (int i{}; i < mRenderables.size(); ++i)
         {
-            if (mRenderables.at(i)->id == id)
+            if (mRenderables.at(i)->mId == mId)
             {
                 mRenderables.erase(mRenderables.begin() + i);
                 mVertexBuffers.erase(mVertexBuffers.begin() + i);
@@ -136,10 +157,10 @@ public:
         }
     }
 
-    IRenderable* getRenderable(IRenderable::Id id) const override
+    IRenderable* getRenderable(IRenderable::Id mId) const override
     {
         auto it =
-            std::find_if(mRenderables.begin(), mRenderables.end(), [id](const auto& item) { return item->id == id; });
+            std::find_if(mRenderables.begin(), mRenderables.end(), [mId](const auto& item) { return item->mId == mId; });
 
         if (it != mRenderables.end())
         {
@@ -491,9 +512,14 @@ void DX11Renderer::createShaders()
                                              nullptr,
                                     &mpBezierC0DS));
 
+    compileShader("beziers/bezier_c0/bezier_c0_border_gs.hlsl", "gs_5_0", compiledShader);
+    checkShader(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                               nullptr, &mpBezierC0BorderGS));
+
     compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", compiledShader);
     checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
                                             nullptr, &mpBezierC0PS));
+
 #pragma endregion bezier_c0
 
 #pragma region bezier_c2

@@ -68,6 +68,7 @@ private:
     bool mIsLeftMouseClicked{};
     bool mIsRightMouseClicked{};
     bool mIsCtrlClicked{};
+    bool mIsMenuHovered{};
 
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
@@ -132,49 +133,49 @@ void App::init()
     XMVECTOR pos{-2.f, 3.f, 0};
     auto pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-1.f, 3.f, 0};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{0.0f, 3.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{1.0f, 3.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-2.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-1.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{0.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{1.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->id);
+    selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
     auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
@@ -248,9 +249,15 @@ void App::updateScene(float dt)
 
 void App::renderScene()
 {
-    mpRenderer->buildGeometryBuffers();
-
     ID3D11DeviceContext* const pContext = mpRenderer->getContext();
+
+    pContext->VSSetShader(nullptr, nullptr, 0);
+    pContext->HSSetShader(nullptr, nullptr, 0);
+    pContext->DSSetShader(nullptr, nullptr, 0);
+    pContext->GSSetShader(nullptr, nullptr, 0);
+    pContext->PSSetShader(nullptr, nullptr, 0);
+
+    mpRenderer->buildGeometryBuffers();
 
     pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
@@ -330,7 +337,7 @@ void App::renderScene()
         XMMATRIX translationToOrigin = XMMatrixIdentity();
         XMMATRIX translationBack = XMMatrixIdentity();
 
-        if (mSelectedRenderableIds.contains(pRenderable->id))
+        if (mSelectedRenderableIds.contains(pRenderable->mId))
         {
             XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
             XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
@@ -354,7 +361,7 @@ void App::renderScene()
 
         data.model = model;
 
-        data.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->id) != mSelectedRenderableIds.end()) ? 1 : 0;
+        data.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->mId) != mSelectedRenderableIds.end()) ? 1 : 0;
 
         pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         memcpy(cbData.pData, &data, sizeof(data));
@@ -362,7 +369,7 @@ void App::renderScene()
 
         UINT vStride;
         UINT offset{};
-        if (dynamic_cast<Bezier*>(pRenderable.get()) == nullptr)
+        if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
         {
             vStride = sizeof(XMFLOAT3);
         }
@@ -371,12 +378,13 @@ void App::renderScene()
             vStride = 4 * sizeof(XMFLOAT3);
         }
 
-        if (dynamic_cast<Bezier*>(pRenderable.get()) == nullptr)
+        if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
         {
             pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
             pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
             pContext->HSSetShader(nullptr, nullptr, 0);
             pContext->DSSetShader(nullptr, nullptr, 0);
+            pContext->GSSetShader(nullptr, nullptr, 0);
             pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
         }
         else
@@ -385,6 +393,7 @@ void App::renderScene()
             pContext->VSSetShader(mpRenderer->mpBezierC0VS.Get(), nullptr, 0);
             pContext->HSSetShader(mpRenderer->mpBezierC0HS.Get(), nullptr, 0);
             pContext->DSSetShader(mpRenderer->mpBezierC0DS.Get(), nullptr, 0);
+            pContext->GSSetShader(nullptr, nullptr, 0);
             pContext->PSSetShader(mpRenderer->mpBezierC0PS.Get(), nullptr, 0);
         }
 
@@ -400,7 +409,7 @@ void App::renderScene()
         {
             pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         }
-        else if (dynamic_cast<Bezier*>(pRenderable.get()) != nullptr)
+        else if (dynamic_cast<IBezier*>(pRenderable.get()) != nullptr)
         {
             pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
         }
@@ -409,7 +418,7 @@ void App::renderScene()
             pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
         }
 
-        if (auto pBezier = dynamic_cast<Bezier*>(pRenderable.get()); pBezier == nullptr)
+        if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier == nullptr)
         {
             pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
         }
@@ -417,20 +426,41 @@ void App::renderScene()
         {
             const auto& controlPoints = pBezier->getControlPointIds();
             const auto controlPointsSize = controlPoints.size();
-            for (unsigned i = 0; i < controlPointsSize + 1; i += Bezier::controlPointsNumber)
+            for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::controlPointsNumber)
             {
                 offset = i * sizeof(XMFLOAT3);
                 pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(),
                                              &vStride,
                                              &offset);
-                pContext->Draw(1, 0);
-            }
 
-            if (pBezier->mIsPolygon)
-            {
-                pContext->HSSetShader(nullptr, nullptr, 0);
-                pContext->DSSetShader(nullptr, nullptr, 0);
                 pContext->Draw(1, 0);
+
+
+                if (pBezier->mIsPolygon)
+                {
+                    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+                    pContext->HSSetShader(nullptr, nullptr, 0);
+                    pContext->DSSetShader(nullptr, nullptr, 0);
+                    pContext->GSSetShader(mpRenderer->mpBezierC0BorderGS.Get(), nullptr, 0);
+                    int tmpFlags = data.flags;
+                    data.flags = 2;
+
+                    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+                    memcpy(cbData.pData, &data, sizeof(data));
+                    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+
+                    pContext->Draw(1, 0);
+
+                    data.flags = tmpFlags;
+                    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+                    pContext->HSSetShader(mpRenderer->mpBezierC0HS.Get(), nullptr, 0);
+                    pContext->DSSetShader(mpRenderer->mpBezierC0DS.Get(), nullptr, 0);
+                    pContext->GSSetShader(nullptr, nullptr, 0);
+
+                    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+                    memcpy(cbData.pData, &data, sizeof(data));
+                    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+                }
             }
         }
     }
@@ -449,7 +479,7 @@ void App::renderScene()
 
         auto pPoint = std::make_unique<Point>(mPivotPos, 0.1f, 25, false);
         pPoint->regenerateData();
-        IRenderable::Id id = pPoint->id;
+        IRenderable::Id mId = pPoint->mId;
         mpRenderer->addRenderable(std::move(pPoint));
         pPoint.reset();
 
@@ -471,10 +501,10 @@ void App::renderScene()
         pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        auto pTest = mpRenderer->getRenderable(id);
+        auto pTest = mpRenderer->getRenderable(mId);
         pContext->DrawIndexed(static_cast<UINT>(pTest->getTopology().size()), 0, 0);
 
-        mpRenderer->removeRenderable(id);
+        mpRenderer->removeRenderable(mId);
     }
 
     renderUi();
@@ -578,7 +608,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
                     if (intersection)
                     {
-                        mSelectedRenderableIds.insert(pRenderable->id);
+                        mSelectedRenderableIds.insert(pRenderable->mId);
                     }
                 }
             }
@@ -653,11 +683,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                     break;
                 }
 
-                const bool isBezierSelected = dynamic_cast<Bezier*>(pRenderable) != nullptr;
+                const bool isBezierSelected = dynamic_cast<IBezier*>(pRenderable) != nullptr;
 
                 for (const auto& pRenderable : mpRenderer->mRenderables)
                 {
-                    if (auto pBezier = dynamic_cast<Bezier*>(pRenderable.get()); pBezier != nullptr)
+                    if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier != nullptr)
                     {
                         const auto& controlPointIds = pBezier->getControlPointIds();
                         for (const IRenderable::Id controlPointRenderableId : controlPointIds)
@@ -682,8 +712,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         }
         break;
     case IWindow::Message::MOUSE_WHEEL:
-        const auto mouseWheel = mpWindow->getEventData<IWindow::Event::MouseWheel>();
-        mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
+        if (!mIsMenuHovered)
+        {
+            const auto mouseWheel = mpWindow->getEventData<IWindow::Event::MouseWheel>();
+            mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
+        }
         break;
     };
 }
@@ -706,6 +739,16 @@ void App::renderUi()
     if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
     {
         mIsMenuEnabled = true;
+
+    }
+
+    if (ImGui::IsWindowHovered())
+    {
+        mIsMenuHovered = true;
+    }
+    else
+    {
+        mIsMenuHovered = false;
     }
 
     ImGui::Text("CAD: ");
@@ -727,19 +770,22 @@ void App::renderUi()
 
     if (ImGui::Button("Add Point"))
     {
-        auto pPoint = std::make_unique<Point>(mCursorPos);
-        pPoint->regenerateData();
-        IRenderable::Id pointId = pPoint->id;
-        mpRenderer->addRenderable(std::move(pPoint));
-
+        IBezier* pBezier = nullptr;
         if (mSelectedRenderableIds.size() == 1)
         {
             const IRenderable::Id selectedRenderableId = *mSelectedRenderableIds.begin();
             IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
-            if (auto pBezier = dynamic_cast<Bezier* const>(pRenderable); pBezier != nullptr)
-            {
-                pBezier->insertControlPoint(pointId);
-            }
+            pBezier = dynamic_cast<IBezier*>(pRenderable);
+        }
+
+        auto pPoint = std::make_unique<Point>(mCursorPos);
+        pPoint->regenerateData();
+        const IRenderable::Id pointId = pPoint->mId;
+        mpRenderer->addRenderable(std::move(pPoint), pBezier->mId);
+
+        if (pBezier->mId != IRenderable::invalidId)
+        {
+            pBezier->insertControlPoint(pointId);
         }
     }
 
@@ -763,7 +809,7 @@ void App::renderUi()
     {
         const auto& pRenderable = mpRenderer->mRenderables.at(i);
 
-        if (ImGui::Selectable(pRenderable->mTag.c_str(), mSelectedRenderableIds.contains(pRenderable->id)))
+        if (ImGui::Selectable(pRenderable->mTag.c_str(), mSelectedRenderableIds.contains(pRenderable->mId)))
         {
             newSelectedItemId = i;
             mIsUiClicked |= ImGui::IsItemActive();
@@ -772,6 +818,11 @@ void App::renderUi()
 
     ImGui::EndChild();
     ImGui::PopStyleColor();
+
+    if (ImGui::IsItemHovered())
+    {
+        mIsMenuHovered = true;
+    }
 
     bool isNewItemSelected{};
     if (newSelectedItemId != -1)
@@ -796,7 +847,7 @@ void App::renderUi()
             XMMATRIX translationToOrigin = XMMatrixIdentity();
             XMMATRIX translationBack = XMMatrixIdentity();
 
-            if (mSelectedRenderableIds.contains(pRenderable->id))
+            if (mSelectedRenderableIds.contains(pRenderable->mId))
             {
                 XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
                 XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
@@ -837,7 +888,7 @@ void App::renderUi()
 
         mPivotScale = 1;
 
-        const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->id;
+        const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->mId;
         if (!mSelectedRenderableIds.contains(newId))
         {
             if (!mIsCtrlClicked)
@@ -957,7 +1008,7 @@ void App::renderUi()
             dataChanged |= ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
             mIsUiClicked |= ImGui::IsItemActive();
         }
-        else if (auto pBezier = dynamic_cast<Bezier*>(pSelectedRenderable); pBezier != nullptr)
+        else if (auto pBezier = dynamic_cast<IBezier*>(pSelectedRenderable); pBezier != nullptr)
         {
             ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
         }
@@ -974,27 +1025,35 @@ void App::renderUi()
     {
         std::unordered_set<IRenderable::Id> selectedPointsIds;
 
-        for (const auto id : mSelectedRenderableIds)
+        for (const auto mId : mSelectedRenderableIds)
         {
-            IRenderable* pSelectedRenderable = mpRenderer->getRenderable(id);
+            IRenderable* pSelectedRenderable = mpRenderer->getRenderable(mId);
             if (dynamic_cast<Point*>(pSelectedRenderable) != nullptr)
             {
-                selectedPointsIds.insert(id);
+                selectedPointsIds.insert(mId);
             }
         }
 
         if (selectedPointsIds.size() >= 3)
         {
-            if (ImGui::Button("Add Bezier C0"))
+            bool isBezierAdded = false;
+            if (ImGui::Button("Add IBezier C0"))
             {
                 auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
+                isBezierAdded = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Add Bezier C2"))
+            if (ImGui::Button("Add IBezier C2"))
             {
                 ASSERT(false);
+                isBezierAdded = true;
+            }
+
+            if (isBezierAdded)
+            {
+                mSelectedRenderableIds.clear();
             }
         }
 
