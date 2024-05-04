@@ -73,7 +73,7 @@ public:
     float mRoll{};
     float mScale = 1.f;
 
-    virtual const std::vector<float>& getGeometry() const
+    virtual const std::vector<XMFLOAT3>& getGeometry() const
     {
         return mGeometry;
     }
@@ -89,10 +89,6 @@ public:
         generateTopology();
     }
 
-protected:
-    std::vector<float> mGeometry;
-    std::vector<unsigned> mTopology;
-
     virtual void generateGeometry()
     {
     }
@@ -100,6 +96,10 @@ protected:
     virtual void generateTopology()
     {
     }
+
+protected:
+    std::vector<XMFLOAT3> mGeometry;
+    std::vector<unsigned> mTopology;
 
 private:
     inline static Id counter = 0;

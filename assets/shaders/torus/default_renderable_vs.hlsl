@@ -5,6 +5,8 @@ cbuffer CBuffer : register(b0) {
     matrix proj;
     matrix invProj;
     int flags;
+    int screenWidth;
+    int screenHeight;
 };
 
 struct VertexIn {
@@ -14,19 +16,13 @@ struct VertexIn {
 struct VertexOut
 {
     float4 pos : SV_POSITION;
-    bool isSelected : BOOLEAN1;
-    bool isCentroid : BOOLEAN2;
 };
-
 
 VertexOut main(VertexIn vin)
 {
     VertexOut vout;
 
     vout.pos = mul(mul(mul(proj, view), model), float4(vin.pos, 1.0));
-
-    vout.isSelected = flags & 1;
-    vout.isCentroid = flags & 2;
 
     return vout;
 }

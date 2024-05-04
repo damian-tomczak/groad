@@ -74,8 +74,8 @@ private:
 
     std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
 
-    XMMATRIX mView = XMMatrixIdentity();
-    XMMATRIX mProj = XMMatrixIdentity();
+    XMMATRIX mViewMtx = XMMatrixIdentity();
+    XMMATRIX mProjMtx = XMMatrixIdentity();
 
     XMVECTOR mPivotPos{};
     float mPivotPitch{};
@@ -127,24 +127,54 @@ void App::init()
     mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
     mpRenderer->init();
 
-    std::vector<unsigned> selectedPointsIds;
+    std::unordered_set<IRenderable::Id> selectedPointsIds;
 
-    XMVECTOR pos{-2.f, 2.f, 0};
+    XMVECTOR pos{-2.f, 3.f, 0};
     auto pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.push_back(pPoint->id);
+    selectedPointsIds.insert(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{2.f, 2.f, 0};
+    pos = XMVECTOR{-1.f, 3.f, 0};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.push_back(pPoint->id);
+    selectedPointsIds.insert(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{0.f, 0.f, 0};
+    pos = XMVECTOR{0.0f, 3.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.push_back(pPoint->id);
+    selectedPointsIds.insert(pPoint->id);
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{1.0f, 3.0f, 0.0f};
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    selectedPointsIds.insert(pPoint->id);
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{-2.0f, 1.0f, 0.0f};
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    selectedPointsIds.insert(pPoint->id);
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{-1.0f, 1.0f, 0.0f};
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    selectedPointsIds.insert(pPoint->id);
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{0.0f, 1.0f, 0.0f};
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    selectedPointsIds.insert(pPoint->id);
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{1.0f, 1.0f, 0.0f};
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    selectedPointsIds.insert(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
@@ -227,16 +257,18 @@ void App::renderScene()
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
     const XMMATRIX identity = XMMatrixIdentity();
-    mView = mCamera.getViewMatrix();
-    mProj = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 1.0f, 1000.0f);
+    mViewMtx = mCamera.getViewMatrix();
+    mProjMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 0.01f, 100.0f);
 
     ConstantBufferData data
     {
         .model = identity,
-        .view = mView,
-        .invView = XMMatrixInverse(nullptr, mView),
-        .proj = mProj,
-        .invProj = XMMatrixInverse(nullptr, mProj),
+        .view = mViewMtx,
+        .invView = XMMatrixInverse(nullptr, mViewMtx),
+        .proj = mProjMtx,
+        .invProj = XMMatrixInverse(nullptr, mProjMtx),
+        .screenWidth = mpWindow->getWidth(),
+        .screenHeight = mpWindow->getHeight()
     };
 
     D3D11_MAPPED_SUBRESOURCE cbData;
@@ -248,6 +280,7 @@ void App::renderScene()
     pContext->HSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
     pContext->DSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
     pContext->GSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+    pContext->PSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
 
     pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
@@ -275,7 +308,7 @@ void App::renderScene()
         pContext->GSSetShader(nullptr, nullptr, 0);
     }
 
-    for (auto const [i, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
+    for (const auto [renderableIdx, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
     {
         if (pRenderable == nullptr)
         {
@@ -328,7 +361,7 @@ void App::renderScene()
         pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
         UINT vStride;
-        const UINT offset{};
+        UINT offset{};
         if (dynamic_cast<Bezier*>(pRenderable.get()) == nullptr)
         {
             vStride = sizeof(XMFLOAT3);
@@ -355,8 +388,9 @@ void App::renderScene()
             pContext->PSSetShader(mpRenderer->mpBezierC0PS.Get(), nullptr, 0);
         }
 
-        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(i).GetAddressOf(), &vStride, &offset);
-        const ComPtr<ID3D11Buffer> indexBuffer = mpRenderer->mIndexBuffers.at(i);
+        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &vStride,
+                                     &offset);
+        const ComPtr<ID3D11Buffer> indexBuffer = mpRenderer->mIndexBuffers.at(renderableIdx);
         if (indexBuffer != nullptr)
         {
             pContext->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
@@ -375,13 +409,29 @@ void App::renderScene()
             pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
         }
 
-        if (dynamic_cast<Bezier*>(pRenderable.get()) == nullptr)
+        if (auto pBezier = dynamic_cast<Bezier*>(pRenderable.get()); pBezier == nullptr)
         {
             pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
         }
         else
         {
-            pContext->Draw(2, 0);
+            const auto& controlPoints = pBezier->getControlPointIds();
+            const auto controlPointsSize = controlPoints.size();
+            for (unsigned i = 0; i < controlPointsSize + 1; i += Bezier::controlPointsNumber)
+            {
+                offset = i * sizeof(XMFLOAT3);
+                pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(),
+                                             &vStride,
+                                             &offset);
+                pContext->Draw(1, 0);
+            }
+
+            if (pBezier->mIsPolygon)
+            {
+                pContext->HSSetShader(nullptr, nullptr, 0);
+                pContext->DSSetShader(nullptr, nullptr, 0);
+                pContext->Draw(1, 0);
+            }
         }
     }
 
@@ -414,7 +464,7 @@ void App::renderScene()
         pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
         UINT vStride = sizeof(XMFLOAT3), offset = 0;
-        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.back().GetAddressOf(), &vStride, &offset);
+        pContext->IASetVertexBuffers(0, 1, &mpRenderer->mVertexBuffers.back(), &vStride, &offset);
         pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.back().Get(), DXGI_FORMAT_R32_UINT, 0);
 
         pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
@@ -501,18 +551,16 @@ void App::processInput(IWindow::Message msg, float deltaTime)
 
                 XMVECTOR rayNDC = XMVectorSet(x, y, z, 1.0f);
 
-                XMMATRIX projMatrix = mProj;
-                XMMATRIX viewMatrix = mView;
-                XMMATRIX invProjMatrix = XMMatrixInverse(nullptr, projMatrix);
-                XMMATRIX invViewMatrix = XMMatrixInverse(nullptr, viewMatrix);
+                XMMATRIX invProjMtx = XMMatrixInverse(nullptr, mProjMtx);
+                XMMATRIX invViewMtx = XMMatrixInverse(nullptr, mViewMtx);
 
                 XMVECTOR rayClip = XMVectorSet(x, y, -1.0f, 1.0f);
                 XMVECTOR rayView = XMVector4Transform(
-                    rayClip, invProjMatrix);
+                    rayClip, invProjMtx);
 
                 rayView = XMVectorSetW(rayView, 0.0f);
 
-                XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMatrix);
+                XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMtx);
                 rayWorld = XMVector3Normalize(rayWorld);
 
                 XMVECTOR rayOrigin = mCamera.getPos();
@@ -587,9 +635,9 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 break;
             }
 
-            for (const auto selectedRenderableId : mSelectedRenderableIds)
+            for (const IRenderable::Id selectedRenderableId : mSelectedRenderableIds)
             {
-                const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+                IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
 
                 switch (mInteractionType)
                 {
@@ -603,6 +651,27 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 case InteractionType::SCALE:
                     pRenderable->mScale += -yOffset * 0.1f;
                     break;
+                }
+
+                const bool isBezierSelected = dynamic_cast<Bezier*>(pRenderable) != nullptr;
+
+                for (const auto& pRenderable : mpRenderer->mRenderables)
+                {
+                    if (auto pBezier = dynamic_cast<Bezier*>(pRenderable.get()); pBezier != nullptr)
+                    {
+                        const auto& controlPointIds = pBezier->getControlPointIds();
+                        for (const IRenderable::Id controlPointRenderableId : controlPointIds)
+                        {
+                            IRenderable* const pControlPointRenderable = mpRenderer->getRenderable(controlPointRenderableId);
+
+                            if (isBezierSelected)
+                            {
+                                pControlPointRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
+                            }
+                        }
+
+                        pBezier->generateGeometry();
+                    }
                 }
             }
         }
@@ -660,7 +729,18 @@ void App::renderUi()
     {
         auto pPoint = std::make_unique<Point>(mCursorPos);
         pPoint->regenerateData();
+        IRenderable::Id pointId = pPoint->id;
         mpRenderer->addRenderable(std::move(pPoint));
+
+        if (mSelectedRenderableIds.size() == 1)
+        {
+            const IRenderable::Id selectedRenderableId = *mSelectedRenderableIds.begin();
+            IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+            if (auto pBezier = dynamic_cast<Bezier* const>(pRenderable); pBezier != nullptr)
+            {
+                pBezier->insertControlPoint(pointId);
+            }
+        }
     }
 
     int newSelectedItemId = -1;
@@ -877,6 +957,10 @@ void App::renderUi()
             dataChanged |= ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
             mIsUiClicked |= ImGui::IsItemActive();
         }
+        else if (auto pBezier = dynamic_cast<Bezier*>(pSelectedRenderable); pBezier != nullptr)
+        {
+            ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
+        }
 
         if (dataChanged)
         {
@@ -888,14 +972,14 @@ void App::renderUi()
     }
     else if (mSelectedRenderableIds.size() > 1)
     {
-        std::vector<IRenderable::Id> selectedPointsIds;
+        std::unordered_set<IRenderable::Id> selectedPointsIds;
 
         for (const auto id : mSelectedRenderableIds)
         {
             IRenderable* pSelectedRenderable = mpRenderer->getRenderable(id);
             if (dynamic_cast<Point*>(pSelectedRenderable) != nullptr)
             {
-                selectedPointsIds.push_back(id);
+                selectedPointsIds.insert(id);
             }
         }
 

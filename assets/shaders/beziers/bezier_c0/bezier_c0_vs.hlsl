@@ -1,7 +1,13 @@
-cbuffer mvp : register(b0)
-{
-	matrix viewMtx;
-}
+cbuffer CBuffer : register(b0) {
+    matrix modelMtx;
+    matrix viewMtx;
+    matrix invViewMtx;
+    matrix projMtx;
+    matrix invProj;
+    int flags;
+    int screenWidth;
+    int screenHeight;
+};
 
 struct VSInput
 {
@@ -13,7 +19,6 @@ struct VSInput
 
 struct VSOutput
 {
-	float4 position : SV_POSITION;
 	float3 controlPoint0 : CONTROL_POINTS_0;
 	float3 controlPoint1 : CONTROL_POINTS_1;
 	float3 controlPoint2 : CONTROL_POINTS_2;
@@ -23,8 +28,6 @@ struct VSOutput
 VSOutput main(VSInput i)
 {
 	VSOutput o = (VSOutput) 0;
-
-	o.position = float4(0.0, 0.0, 0.0, 1.0);
 
 	o.controlPoint0 = mul(viewMtx, float4(i.controlPoint0, 1.0)).xyz;
 	o.controlPoint1 = mul(viewMtx, float4(i.controlPoint1, 1.0)).xyz;

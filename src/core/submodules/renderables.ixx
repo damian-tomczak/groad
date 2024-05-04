@@ -35,7 +35,7 @@ export
                     float x = mRadius * std::sin(theta) * std::cos(phi);
                     float y = mRadius * std::sin(theta) * std::sin(phi);
                     float z = mRadius * std::cos(theta);
-                    mGeometry.insert(mGeometry.end(), {x, y, z});
+                    mGeometry.emplace_back(x, y, z);
                 }
             }
         }
@@ -86,7 +86,7 @@ export
                     float x = (mMajorRadius + mMinorRadius * cos(phi)) * cos(theta);
                     float y = (mMajorRadius + mMinorRadius * cos(phi)) * sin(theta);
                     float z = mMinorRadius * sin(phi);
-                    mGeometry.insert(mGeometry.end(), {x, y, z});
+                    mGeometry.emplace_back(x, y, z);
                 }
             }
         }
@@ -112,9 +112,28 @@ export
     class Bezier : public IRenderable
     {
     public:
-        Bezier(std::string_view tag) : IRenderable{XMVectorZero(), tag}
+        Bezier(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, std::string_view tag)
+            : IRenderable{XMVectorZero(), tag}, mControlPointRenderableIds{selectedRenderableIds}
         {
         }
+
+        static constexpr unsigned controlPointsNumber = 4;
+
+        bool mIsPolygon{};
+
+        const std::unordered_set<IRenderable::Id>& getControlPointIds() const
+        {
+            return mControlPointRenderableIds;
+        }
+
+        void insertControlPoint(const IRenderable::Id id)
+        {
+            mControlPointRenderableIds.insert(id);
+            generateGeometry();
+        }
+
+    protected:
+        std::unordered_set<IRenderable::Id> mControlPointRenderableIds;
     };
 
     class BezierC0 final : public Bezier
@@ -124,15 +143,42 @@ export
         const IRenderer* mpRenderer;
 
     public:
-        BezierC0(const std::vector<IRenderable::Id>& selectedRenderableIds, const IRenderer* pRenderer)
-            : Bezier{std::format("BezierC0 {}", counter++).c_str()}, mpRenderer{pRenderer}
+        BezierC0(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, const IRenderer* pRenderer)
+            : Bezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str()}, mpRenderer{pRenderer}
         {
-            for (const auto id : selectedRenderableIds)
+        }
+
+        void generateGeometry() override
+        {
+            mGeometry.clear();
+
+            unsigned idx = 0;
+
+            for (const auto id : mControlPointRenderableIds)
             {
-                const XMVECTOR positionVec = pRenderer->getRenderable(id)->mWorldPos;
+                if ((idx != 0) && (idx % controlPointsNumber == 0))
+                {
+                    const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
+                    mGeometry.push_back(previousPoint);
+                    idx++;
+                }
+
+                const XMVECTOR positionVec = mpRenderer->getRenderable(id)->mWorldPos;
                 XMFLOAT3 position;
                 XMStoreFloat3(&position, positionVec);
-                mGeometry.insert(mGeometry.end(), {position.x, position.y, position.z});
+                mGeometry.push_back(position);
+
+                idx++;
+            }
+
+            if (mGeometry.size() % controlPointsNumber != 0)
+            {
+                const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
+
+                while (mGeometry.size() % controlPointsNumber != 0)
+                {
+                    mGeometry.push_back(previousPoint);
+                }
             }
         }
     };

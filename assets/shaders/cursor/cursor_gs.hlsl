@@ -6,6 +6,8 @@ cbuffer CBuffer: register(b0)
     matrix proj;
     matrix invProj;
     int flags;
+    int screenWidth;
+    int screenHeight;
 };
 
 struct GeometryIn

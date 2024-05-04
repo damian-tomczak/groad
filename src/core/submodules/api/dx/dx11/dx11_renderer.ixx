@@ -27,6 +27,8 @@ export struct ConstantBufferData
     XMMATRIX proj;
     XMMATRIX invProj;
     int flags;
+    int screenWidth;
+    int screenHeight;
 };
 static_assert(sizeof(ConstantBufferData) % 16 == 0);
 
@@ -316,7 +318,7 @@ void DX11Renderer::buildGeometryBuffers()
         //    continue;
         //}
 
-        const std::vector<float>& geometry = pRenderable->getGeometry();
+        const std::vector<XMFLOAT3>& geometry = pRenderable->getGeometry();
         const std::vector<unsigned>& topology = pRenderable->getTopology();
 
         if (geometry.size() == 0)
@@ -328,7 +330,7 @@ void DX11Renderer::buildGeometryBuffers()
         mIndexBuffers[i].Reset();
 
         D3D11_BUFFER_DESC vbd{
-            .ByteWidth = static_cast<UINT>(sizeof(float) * geometry.size()),
+            .ByteWidth = static_cast<UINT>(sizeof(XMFLOAT3) * geometry.size()),
             .Usage = D3D11_USAGE_DYNAMIC,
             .BindFlags = D3D11_BIND_VERTEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
@@ -435,10 +437,10 @@ void DX11Renderer::createShaders()
     ComPtr<ID3D10Blob> compiledShader;
 
 #pragma region torus
-    compileShader("torus/torus_vs.hlsl", "vs_5_0", mpDefaultVSBlob);
+    compileShader("torus/default_renderable_vs.hlsl", "vs_5_0", mpDefaultVSBlob);
     checkShader(mpDevice->CreateVertexShader(mpDefaultVSBlob->GetBufferPointer(), mpDefaultVSBlob->GetBufferSize(), nullptr, &mpVS));
 
-    compileShader("torus/torus_ps.hlsl", "ps_5_0", compiledShader);
+    compileShader("torus/default_renderable_ps.hlsl", "ps_5_0", compiledShader);
     checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
                                             nullptr,
                                    &mpPS));
