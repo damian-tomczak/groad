@@ -1,25 +1,27 @@
 module;
 
-#include "utils.hpp"
-#include <DirectXMath.h>
+#include "utils.h"
+#include "mg.hpp"
 
 export module core.camera;
+import std.core;
 
 using namespace DirectX;
 
-export class Camera
+export inline constexpr float mouseSensitivity = 0.05f;
+
+export class Camera : public NonCopyableAndMoveable
 {
-    inline static const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    inline static const XMVECTOR right = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    inline static XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 
     XMVECTOR mPosition;
     XMVECTOR mFront;
 
-    float mYaw;
-    float mPitch;
+    float mYaw{};
+    float mPitch{};
 
     float mMovementSpeed = 100.0f;
-    float mMouseSensitivity = 0.1f;
     float mZoom = 45.0f;
 
 public:
@@ -31,10 +33,9 @@ public:
         RIGHT
     };
 
-    Camera(XMVECTOR mPosition = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f), float yaw = 90.0f, float pitch = 0.0f)
+    Camera(XMVECTOR mPosition, float yaw, float pitch)
         : mPosition{mPosition}, mYaw{yaw}, mPitch{pitch}
     {
-        mFront = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
         updateCameraVectors();
     }
 
@@ -45,62 +46,80 @@ public:
 
     XMMATRIX getViewMatrix() const
     {
-        return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), up);
+        return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
-    void processKeyboard(const CameraMovement direction, const float deltaTime)
+    void moveCamera(const CameraMovement direction, float deltaTime)
     {
         const float velocity = mMovementSpeed * deltaTime;
 
         switch (direction)
         {
         case FORWARD:
-            mPosition = XMVectorAdd(mPosition, XMVectorScale(mFront, velocity));
+            mPosition += XMVectorScale(mFront, velocity);
             break;
         case BACKWARD:
-            mPosition = XMVectorSubtract(mPosition, XMVectorScale(mFront, velocity));
+            mPosition -= XMVectorScale(mFront, velocity);
             break;
         case LEFT:
-            mPosition = XMVectorSubtract(mPosition, XMVectorScale(right, velocity));
+            mPosition -= XMVectorScale(mRight, velocity);
             break;
         case RIGHT:
-            mPosition = XMVectorAdd(mPosition, XMVectorScale(right, velocity));
+            mPosition += XMVectorScale(mRight, velocity);
             break;
         default:
             ASSERT(false);
         }
     }
 
-    void processMouseMovement(float xoffset, float yoffset, bool constrainmPitch = true)
+    void rotateCamera(float xoffset, float yoffset)
     {
-        xoffset *= mMouseSensitivity;
-        yoffset *= mMouseSensitivity;
+        xoffset *= mouseSensitivity;
+        yoffset *= mouseSensitivity;
 
         mYaw += xoffset;
         mPitch += yoffset;
 
-        if (constrainmPitch)
-        {
-            mPitch = std::min(std::max(mPitch, -89.0f), 89.0f);
-        }
-
         updateCameraVectors();
     }
 
-    void processMouseScroll(float yoffset)
+    void setZoom(float yoffset)
     {
-        mZoom = std::min(std::max(mZoom - yoffset, 1.0f), 45.0f);
+        mZoom = std::min(std::max(mZoom - yoffset / abs(yoffset), 1.0f), 45.0f);
+    }
+
+    [[nodiscard]] float getZoom() const
+    {
+        return mZoom;
+    }
+
+    [[nodiscard]] XMVECTOR getFront() const
+    {
+        return mFront;
+    }
+
+    [[nodiscard]] XMVECTOR getRight() const
+    {
+        return mRight;
+    }
+
+    [[nodiscard]] XMVECTOR getUp() const
+    {
+        return mUp;
+    }
+
+    [[nodiscard]] XMVECTOR getPos() const
+    {
+        return mPosition;
     }
 
 private:
     void updateCameraVectors()
     {
-        // float mYaw = XMConvertToRadians(mYaw);
-        // float mPitch = XMConvertToRadians(mPitch);
-        // XMVECTOR mFront = XMVectorSet(cosf(mYaw) * cosf(mPitch), sinf(mPitch), sinf(mYaw) * cosf(mPitch), 0.0f);
+        float yawRadians = XMConvertToRadians(mYaw);
+        float pitchRadians = XMConvertToRadians(mPitch);
 
-        // mFront = XMVector3Normalize(mFront);
-        // Right = XMVector3Normalize(XMVector3Cross(mFront, WorldUp));
-        // Up = XMVector3Normalize(XMVector3Cross(Right, mFront));
+        XMVECTOR front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians), sinf(yawRadians) * cosf(pitchRadians), 0.0f);
+        mFront = XMVector3Normalize(front);
     }
 };

@@ -3,7 +3,9 @@ module;
 #include "Windows.h"
 #include <windowsx.h>
 
-#include "utils.hpp"
+#include "utils.h"
+
+#include "imgui_impl_win32.h"
 
 #define LIBRARY_TYPE HMODULE
 #define LoadFunction GetProcAddress
@@ -17,7 +19,7 @@ export class Win32Window final : public IWindow
     friend LRESULT staticWindowProcedure(HWND hwnd, UINT msg, WPARAM pWParam, LPARAM wLParam);
 
 public:
-    Win32Window(const int width, const int height) : IWindow{width, height}
+    Win32Window(unsigned width, unsigned height) : IWindow{width, height}
     {
     }
     ~Win32Window();
@@ -33,12 +35,11 @@ public:
     }
 
     void show() override;
-    Message peekMessage() override;
-    void dispatchMessage() override;
+    Message getMessage() override;
 
 private:
     static LRESULT CALLBACK staticWindowProcedure(HWND hwnd, UINT msg, WPARAM pWParam, LPARAM wLParam);
-    LRESULT instanceWindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+    bool instanceWindowProcedure(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
     HINSTANCE mHInstance{};
     HWND mHwnd{};
@@ -77,10 +78,14 @@ void Win32Window::init()
     {
         ERR("Window creation failure");
     }
+
+    ImGui_ImplWin32_Init(mHwnd);
 }
 
 Win32Window::~Win32Window()
 {
+    ImGui_ImplWin32_Shutdown();
+
     if (mHwnd != nullptr)
     {
         DestroyWindow(mHwnd);
@@ -98,108 +103,139 @@ void Win32Window::show()
     UpdateWindow(mHwnd);
 }
 
-IWindow::Message Win32Window::peekMessage()
+IWindow::Message Win32Window::getMessage()
 {
-    PeekMessage(&mMsg, NULL, 0, 0, PM_REMOVE);
+    const bool isEmpty = PeekMessage(&mMsg, nullptr, 0, 0, PM_REMOVE) == 0;
+    if (isEmpty)
+    {
+        return Message::EMPTY;
+    }
+    else if (mMsg.message == WM_QUIT)
+    {
+        return Message::QUIT;
+    }
+
+    TranslateMessage(&mMsg);
+    DispatchMessage(&mMsg);
 
     return static_cast<Message>(mMsg.message);
 }
 
-void Win32Window::dispatchMessage()
-{
-    TranslateMessage(&mMsg);
-    DispatchMessage(&mMsg);
-}
-
-LRESULT Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return true;
     case WM_SIZE:
-    case WM_EXITSIZEMOVE:
         PostMessage(hwnd, static_cast<UINT32>(Message::RESIZE), wParam, lParam);
-        break;
+        mWidth = LOWORD(lParam);
+        mHeight = HIWORD(lParam);
+        return true;
     case WM_KEYDOWN:
         switch (wParam)
         {
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_DOWN), wParam, lParam);
-            break;
+            return true;
         case 'S':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_S_DOWN), wParam, lParam);
-            break;
+            return true;
         case 'A':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_A_DOWN), wParam, lParam);
-            break;
+            return true;
         case 'D':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_D_DOWN), wParam, lParam);
-            break;
+            return true;
+        case VK_DELETE:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_DELETE_DOWN), wParam, lParam);
+            return true;
+        case VK_CONTROL:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_CTRL_DOWN), wParam, lParam);
+            return true;
         }
+
         break;
     case WM_KEYUP:
         switch (wParam)
         {
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_UP), wParam, lParam);
-            break;
+            return true;
         case 'S':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_S_UP), wParam, lParam);
-            break;
+            return true;
         case 'A':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_A_UP), wParam, lParam);
-            break;
+            return true;
         case 'D':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_D_UP), wParam, lParam);
-            break;
+            return true;
+        case VK_DELETE:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_DELETE_UP), wParam, lParam);
+            return true;
+        case VK_CONTROL:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_CTRL_UP), wParam, lParam);
+            return true;
         }
-        break;
-    case WM_CLOSE:
-        PostMessage(hwnd, static_cast<UINT32>(Message::QUIT), wParam, lParam);
         break;
     case WM_LBUTTONDOWN:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_LEFT_DOWN), wParam, lParam);
-        break;
+        goto setMousePositionLabel;
     case WM_LBUTTONUP:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_LEFT_UP), wParam, lParam);
-        break;
-    case WM_RBUTTONDOWN:
-        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_DOWN), wParam, lParam);
-        break;
-    case WM_RBUTTONUP:
-        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_UP), wParam, lParam);
-        break;
+        goto setMousePositionLabel;
     case WM_MBUTTONDOWN:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MIDDLE_DOWN), wParam, lParam);
-        break;
+        goto setMousePositionLabel;
     case WM_MBUTTONUP:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MIDDLE_UP), wParam, lParam);
-        break;
-    case WM_MOUSEMOVE: {
+        goto setMousePositionLabel;
+    case WM_RBUTTONDOWN:
+        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_DOWN), wParam, lParam);
+        goto setMousePositionLabel;
+    case WM_RBUTTONUP:
+        PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_RIGHT_UP), wParam, lParam);
+        goto setMousePositionLabel;
+    case WM_MOUSEMOVE:
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_MOVE), wParam, lParam);
-        const EventData::MousePosition mousePosition{
-            .xoffset = GET_X_LPARAM(lParam),
-            .yoffset = GET_Y_LPARAM(lParam),
-        };
-        mEventData = mousePosition;
-        break;
-    }
+        goto setMousePositionLabel;
     case WM_MOUSEWHEEL: {
         PostMessage(hwnd, static_cast<UINT32>(Message::MOUSE_WHEEL), wParam, lParam);
-        const EventData::MousePosition mouseWheel{
-            .yoffset = GET_WHEEL_DELTA_WPARAM(wParam),
+
+        const Event::MouseWheel mouseWheel{
+            .yOffset = GET_WHEEL_DELTA_WPARAM(wParam),
         };
         mEventData = mouseWheel;
-        break;
+
+        return true;
     }
-    default:
-        return DefWindowProc(hwnd, msg, wParam, lParam);
+    setMousePositionLabel:
+        const int x = GET_X_LPARAM(lParam);
+        const int y = GET_Y_LPARAM(lParam);
+
+        const Event::MousePosition mousePosition{
+            .x = x,
+            .y = y,
+        };
+
+        mEventData = mousePosition;
+        return true;
     }
 
-    return 0;
+    return false;
 }
+
+extern "C++" IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LRESULT CALLBACK Win32Window::staticWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+    {
+        return true;
+    }
+
     Win32Window* pThis{};
     if (msg == WM_NCCREATE)
     {
@@ -212,10 +248,10 @@ LRESULT CALLBACK Win32Window::staticWindowProcedure(HWND hwnd, UINT msg, WPARAM 
         pThis = reinterpret_cast<Win32Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
 
-    if (pThis)
+    if ((pThis != nullptr) && (!pThis->instanceWindowProcedure(hwnd, msg, wParam, lParam)))
     {
-        return pThis->instanceWindowProcedure(hwnd, msg, wParam, lParam);
+        return DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
-    return DefWindowProc(hwnd, msg, wParam, lParam);
+    return 0;
 }

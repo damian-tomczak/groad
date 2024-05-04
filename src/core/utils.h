@@ -31,19 +31,14 @@ using namespace std::literals;
 #define WARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
 
-#ifndef NDEBUG
-#define ASSERT(x)                                                                                                      \
-    if (!(x))                                                                                                          \
-    {                                                                                                                  \
-        ERR("Assert occured: " #x);                                                                                    \
-    }
-#else
-#define ASSERT(x)
-#endif
-
 // clang-format off
+#define ASSERT(x)                   \
+    if (!(x))                       \
+    {                               \
+        ERR("Assert occured: " #x); \
+    }
+
 #define HR(x)                                                                   \
-                                                                                \
     if (const auto hr = x; FAILED(hr))                                          \
     {                                                                           \
         ERR(std::format(#x " {}({})", std::system_category().message(hr), hr)); \
@@ -72,7 +67,7 @@ enum class LogLevel : uint8_t
     COUNT
 };
 
-void log(const std::string_view& msg, const LogLevel level = LogLevel::DEFAULT);
+void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT);
 
 class NonCopyable
 {
@@ -94,7 +89,7 @@ public:
     NonMoveable& operator=(NonMoveable&&) = delete;
 };
 
-class NonCopyableAndNonMoveable : public NonCopyable, public NonMoveable
+class NonCopyableAndMoveable : public NonCopyable, public NonMoveable
 {
 };
 

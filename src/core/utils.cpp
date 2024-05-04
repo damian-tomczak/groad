@@ -2,7 +2,7 @@
 #include <Windows.h>
 #endif
 
-#include "utils.hpp"
+#include "utils.h"
 
 import std.core;
 
@@ -54,7 +54,7 @@ std::ostream& operator<<(std::ostream& ostream, const Color color)
 constexpr const char* logLevelToStr(const LogLevel level);
 constexpr Color logLevelToColor(const LogLevel level);
 
-void log(const std::string_view& msg, const LogLevel level)
+void log(const std::string_view msg, const LogLevel level)
 {
     const auto now = std::chrono::system_clock::now();
     const time_t nowTime = std::chrono::system_clock::to_time_t(now);
@@ -78,7 +78,7 @@ void log(const std::string_view& msg, const LogLevel level)
     // clang-format on
 
     std::lock_guard lock{ioMutex};
-    if (level > LogLevel::INFO)
+    if (level == LogLevel::ERROR)
     {
         std::clog << out.str();
 

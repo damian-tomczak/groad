@@ -1,7 +1,7 @@
 module;
 
 export module dx12renderer;
-export import renderer;
+export import core.renderer;
 
 export class DX12Renderer : public IRenderer
 {

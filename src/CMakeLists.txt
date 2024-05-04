@@ -22,6 +22,12 @@ file(GLOB_RECURSE SHADER_FILES
     ${ASSETS_DIR}/shaders/*
 )
 
+if (MSVC)
+    foreach(SHADER_FILE ${SHADER_FILES})
+        set_source_files_properties(${SHADER_FILE} PROPERTIES VS_TOOL_OVERRIDE "None")
+    endforeach()
+endif()
+
 add_executable(${CMAKE_PROJECT_NAME}
     ${SRC_FILES}
     ${H_FILES}
@@ -33,7 +39,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_23)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    d3d11 D3DCompiler
+    d3d11 D3DCompiler imgui::imgui
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -75,7 +81,7 @@ set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_DEBUG ${OUTPUT_DIR_DEBUG}
     RUNTIME_OUTPUT_DIRECTORY_RELEASE ${OUTPUT_DIR_RELEASE}
     RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO ${OUTPUT_DIR_RELWITHDEBINFO}
-    VS_DEBUGGER_WORKING_DIRECTORY $<$<CONFIG:Debug>:${OUTPUT_DIR_DEBUG}>$<$<CONFIG:RelWithDebInfo>:${OUTPUT_DIR_RELWITHDEBINFO}>$<$<CONFIG:Release>:${OUTPUT_DIR_RELEASE}>
+    VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
 target_compile_options(${CMAKE_PROJECT_NAME} PUBLIC

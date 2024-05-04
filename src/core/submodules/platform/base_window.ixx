@@ -4,17 +4,37 @@ module;
 #include "Windows.h"
 #endif
 
-#include "utils.hpp"
+#include "utils.h"
 
 export module window;
 export import std.core;
 
-export class IWindow : public NonCopyableAndNonMoveable
+export class IWindow : public NonCopyableAndMoveable
 {
     inline static bool isWindowCreated{};
 
 public:
-    IWindow(const int width = 1280, const int height = 720) : mWidth{width}, mHeight{height}
+    struct Event
+    {
+        struct MousePosition
+        {
+            int x;
+            int y;
+        };
+
+        struct MouseWheel
+        {
+            int yOffset;
+        };
+    };
+    // clang-format off
+    using EventData = std::variant<
+        Event::MousePosition,
+        Event::MouseWheel
+    >;
+    // clang-format
+
+    IWindow(unsigned width, unsigned height) : mWidth{width}, mHeight{height}
     {
     }
 
@@ -25,6 +45,7 @@ public:
 
     enum class Message
     {
+        EMPTY,
 #ifdef _WIN32
         RESIZE = WM_USER + 1,
 #else
@@ -40,20 +61,23 @@ public:
         KEY_A_UP,
         KEY_D_DOWN,
         KEY_D_UP,
+        KEY_DELETE_DOWN,
+        KEY_DELETE_UP,
+        KEY_CTRL_DOWN,
+        KEY_CTRL_UP,
         MOUSE_LEFT_DOWN,
         MOUSE_LEFT_UP,
-        MOUSE_RIGHT_DOWN,
-        MOUSE_RIGHT_UP,
         MOUSE_MIDDLE_DOWN,
         MOUSE_MIDDLE_UP,
+        MOUSE_RIGHT_DOWN,
+        MOUSE_RIGHT_UP,
         MOUSE_WHEEL,
         MOUSE_MOVE,
     };
 
     virtual void init() = 0;
     virtual void show() = 0;
-    virtual Message peekMessage() = 0;
-    virtual void dispatchMessage() = 0;
+    virtual Message getMessage() = 0;
 
     [[nodiscard]] int getWidth() const
     {
@@ -68,29 +92,17 @@ public:
         return static_cast<float>(mWidth) / mHeight;
     }
 
-    struct EventData
+    template <typename EventType>
+    [[nodiscard]] EventType getEventData() const
     {
-        struct MousePosition
-        {
-            int xoffset;
-            int yoffset;
-        };
+        ASSERT(std::holds_alternative<EventType>(mEventData));
+        return std::get<EventType>(mEventData);
+    }
 
-        struct MouseWheel
-        {
-            int yoffset;
-        };
-    };
-    // clang-format off
-    std::variant<
-        EventData::MousePosition,
-        EventData::MouseWheel
-    > mEventData;
-    // clang-format on
-
-    static IWindow* createWindow(const uint32_t width = 1280, const uint32_t height = 720);
+    static IWindow* createWindow(uint32_t width = 1280, uint32_t height = 720);
 
 protected:
-    int mWidth;
-    int mHeight;
+    EventData mEventData;
+    unsigned mWidth;
+    unsigned mHeight;
 };

@@ -1,11 +1,29 @@
 module;
 
-#include "utils.hpp"
+#include <DirectXMath.h>
 
-export module renderer;
+#include "utils.h"
+
+export module core.renderer;
 
 import window;
 import std.core;
+
+using namespace DirectX;
+
+// clang-format off
+export namespace Colors
+{
+    inline constexpr XMFLOAT4 White  {1.0f, 1.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Black  {0.0f, 0.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Red    {1.0f, 0.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Green  {0.0f, 1.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Blue   {0.0f, 0.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Yellow {1.0f, 1.0f, 0.0f, 1.0f};
+    inline constexpr XMFLOAT4 Cyan   {0.0f, 1.0f, 1.0f, 1.0f};
+    inline constexpr XMFLOAT4 Magenta{1.0f, 0.0f, 1.0f, 1.0f};
+}
+// clang-format on
 
 export enum class API : uint8_t
 {
@@ -34,7 +52,63 @@ export constexpr const char* apiToStr(const API api)
     }
 }
 
-export class IRenderer : public NonCopyableAndNonMoveable
+export class IRenderable : public NonCopyable
+{
+public:
+    using Id = int;
+    static constexpr Id invalidId = -1;
+
+    IRenderable(FXMVECTOR pos, std::string_view tag) : mTag{tag}, mId{counter++}, mWorldPos{pos}
+    {
+    }
+
+    std::string mTag;
+    Id mId;
+    bool isVisible = true;
+
+    XMVECTOR mLocalPos{};
+    XMVECTOR mWorldPos{};
+
+    float mPitch{};
+    float mYaw{};
+    float mRoll{};
+    float mScale = 1.f;
+
+    virtual const std::vector<XMFLOAT3>& getGeometry() const
+    {
+        return mGeometry;
+    }
+
+    virtual const std::vector<unsigned>& getTopology() const
+    {
+        return mTopology;
+    }
+
+    void regenerateData()
+    {
+        generateGeometry();
+        generateTopology();
+    }
+
+    virtual void generateGeometry()
+    {
+    }
+
+    virtual void generateTopology()
+    {
+    }
+
+protected:
+    std::vector<XMFLOAT3> mGeometry;
+    std::vector<unsigned> mTopology;
+
+private:
+    inline static Id counter = 0;
+};
+
+
+
+export class IRenderer : public NonCopyableAndMoveable
 {
     inline static bool isRendererCreated{};
 
@@ -51,6 +125,9 @@ public:
     virtual void onResize() = 0;
 
     static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
+    virtual class IRenderable* getRenderable(IRenderable::Id mId) const = 0;
+
+    std::vector<std::unique_ptr<IRenderable>> mRenderables;
 
 protected:
     std::weak_ptr<IWindow> mpWindow;
