@@ -115,31 +115,11 @@ public:
         return mpConstantBuffer.GetAddressOf();
     }
 
-    void addRenderable(std::unique_ptr<IRenderable>&& renderable, const IRenderable::Id parentId = IRenderable::invalidId)
+    void addRenderable(std::unique_ptr<IRenderable>&& renderable)
     {
-        if (parentId != IRenderable::invalidId)
-        {
-            const auto it = std::find_if(mRenderables.begin(), mRenderables.end(),
-                                   [&](const auto& item) { return item->mId == parentId; });
-
-            if (it != mRenderables.end())
-            {
-                size_t index = std::distance(mRenderables.begin(), it);
-                mRenderables.insert(it, std::move(renderable));
-                mVertexBuffers.insert(mVertexBuffers.begin() + index, ComPtr<ID3D11Buffer>());
-                mIndexBuffers.insert(mIndexBuffers.begin() + index, ComPtr<ID3D11Buffer>());
-            }
-            else
-            {
-                ASSERT(false);
-            }
-        }
-        else
-        {
-            mRenderables.emplace_back(std::move(renderable));
-            mVertexBuffers.emplace_back();
-            mIndexBuffers.emplace_back();
-        }
+        mRenderables.emplace_back(std::move(renderable));
+        mVertexBuffers.emplace_back();
+        mIndexBuffers.emplace_back();
 
         //mRebuildBuffers = true;
     }

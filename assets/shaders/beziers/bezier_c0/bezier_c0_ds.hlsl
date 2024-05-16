@@ -20,7 +20,6 @@ struct HSOutput
 	float3 controlPoint1 : CONTROL_POINTS_1;
 	float3 controlPoint2 : CONTROL_POINTS_2;
 	float3 controlPoint3 : CONTROL_POINTS_3;
-	float3 color : COLOR;
 };
 
 struct HSConstantDataOutput

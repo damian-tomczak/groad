@@ -65,6 +65,8 @@ public:
         KEY_DELETE_UP,
         KEY_CTRL_DOWN,
         KEY_CTRL_UP,
+        KEY_SHIFT_DOWN,
+        KEY_SHIFT_UP,
         MOUSE_LEFT_DOWN,
         MOUSE_LEFT_UP,
         MOUSE_MIDDLE_DOWN,

@@ -30,7 +30,7 @@ struct HSConstantDataOutput
 	float EdgeTessFactor[2] : SV_TessFactor;
 };
 
-#define NUM_CONTROL_POINTS 1
+#define NUM_CONTROL_POINTS 4
 
 float3 projectToScreen(float3 worldPos)
 {

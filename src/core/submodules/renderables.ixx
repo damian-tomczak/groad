@@ -163,12 +163,16 @@ export
                     idx++;
                 }
 
-                const XMVECTOR positionVec = mpRenderer->getRenderable(mId)->mWorldPos;
-                XMFLOAT3 position;
-                XMStoreFloat3(&position, positionVec);
-                mGeometry.push_back(position);
+                auto pRenderable = mpRenderer->getRenderable(mId);
+                if (pRenderable)
+                {
+                    const XMVECTOR positionVec = pRenderable->mWorldPos;
+                    XMFLOAT3 position;
+                    XMStoreFloat3(&position, positionVec);
+                    mGeometry.push_back(position);
+                    idx++;
+                }
 
-                idx++;
             }
 
             if (mGeometry.size() % controlPointsNumber != 0)

@@ -1,5 +1,6 @@
 module;
 
+#define NOMINMAX
 #include <Windows.h>
 #include <cmath>
 
@@ -25,6 +26,8 @@ using namespace std::chrono;
 using namespace DirectX;
 using namespace Microsoft::WRL;
 namespace fs = std::filesystem;
+
+export inline const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELECT"};
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -60,7 +63,6 @@ private:
         SCALE,
         SELECT,
     } mInteractionType{};
-    inline static const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELECT"};
 
     bool mIsRunning{};
     bool mIsMenuEnabled{};
@@ -74,6 +76,7 @@ private:
     std::optional<int> mLastYMousePosition;
 
     std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
+    IRenderable::Id mLastSelectedRenderableId = IRenderable::invalidId;
 
     XMMATRIX mViewMtx = XMMatrixIdentity();
     XMMATRIX mProjMtx = XMMatrixIdentity();
@@ -83,6 +86,8 @@ private:
     float mPivotYaw{};
     float mPivotRoll{};
     float mPivotScale{};
+
+    bool mIsShiftPressed{};
 };
 
 module :private;
@@ -535,6 +540,10 @@ void App::processInput(IWindow::Message msg, float deltaTime)
             mpRenderer->removeRenderable(*it);
             mSelectedRenderableIds.erase(*it);
         }
+        for (auto& pRenderable : mpRenderer->mRenderables)
+        {
+            pRenderable->regenerateData();
+        }
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
@@ -632,6 +641,12 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::MOUSE_RIGHT_UP:
         mIsRightMouseClicked = false;
         break;
+    case IWindow::Message::KEY_SHIFT_DOWN:
+        mIsShiftPressed = true;
+        break;
+    case IWindow::Message::KEY_SHIFT_UP:
+        mIsShiftPressed = false;
+        break;
     case IWindow::Message::MOUSE_MOVE: {
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
 
@@ -719,374 +734,4 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         }
         break;
     };
-}
-
-void App::renderUi()
-{
-
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-
-    mIsMenuEnabled = false;
-    mIsUiClicked = false;
-
-    const float menuWidth = mpWindow->getWidth() * 0.2f;
-
-    ImGui::SetNextWindowPos(ImVec2{mpWindow->getWidth() - menuWidth, 0});
-    ImGui::SetNextWindowSize(ImVec2{menuWidth, static_cast<float>(mpWindow->getHeight())});
-
-    if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
-    {
-        mIsMenuEnabled = true;
-
-    }
-
-    if (ImGui::IsWindowHovered())
-    {
-        mIsMenuHovered = true;
-    }
-    else
-    {
-        mIsMenuHovered = false;
-    }
-
-    ImGui::Text("CAD: ");
-    ImGui::Spacing();
-
-    ImGui::Combo("##interactionType", reinterpret_cast<int*>(&mInteractionType), interationsNames,
-                 IM_ARRAYSIZE(interationsNames));
-    mIsUiClicked |= ImGui::IsItemActive();
-
-    ImGui::Spacing();
-
-    if (ImGui::Button("Add Torus"))
-    {
-        auto pTorus = std::make_unique<Torus>(mCursorPos);
-        pTorus->regenerateData();
-        mpRenderer->addRenderable(std::move(pTorus));
-    }
-    ImGui::SameLine();
-
-    if (ImGui::Button("Add Point"))
-    {
-        IBezier* pBezier = nullptr;
-        if (mSelectedRenderableIds.size() == 1)
-        {
-            const IRenderable::Id selectedRenderableId = *mSelectedRenderableIds.begin();
-            IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
-            pBezier = dynamic_cast<IBezier*>(pRenderable);
-        }
-
-        auto pPoint = std::make_unique<Point>(mCursorPos);
-        pPoint->regenerateData();
-        const IRenderable::Id pointId = pPoint->mId;
-        mpRenderer->addRenderable(std::move(pPoint), pBezier->mId);
-
-        if (pBezier->mId != IRenderable::invalidId)
-        {
-            pBezier->insertControlPoint(pointId);
-        }
-    }
-
-    int newSelectedItemId = -1;
-
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    ImGuiStyle& style = ImGui::GetStyle();
-
-    ImVec4 backgroundColor = style.Colors[ImGuiCol_WindowBg];
-    backgroundColor.z *= 2.2f;
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, backgroundColor);
-    const float renderablesHeight = mpWindow->getHeight() * 0.2f;
-
-    ImGui::Text("Renderables:");
-    ImGui::BeginChild("Scrolling", ImVec2{menuWidth * 0.9f, renderablesHeight});
-
-    for (int i = 0; i < mpRenderer->mRenderables.size(); ++i)
-    {
-        const auto& pRenderable = mpRenderer->mRenderables.at(i);
-
-        if (ImGui::Selectable(pRenderable->mTag.c_str(), mSelectedRenderableIds.contains(pRenderable->mId)))
-        {
-            newSelectedItemId = i;
-            mIsUiClicked |= ImGui::IsItemActive();
-        }
-    }
-
-    ImGui::EndChild();
-    ImGui::PopStyleColor();
-
-    if (ImGui::IsItemHovered())
-    {
-        mIsMenuHovered = true;
-    }
-
-    bool isNewItemSelected{};
-    if (newSelectedItemId != -1)
-    {
-        int i = 0;
-        for (const auto renderableSelectedId : mSelectedRenderableIds)
-        {
-            IRenderable* const pRenderable = mpRenderer->getRenderable(renderableSelectedId);
-
-            XMMATRIX model = XMMatrixIdentity();
-
-            XMMATRIX localScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
-            XMMATRIX pivotScaleMat = XMMatrixIdentity();
-
-            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
-            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
-
-            XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
-            XMMATRIX pivotRotationMat = XMMatrixIdentity();
-
-            XMMATRIX translationToOrigin = XMMatrixIdentity();
-            XMMATRIX translationBack = XMMatrixIdentity();
-
-            if (mSelectedRenderableIds.contains(pRenderable->mId))
-            {
-                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
-                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
-                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
-
-                pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
-
-                pivotScaleMat = XMMatrixScaling(mPivotScale, mPivotScale, mPivotScale);
-
-                translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
-                translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
-            }
-
-            XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
-
-            // clang-format off
-            model = localScaleMat * localRotationMat *
-                    translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
-                    worldTranslation;
-            // clang-format on
-
-            pRenderable->mWorldPos = model.r[3];
-
-            const XMMATRIX scaleMat = localScaleMat * pivotScaleMat;
-            pRenderable->mScale = XMVectorGetX(scaleMat.r[0]);
-
-            const XMMATRIX rotationMat = localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
-            const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
-
-            pRenderable->mPitch = pitch;
-            pRenderable->mYaw = yaw;
-            pRenderable->mRoll = roll;
-        }
-
-        mPivotPitch = 0;
-        mPivotYaw = 0;
-        mPivotRoll = 0;
-
-        mPivotScale = 1;
-
-        const auto newId = mpRenderer->mRenderables.at(newSelectedItemId)->mId;
-        if (!mSelectedRenderableIds.contains(newId))
-        {
-            if (!mIsCtrlClicked)
-            {
-                mSelectedRenderableIds.clear();
-            }
-
-            mSelectedRenderableIds.insert(newId);
-            isNewItemSelected = true;
-        }
-        else
-        {
-            mSelectedRenderableIds.erase(newId);
-        }
-    }
-
-    if (mSelectedRenderableIds.size() > 0)
-    {
-        ImGui::Separator();
-        ImGui::Spacing();
-    }
-
-    if (mSelectedRenderableIds.size() == 1)
-    {
-        const IRenderable::Id selectedRenderableId = *mSelectedRenderableIds.begin();
-
-        bool dataChanged{};
-        IRenderable* pSelectedRenderable = mpRenderer->getRenderable(selectedRenderableId);
-
-        ImGui::Text("Selected item: %s", pSelectedRenderable->mTag.c_str());
-
-        static char nameBuffer[256]{};
-
-        if (isNewItemSelected)
-        {
-            strncpy_s(nameBuffer, pSelectedRenderable->mTag.c_str(), sizeof(nameBuffer) - 1);
-            nameBuffer[sizeof(nameBuffer) - 1] = '\0';
-        }
-
-        dataChanged |= ImGui::InputText("##tag", nameBuffer, sizeof(nameBuffer));
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::SameLine();
-
-        if (ImGui::Button("Rename"))
-        {
-            pSelectedRenderable->mTag = nameBuffer;
-        }
-
-        float localPos[3]{};
-        float worldPos[3]{};
-        float rotation[3]{};
-        float scale{};
-
-        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(localPos), pSelectedRenderable->mLocalPos);
-        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(worldPos), pSelectedRenderable->mWorldPos);
-        rotation[0] = pSelectedRenderable->mPitch;
-        rotation[1] = pSelectedRenderable->mYaw;
-        rotation[2] = pSelectedRenderable->mRoll;
-
-        ImGui::Text("Local Position:");
-        if (ImGui::InputFloat3("##localPos", localPos))
-        {
-            pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
-            pSelectedRenderable->mWorldPos = pSelectedRenderable->mLocalPos - mCursorPos;
-        }
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("World Position:");
-        if (ImGui::InputFloat3("##worldPos", worldPos))
-        {
-            pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
-            pSelectedRenderable->mLocalPos = pSelectedRenderable->mWorldPos - mCursorPos;
-        }
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Rotation:");
-        if (ImGui::InputFloat3("##rotation", rotation))
-        {
-            pSelectedRenderable->mPitch = rotation[0];
-            pSelectedRenderable->mYaw = rotation[1];
-            pSelectedRenderable->mRoll = rotation[2];
-        }
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Scale:");
-        ImGui::InputFloat("##scale", &pSelectedRenderable->mScale);
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
-        {
-            ImGui::Text("Major Radius:");
-            dataChanged |= ImGui::SliderFloat("##majorRadius", &pTorus->mMajorRadius, 0.0f, 1.0f);
-            mIsUiClicked |= ImGui::IsItemActive();
-
-            ImGui::Text("Minor Radius:");
-            dataChanged |= ImGui::SliderFloat("##minorRadius", &pTorus->mMinorRadius, 0.0f, 1.0f);
-            mIsUiClicked |= ImGui::IsItemActive();
-
-            ImGui::Spacing();
-
-            ImGui::Text("Major Segments:");
-            dataChanged |= ImGui::SliderInt("##majorSegments", &pTorus->mMajorSegments, 3, 100);
-            mIsUiClicked |= ImGui::IsItemActive();
-
-            ImGui::Text("Minor Segments:");
-            dataChanged |= ImGui::SliderInt("##minorSegments", &pTorus->mMinorSegments, 3, 100);
-            mIsUiClicked |= ImGui::IsItemActive();
-        }
-        else if (auto pPoint = dynamic_cast<Point*>(pSelectedRenderable); pPoint != nullptr)
-        {
-            ImGui::Text("Radius:");
-            dataChanged |= ImGui::SliderFloat("##radius", &pPoint->mRadius, 0.1f, 10.0f);
-            mIsUiClicked |= ImGui::IsItemActive();
-
-            ImGui::Text("Segments:");
-            dataChanged |= ImGui::SliderInt("##segments", &pPoint->mSegments, 1, 100);
-            mIsUiClicked |= ImGui::IsItemActive();
-        }
-        else if (auto pBezier = dynamic_cast<IBezier*>(pSelectedRenderable); pBezier != nullptr)
-        {
-            ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
-        }
-
-        if (dataChanged)
-        {
-            pSelectedRenderable->regenerateData();
-            mpRenderer->buildGeometryBuffers();
-        }
-
-        mIsUiClicked |= dataChanged;
-    }
-    else if (mSelectedRenderableIds.size() > 1)
-    {
-        std::unordered_set<IRenderable::Id> selectedPointsIds;
-
-        for (const auto mId : mSelectedRenderableIds)
-        {
-            IRenderable* pSelectedRenderable = mpRenderer->getRenderable(mId);
-            if (dynamic_cast<Point*>(pSelectedRenderable) != nullptr)
-            {
-                selectedPointsIds.insert(mId);
-            }
-        }
-
-        if (selectedPointsIds.size() >= 3)
-        {
-            bool isBezierAdded = false;
-            if (ImGui::Button("Add IBezier C0"))
-            {
-                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
-                pBezier->regenerateData();
-                mpRenderer->addRenderable(std::move(pBezier));
-                isBezierAdded = true;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Add IBezier C2"))
-            {
-                ASSERT(false);
-                isBezierAdded = true;
-            }
-
-            if (isBezierAdded)
-            {
-                mSelectedRenderableIds.clear();
-            }
-        }
-
-        float pivotPos[3]{};
-
-        XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(pivotPos), mPivotPos);
-
-        ImGui::Text("Pivot position:");
-        if (ImGui::InputFloat3("##pivotPos", pivotPos))
-        {
-            mPivotPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(pivotPos));
-        }
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Pivot Pitch:");
-        ImGui::InputFloat("##pivotPitch", &mPivotPitch);
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Pivot Yaw:");
-        ImGui::InputFloat("##pivotYaw", &mPivotYaw);
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Pivot Roll:");
-        ImGui::InputFloat("##pivotRoll", &mPivotRoll);
-        mIsUiClicked |= ImGui::IsItemActive();
-
-        ImGui::Text("Pivot Scale:");
-        ImGui::InputFloat("##pivotScale", &mPivotScale);
-        mIsUiClicked |= ImGui::IsItemActive();
-    }
-
-    ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }

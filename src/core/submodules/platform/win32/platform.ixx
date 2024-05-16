@@ -154,8 +154,10 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         case VK_CONTROL:
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_CTRL_DOWN), wParam, lParam);
             return true;
+        case VK_SHIFT:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_SHIFT_DOWN), wParam, lParam);
+            return true;
         }
-
         break;
     case WM_KEYUP:
         switch (wParam)
@@ -177,6 +179,9 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
             return true;
         case VK_CONTROL:
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_CTRL_UP), wParam, lParam);
+            return true;
+        case VK_SHIFT:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_SHIFT_UP), wParam, lParam);
             return true;
         }
         break;
