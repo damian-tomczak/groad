@@ -30,6 +30,7 @@ using namespace std::literals;
 #define LOG(msg) log(DEBUG_LOG_INFO msg, LogLevel::INFO);
 #define WARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
+#define ERR_NOTERMINATE(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR, false);
 
 // clang-format off
 #define ASSERT(x)                   \
@@ -67,7 +68,7 @@ enum class LogLevel : uint8_t
     COUNT
 };
 
-void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT);
+void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT, bool shouldTerminate = true);
 
 class NonCopyable
 {

@@ -21,7 +21,7 @@ export class Camera : public NonCopyableAndMoveable
     float mYaw{};
     float mPitch{};
 
-    float mMovementSpeed = 100.0f;
+    float mMovementSpeed = 25.0f;
     float mZoom = 45.0f;
 
 public:

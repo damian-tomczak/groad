@@ -119,21 +119,14 @@ export
 
         static constexpr unsigned controlPointsNumber = 4;
 
+        std::unordered_set<IRenderable::Id> mControlPointRenderableIds;
         bool mIsPolygon{};
-
-        const std::unordered_set<IRenderable::Id>& getControlPointIds() const
-        {
-            return mControlPointRenderableIds;
-        }
 
         void insertControlPoint(const IRenderable::Id mId)
         {
             mControlPointRenderableIds.insert(mId);
             generateGeometry();
         }
-
-    protected:
-        std::unordered_set<IRenderable::Id> mControlPointRenderableIds;
     };
 
     class BezierC0 final : public IBezier

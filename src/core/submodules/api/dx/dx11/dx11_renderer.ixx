@@ -365,14 +365,33 @@ void DX11Renderer::buildGeometryBuffers()
     //mRebuildBuffers = false;
 }
 
-
 void DX11Renderer::createShaders()
 {
+    bool isSuccess = true;
+
     static bool firstCall = true;
 
     namespace fs = std::filesystem;
 
-    auto compileShader = [](const fs::path shaderPath, const std::string_view shaderModel, ComPtr<ID3D10Blob>& shaderBlob) {
+    auto checkShader = [](const HRESULT hr) {
+        if (FAILED(hr))
+        {
+            const std::string msg =
+                std::format("Shader creation error: {}({})", std::system_category().message(hr), hr);
+
+            if (firstCall)
+            {
+                ERR(msg);
+            }
+            else
+            {
+                WARN(msg);
+            }
+        }
+    };
+
+    auto compileShader = [&](const fs::path shaderPath, const std::string_view shaderModel,
+                             ComPtr<ID3D10Blob>& shaderBlob, std::function<HRESULT()> creationShaderFunction) {
         shaderBlob.Reset();
 
         static constexpr std::string_view shaderEntryPoint{"main"};
@@ -386,16 +405,9 @@ void DX11Renderer::createShaders()
         shaderFlags |= D3D10_SHADER_DEBUG | D3D10_SHADER_SKIP_OPTIMIZATION;
 #endif
 
-        HRESULT hr = D3DCompileFromFile(
-            fullShaderPath.c_str(),
-            nullptr,
-            nullptr,
-            shaderEntryPoint.data(),
-            shaderModel.data(),
-            shaderFlags,
-            0,
-            shaderBlob.GetAddressOf(),
-            compilationMsgs.GetAddressOf());
+        const HRESULT hr =
+            D3DCompileFromFile(fullShaderPath.c_str(), nullptr, nullptr, shaderEntryPoint.data(), shaderModel.data(),
+                               shaderFlags, 0, shaderBlob.GetAddressOf(), compilationMsgs.GetAddressOf());
 
         const bool containMessage = compilationMsgs != nullptr;
 
@@ -412,100 +424,92 @@ void DX11Renderer::createShaders()
             }
             else
             {
-                WARN(errorMessage.str());
+                ERR_NOTERMINATE(errorMessage.str());
             }
         }
 
         compilationMsgs.Reset();
-    };
 
-    auto checkShader = [](const HRESULT hr) {
-        if (FAILED(hr))
+        if (shaderBlob != nullptr)
         {
-            const std::string msg = std::format("Shader creation error: {}({})", std::system_category().message(hr), hr);
-
-            if (firstCall)
-            {
-                ERR(msg);
-            }
-            else
-            {
-                WARN(msg);
-            }
+            checkShader(creationShaderFunction());
+        }
+        else
+        {
+            isSuccess = false;
         }
     };
 
     ComPtr<ID3D10Blob> compiledShader;
 
 #pragma region torus
-    compileShader("torus/default_renderable_vs.hlsl", "vs_5_0", mpDefaultVSBlob);
-    checkShader(mpDevice->CreateVertexShader(mpDefaultVSBlob->GetBufferPointer(), mpDefaultVSBlob->GetBufferSize(), nullptr, &mpVS));
+    compileShader("torus/default_renderable_vs.hlsl", "vs_5_0", mpDefaultVSBlob, [this]() {
+        return mpDevice->CreateVertexShader(mpDefaultVSBlob->GetBufferPointer(), mpDefaultVSBlob->GetBufferSize(),
+                                                 nullptr, &mpVS);
+    });
 
-    compileShader("torus/default_renderable_ps.hlsl", "ps_5_0", compiledShader);
-    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                            nullptr,
-                                   &mpPS));
+    compileShader("torus/default_renderable_ps.hlsl", "ps_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                                nullptr, &mpPS);
+    });
 #pragma endregion
 
 #pragma region grid
-    compileShader("grid/infinite_grid_vs.hlsl", "vs_5_0", compiledShader);
-    checkShader(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                             nullptr,
-                                    &mpGridVS));
-
-    compileShader("grid/infinite_grid_ps.hlsl", "ps_5_0", compiledShader);
-    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                            nullptr,
-                                   &mpGridPS));
+    compileShader("grid/infinite_grid_vs.hlsl", "vs_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr, &mpGridVS);
+    });
+    compileShader("grid/infinite_grid_ps.hlsl", "ps_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                           &mpGridPS);
+    });
 #pragma endregion
 
 #pragma region cursor
-    compileShader("cursor/cursor_vs.hlsl", "vs_5_0", compiledShader);
-    checkShader(mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                             nullptr,
-                                    &mpCursorVS));
-
-    compileShader("cursor/cursor_gs.hlsl", "gs_5_0", compiledShader);
-    checkShader(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                               nullptr,
-                                      &mpCursorGS));
-
-    compileShader("cursor/cursor_ps.hlsl", "ps_5_0", compiledShader);
-    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                            nullptr,
-                                   &mpCursorPS));
+    compileShader("cursor/cursor_vs.hlsl", "vs_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateVertexShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr, &mpCursorVS);
+    });
+    compileShader("cursor/cursor_gs.hlsl", "gs_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                              nullptr, &mpCursorGS);
+    });
+    compileShader("cursor/cursor_ps.hlsl", "ps_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                           &mpCursorPS);
+    });
 #pragma endregion
 
 
 #pragma region beziers
 #pragma region bezier_c0
-    compileShader("beziers/bezier_c0/bezier_c0_vs.hlsl", "vs_5_0", mpBezierVSBlob);
-    checkShader(mpDevice->CreateVertexShader(mpBezierVSBlob->GetBufferPointer(), mpBezierVSBlob->GetBufferSize(),
-                                             nullptr, &mpBezierC0VS));
-
-    compileShader("beziers/bezier_c0/bezier_c0_hs.hlsl", "hs_5_0", compiledShader);
-    checkShader(mpDevice->CreateHullShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
-                                  &mpBezierC0HS));
-
-    compileShader("beziers/bezier_c0/bezier_c0_ds.hlsl", "ds_5_0", compiledShader);
-    checkShader(mpDevice->CreateDomainShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                             nullptr,
-                                    &mpBezierC0DS));
-
-    compileShader("beziers/bezier_c0/bezier_c0_border_gs.hlsl", "gs_5_0", compiledShader);
-    checkShader(mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                               nullptr, &mpBezierC0BorderGS));
-
-    compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", compiledShader);
-    checkShader(mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
-                                            nullptr, &mpBezierC0PS));
-
+    compileShader("beziers/bezier_c0/bezier_c0_vs.hlsl", "vs_5_0", mpBezierVSBlob, [this]() {
+        return mpDevice->CreateVertexShader(mpBezierVSBlob->GetBufferPointer(), mpBezierVSBlob->GetBufferSize(),
+                                            nullptr, &mpBezierC0VS);
+    });
+    compileShader("beziers/bezier_c0/bezier_c0_hs.hlsl", "hs_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateHullShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                          &mpBezierC0HS);
+    });
+    compileShader("beziers/bezier_c0/bezier_c0_ds.hlsl", "ds_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateDomainShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                            nullptr, &mpBezierC0DS);
+    });
+    compileShader("beziers/bezier_c0/bezier_c0_border_gs.hlsl", "gs_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreateGeometryShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(),
+                                              nullptr, &mpBezierC0BorderGS);
+    });
+    compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", compiledShader, [this, &compiledShader]() {
+        return mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+                                           &mpBezierC0PS);
+    });
 #pragma endregion bezier_c0
 
 #pragma region bezier_c2
-
+    // Include similar lambda function calls as above for the Bezier C2 shaders
 #pragma endregion bezier_c2
 #pragma endregion
+
 
     D3D11_BUFFER_DESC constantBufferDesc
     {
@@ -517,6 +521,16 @@ void DX11Renderer::createShaders()
     HR(mpDevice->CreateBuffer(&constantBufferDesc, nullptr, &mpConstantBuffer));
 
     firstCall = false;
+
+    if (isSuccess)
+    {
+        LOG("Shader compilaton SUCCESS");
+    }
+    else
+    {
+        ERR_NOTERMINATE("Shader compilation ERROR");
+    }
+
 }
 
 

@@ -54,7 +54,7 @@ std::ostream& operator<<(std::ostream& ostream, const Color color)
 constexpr const char* logLevelToStr(const LogLevel level);
 constexpr Color logLevelToColor(const LogLevel level);
 
-void log(const std::string_view msg, const LogLevel level)
+void log(const std::string_view msg, const LogLevel level, bool shouldTerminate)
 {
     const auto now = std::chrono::system_clock::now();
     const time_t nowTime = std::chrono::system_clock::to_time_t(now);
@@ -95,7 +95,7 @@ void log(const std::string_view msg, const LogLevel level)
         std::cout << out.str();
     }
 
-    if (level == LogLevel::ERROR)
+    if (shouldTerminate && (level == LogLevel::ERROR))
     {
         std::terminate();
     }

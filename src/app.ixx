@@ -88,6 +88,7 @@ private:
     float mPivotScale{};
 
     bool mIsShiftPressed{};
+    bool mIsCameraInMovement{};
 };
 
 module :private;
@@ -247,9 +248,12 @@ void App::run()
     }
 }
 
-void App::updateScene(float dt)
+void App::updateScene(float deltaTime)
 {
-
+    if (mIsCameraInMovement)
+    {
+        mCamera.moveCamera(Camera::FORWARD, deltaTime);
+    }
 }
 
 void App::renderScene()
@@ -429,7 +433,7 @@ void App::renderScene()
         }
         else
         {
-            const auto& controlPoints = pBezier->getControlPointIds();
+            const auto& controlPoints = pBezier->mControlPointRenderableIds;
             const auto controlPointsSize = controlPoints.size();
             for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::controlPointsNumber)
             {
@@ -548,7 +552,13 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::KEY_W_DOWN:
         if (!mIsUiClicked)
         {
-            mCamera.moveCamera(Camera::FORWARD, deltaTime);
+            mIsCameraInMovement = true;
+        }
+        break;
+    case IWindow::Message::KEY_W_UP:
+        if (!mIsUiClicked)
+        {
+            mIsCameraInMovement = false;
         }
         break;
     case IWindow::Message::KEY_S_DOWN:
@@ -704,7 +714,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 {
                     if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier != nullptr)
                     {
-                        const auto& controlPointIds = pBezier->getControlPointIds();
+                        const auto& controlPointIds = pBezier->mControlPointRenderableIds;
                         for (const IRenderable::Id controlPointRenderableId : controlPointIds)
                         {
                             IRenderable* const pControlPointRenderable = mpRenderer->getRenderable(controlPointRenderableId);

@@ -89,6 +89,11 @@ void App::renderUi()
         }
     }
 
+    if (ImGui::Button("Clear Scene"))
+    {
+        mpRenderer->mRenderables.clear();
+    }
+
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -338,7 +343,7 @@ void App::renderUi()
             // std::vector<std::string> deboorControlPointsNames;
             // std::vector<const char*> deboorControlPointsNamesPtrs;
 
-            // for (size_t i = 0; i < pBezier->getControlPointIds().size(); ++i)
+            // for (size_t i = 0; i < mControlPointRenderableIds.size(); ++i)
             //{
             //     deboorControlPointsNames.emplace_back("Point " + std::to_string(i));
             // }
@@ -360,6 +365,52 @@ void App::renderUi()
             //                    static_cast<int>(deboorControlPointsNamesPtrs.size()), 4))
             //{
             // }
+
+            ImGui::Text("Control points:");
+            if (ImGui::TreeNode("de Boor points"))
+            {
+                IRenderable::Id idToDelete = IRenderable::invalidId;
+                size_t i = 0;
+                for (const IRenderable::Id id : pBezier->mControlPointRenderableIds)
+                {
+                    if (ImGui::Button(("X##" + std::to_string(id)).c_str()))
+                    {
+                        idToDelete = id;
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text("- Point %d", i);
+                    i++;
+                }
+
+                if (idToDelete != IRenderable::invalidId)
+                {
+                    pBezier->mControlPointRenderableIds.erase(idToDelete);
+                    pBezier->regenerateData();
+                }
+
+                ImGui::TreePop();
+            }
+
+
+            if (ImGui::TreeNode("Bernstein points"))
+            {
+                size_t i = 0;
+                for (const IRenderable::Id id : pBezier->mControlPointRenderableIds)
+                {
+                    if (ImGui::Button(("Edit##" + std::to_string(id)).c_str()))
+                    {
+                        mSelectedRenderableIds.clear();
+                        mSelectedRenderableIds.insert(id);
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::Text("- Point %d", i);
+                    i++;
+                }
+
+                ImGui::TreePop();
+            }
         }
 
         if (dataChanged)
