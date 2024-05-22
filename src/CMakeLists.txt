@@ -19,7 +19,7 @@ file(GLOB_RECURSE MODULE_FILES
 os_files_filter(MODULE_FILES core/submodules/platform)
 
 file(GLOB_RECURSE SHADER_FILES
-    ${ASSETS_DIR}/shaders/*
+    src/shaders/*
 )
 
 if (MSVC)
@@ -51,6 +51,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 set(PROJECT_DEFINITIONS
     PROJECT_NAME="${CMAKE_PROJECT_NAME}"
     ASSETS_PATH="${ASSETS_DIR}"
+    SHADERS_PATH="${CMAKE_SOURCE_DIR}/src/shaders/"
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE

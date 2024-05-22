@@ -395,9 +395,8 @@ void DX11Renderer::createShaders()
         shaderBlob.Reset();
 
         static constexpr std::string_view shaderEntryPoint{"main"};
-        static const fs::path shaderPaths{ASSETS_PATH "shaders/"};
 
-        const fs::path fullShaderPath = shaderPaths / shaderPath;
+        const fs::path fullShaderPath = SHADERS_PATH / shaderPath;
 
         ComPtr<ID3D10Blob> compilationMsgs;
         DWORD shaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;

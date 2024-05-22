@@ -277,7 +277,7 @@ void App::renderUi()
         rotation[2] = pSelectedRenderable->mRoll;
 
         ImGui::Text("Local Position:");
-        if (ImGui::InputFloat3("##localPos", localPos))
+        if (ImGui::DragFloat3("##localPos", localPos))
         {
             pSelectedRenderable->mLocalPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(localPos));
             pSelectedRenderable->mWorldPos = pSelectedRenderable->mLocalPos - mCursorPos;
@@ -285,7 +285,7 @@ void App::renderUi()
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("World Position:");
-        if (ImGui::InputFloat3("##worldPos", worldPos))
+        if (ImGui::DragFloat3("##worldPos", worldPos))
         {
             pSelectedRenderable->mWorldPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(worldPos));
             pSelectedRenderable->mLocalPos = pSelectedRenderable->mWorldPos - mCursorPos;
@@ -293,7 +293,7 @@ void App::renderUi()
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Rotation:");
-        if (ImGui::InputFloat3("##rotation", rotation))
+        if (ImGui::DragFloat3("##rotation", rotation))
         {
             pSelectedRenderable->mPitch = rotation[0];
             pSelectedRenderable->mYaw = rotation[1];
@@ -302,7 +302,7 @@ void App::renderUi()
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Scale:");
-        ImGui::InputFloat("##scale", &pSelectedRenderable->mScale);
+        ImGui::DragFloat("##scale", &pSelectedRenderable->mScale);
         mIsUiClicked |= ImGui::IsItemActive();
 
         if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
@@ -462,26 +462,26 @@ void App::renderUi()
         XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(pivotPos), mPivotPos);
 
         ImGui::Text("Pivot position:");
-        if (ImGui::InputFloat3("##pivotPos", pivotPos))
+        if (ImGui::DragFloat3("##pivotPos", pivotPos))
         {
             mPivotPos = XMLoadFloat3(reinterpret_cast<XMFLOAT3*>(pivotPos));
         }
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Pivot Pitch:");
-        ImGui::InputFloat("##pivotPitch", &mPivotPitch);
+        ImGui::DragFloat("##pivotPitch", &mPivotPitch);
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Pivot Yaw:");
-        ImGui::InputFloat("##pivotYaw", &mPivotYaw);
+        ImGui::DragFloat("##pivotYaw", &mPivotYaw);
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Pivot Roll:");
-        ImGui::InputFloat("##pivotRoll", &mPivotRoll);
+        ImGui::DragFloat("##pivotRoll", &mPivotRoll);
         mIsUiClicked |= ImGui::IsItemActive();
 
         ImGui::Text("Pivot Scale:");
-        ImGui::InputFloat("##pivotScale", &mPivotScale);
+        ImGui::DragFloat("##pivotScale", &mPivotScale);
         mIsUiClicked |= ImGui::IsItemActive();
     }
 

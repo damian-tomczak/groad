@@ -201,14 +201,13 @@ void App::run()
 
 #ifndef NDEBUG
     auto lastShadersCompilationTime = fs::file_time_type::clock::now();
-    const fs::path shaderPaths{ASSETS_PATH "shaders/"};
 #endif
 
     while (mIsRunning)
     {
 #ifndef NDEBUG
         bool shouldRecompileShaders = false;
-        for (const auto& entry : fs::recursive_directory_iterator(shaderPaths))
+        for (const auto& entry : fs::recursive_directory_iterator(SHADERS_PATH))
         {
             if (fs::is_regular_file(entry.status()))
             {

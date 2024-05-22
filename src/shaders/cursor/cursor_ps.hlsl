@@ -6,5 +6,5 @@ struct PixelShaderOut
 
 float4 main(PixelShaderOut output) : SV_Target
 {
-    return output.color
+    return output.color;
 }
