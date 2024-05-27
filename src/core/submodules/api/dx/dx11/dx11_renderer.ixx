@@ -1,13 +1,10 @@
 module;
 
-#include "mg.hpp"
-#include <DirectXPackedVector.h>
-#include <d3d11.h>
-#include <d3dcompiler.h>
-#include <wrl/client.h>
-#include "imgui_impl_dx11.h"
-
 #include "utils.h"
+
+#include "mg.hpp"
+#include "imgui_impl_dx11.h"
+#include <d3dcompiler.h>
 
 export module dx11renderer;
 export import dxrenderer;
@@ -16,9 +13,6 @@ import std.filesystem;
 
 import platform;
 
-using namespace Microsoft::WRL;
-using namespace DirectX;
-
 export struct ConstantBufferData
 {
     XMMATRIX model;
@@ -26,6 +20,8 @@ export struct ConstantBufferData
     XMMATRIX invView;
     XMMATRIX proj;
     XMMATRIX invProj;
+    XMMATRIX texMtx;
+    XMFLOAT3 cameraPos;
     int flags;
     int screenWidth;
     int screenHeight;
@@ -67,8 +63,16 @@ public:
     ComPtr<ID3D11GeometryShader> mpBezierC0BorderGS;
     ComPtr<ID3D11PixelShader> mpBezierC0PS;
 
+    ComPtr<ID3D11VertexShader> mpWaterSurfaceVS;
+    ComPtr<ID3D11PixelShader> mpWaterSurfacePS;
+
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+
+    ID3D11Device* getDevice() const
+    {
+        return mpDevice.Get();
+    }
 
     ID3D11DeviceContext* getContext() const
     {
@@ -248,7 +252,7 @@ void DX11Renderer::onResize()
     };
 
     ComPtr<ID3D11BlendState> pBlendState;
-    HR(mpDevice->CreateBlendState(&blendDesc, pBlendState.GetAddressOf()));
+    HR(mpDevice->CreateBlendState(&blendDesc, &pBlendState));
 
     float blendFactor[]{0.0f, 0.0f, 0.0f, 0.0f};
     UINT sampleMask = 0xffffffff;
@@ -263,7 +267,7 @@ void DX11Renderer::initCore()
 #endif
 
     D3D_FEATURE_LEVEL featureLevel{};
-    HR(D3D11CreateDevice(0, d3dDriverType, 0, createDeviceFlags, 0, 0, D3D11_SDK_VERSION, mpDevice.GetAddressOf(),
+    HR(D3D11CreateDevice(0, d3dDriverType, 0, createDeviceFlags, 0, 0, D3D11_SDK_VERSION, &mpDevice,
                          &featureLevel, mpContext.GetAddressOf()));
 
     if (featureLevel != D3D_FEATURE_LEVEL_11_0)
@@ -370,8 +374,6 @@ void DX11Renderer::createShaders()
     bool isSuccess = true;
 
     static bool firstCall = true;
-
-    namespace fs = std::filesystem;
 
     auto checkShader = [](const HRESULT hr) {
         if (FAILED(hr))
@@ -507,6 +509,13 @@ void DX11Renderer::createShaders()
 #pragma region bezier_c2
     // Include similar lambda function calls as above for the Bezier C2 shaders
 #pragma endregion bezier_c2
+
+#pragma region watersurface
+    //compileShader("water/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", compiledShader, [this, &compiledShader]() {
+    //    return mpDevice->CreatePixelShader(compiledShader->GetBufferPointer(), compiledShader->GetBufferSize(), nullptr,
+    //                                       &mpBezierC0PS);
+    //});
+#pragma endregion watersurface
 #pragma endregion
 
 

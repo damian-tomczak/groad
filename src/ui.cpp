@@ -439,7 +439,7 @@ void App::renderUi()
             bool isBezierAdded = false;
             if (ImGui::Button("Add IBezier C0"))
             {
-                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
+                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;

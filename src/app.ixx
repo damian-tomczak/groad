@@ -54,7 +54,7 @@ private:
     XMVECTOR mCursorPos{};
 
     std::shared_ptr<IWindow> mpWindow;
-    std::unique_ptr<DX11Renderer> mpRenderer;
+    DX11Renderer* mpRenderer;
 
     enum class InteractionType
     {
@@ -109,7 +109,7 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 App::~App()
 {
     mpWindow.reset();
-    mpRenderer.reset();
+    delete mpRenderer;
 
     ImGui::DestroyContext();
 }
@@ -129,9 +129,8 @@ void App::init()
     mpWindow->init();
     mpWindow->show();
 
-    const auto dx11renderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
-    ASSERT(dx11renderer != nullptr);
-    mpRenderer = std::unique_ptr<DX11Renderer>(dx11renderer);
+    mpRenderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
+    ASSERT(mpRenderer != nullptr);
     mpRenderer->init();
 
     std::unordered_set<IRenderable::Id> selectedPointsIds;
@@ -184,7 +183,7 @@ void App::init()
     selectedPointsIds.insert(pPoint->mId);
     mpRenderer->addRenderable(std::move(pPoint));
 
-    auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
+    auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
     pBezier->regenerateData();
     mpRenderer->addRenderable(std::move(pBezier));
 }

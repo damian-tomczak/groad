@@ -2,6 +2,18 @@
 
 #include <mutex>
 
+#define NOMINMAX
+#include <d3d11.h>
+#include <wrl/client.h>
+#include <DirectXMath.h>
+
+using namespace Microsoft::WRL;
+using namespace DirectX;
+namespace std::filesystem
+{
+}
+namespace fs = std::filesystem;
+
 #ifdef ERROR
 #undef ERROR
 #endif
