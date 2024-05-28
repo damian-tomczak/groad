@@ -21,6 +21,7 @@ import core;
 import core.options;
 import window;
 import dx11renderer;
+import scene;
 
 using namespace std::chrono;
 using namespace DirectX;
@@ -42,12 +43,25 @@ public:
     void init();
     void run();
 
-    void updateScene(float dt);
-    void renderScene();
+    void update(float dt);
+    void draw();
+
+    enum class Scene
+    {
+        DEFAULT,
+        CAD = DEFAULT,
+        DUCK,
+    };
+
+    struct Settings
+    {
+        bool isVsync;
+    } mSettings{};
 
 private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
+    void loadScene(App::Scene mode);
 
     const ParsedOptions mOptions;
     Camera mCamera{0.0f, 0.5f, -10.0f};
@@ -75,7 +89,6 @@ private:
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
 
-    std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
     IRenderable::Id mLastSelectedRenderableId = IRenderable::invalidId;
 
     XMMATRIX mViewMtx = XMMatrixIdentity();
@@ -89,6 +102,12 @@ private:
 
     bool mIsShiftPressed{};
     bool mIsCameraInMovement{};
+
+    Scene mMode{};
+
+    std::unique_ptr<IScene> mpScene;
+
+    std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
 };
 
 module :private;
@@ -133,59 +152,8 @@ void App::init()
     ASSERT(mpRenderer != nullptr);
     mpRenderer->init();
 
-    std::unordered_set<IRenderable::Id> selectedPointsIds;
-
-    XMVECTOR pos{-2.f, 3.f, 0};
-    auto pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{-1.f, 3.f, 0};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{0.0f, 3.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{1.0f, 3.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{-2.0f, 1.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{-1.0f, 1.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{0.0f, 1.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    pos = XMVECTOR{1.0f, 1.0f, 0.0f};
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
-    mpRenderer->addRenderable(std::move(pPoint));
-
-    auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
-    pBezier->regenerateData();
-    mpRenderer->addRenderable(std::move(pBezier));
+    mpScene = std::make_unique<CadScene>(mpRenderer);
+    mpScene->init();
 }
 
 void App::run()
@@ -241,20 +209,22 @@ void App::run()
             msg = mpWindow->getMessage();
         }
 
-        updateScene(deltaTime);
-        renderScene();
+        update(deltaTime);
+        draw();
     }
 }
 
-void App::updateScene(float deltaTime)
+void App::update(float dt)
 {
     if (mIsCameraInMovement)
     {
-        mCamera.moveCamera(Camera::FORWARD, deltaTime);
+        mCamera.moveCamera(Camera::FORWARD, dt);
     }
+
+    mpScene->update(dt);
 }
 
-void App::renderScene()
+void App::draw()
 {
     ID3D11DeviceContext* const pContext = mpRenderer->getContext();
 
@@ -298,29 +268,25 @@ void App::renderScene()
 
     pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
-    {
-        pContext->VSSetShader(mpRenderer->mpGridVS.Get(), nullptr, 0);
-        pContext->PSSetShader(mpRenderer->mpGridPS.Get(), nullptr, 0);
-        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pContext->Draw(6, 0);
-    }
+    mpScene->drawSurface();
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-    {
-        const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
-        data.model = translationMat;
+    mpScene->draw();
+#pragma region cursor
+    const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
+    data.model = translationMat;
 
-        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-        memcpy(cbData.pData, &data, sizeof(data));
-        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
+    memcpy(cbData.pData, &data, sizeof(data));
+    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
 
-        pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
-        pContext->GSSetShader(mpRenderer->mpCursorGS.Get(), nullptr, 0);
-        pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
-        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-        pContext->Draw(6, 0);
-        pContext->GSSetShader(nullptr, nullptr, 0);
-    }
+    pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
+    pContext->GSSetShader(mpRenderer->mpCursorGS.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pContext->Draw(6, 0);
+    pContext->GSSetShader(nullptr, nullptr, 0);
+#pragma endregion
 
     for (const auto [renderableIdx, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
     {
@@ -516,7 +482,7 @@ void App::renderScene()
 
     renderUi();
 
-    mpRenderer->getSwapchain()->Present(1, 0);
+    mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
 void App::processInput(IWindow::Message msg, float deltaTime)
@@ -742,4 +708,25 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         }
         break;
     };
+}
+
+void App::loadScene(App::Scene mode)
+{
+    mMode = mode;
+
+    mpRenderer->mRenderables.clear();
+
+    switch (mMode)
+    {
+    case App::Scene::CAD:
+        mpScene = std::make_unique<CadScene>(mpRenderer);
+        break;
+    case App::Scene::DUCK:
+        mpScene = std::make_unique<DuckScene>(mpRenderer);
+        break;
+    default:
+        break;
+    }
+
+    mpScene->init();
 }

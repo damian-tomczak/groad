@@ -2,20 +2,42 @@ module;
 
 #include "utils.h"
 
-export module watersurface;
+export module surface;
 import dx11renderer;
 import core;
 
-class WaterSurface
+export class ISurface
 {
 public:
-    WaterSurface(float planeWidth, float planeHeight, int samplesTextureWidth, int samplesTextureHeight);
+    virtual void init()
+    {
+
+    }
+    virtual void update(float dt) = 0;
+    virtual void draw() = 0;
+
+protected:
+    ISurface(IRenderer* pRenderer) : mpRenderer{pRenderer}
+    {
+
+    }
+
+    IRenderer* mpRenderer;
+};
+
+export class WaterSurface : public ISurface
+{
+public:
+    WaterSurface(IRenderer* pRenderer, float planeWidth, float planeHeight, int samplesTextureWidth,
+                 int samplesTextureHeight);
 
     void create();
 
+    void init() override;
+    void draw() override;
+
     void applyDisturbanceInWorldSpace(XMFLOAT3 position, float strength);
-    void update(float deltaTime);
-    void draw(FXMMATRIX viewProj, const XMFLOAT3& cameraPosition);
+    void update(float deltaTime) override;
 
     void setCubemap(ID3D11ShaderResourceView* cubemap)
     {
@@ -57,8 +79,32 @@ private:
     ID3D11VertexShader* _vertexShader;
     ID3D11PixelShader* _pixelShader;
     ID3D11InputLayout* _inputLayout;
+};
 
-    DX11Renderer* mpRenderer;
+export class GridSurface : public ISurface
+{
+public:
+    GridSurface(IRenderer* pRenderer) : ISurface{pRenderer}
+    {
+
+    }
+
+    void init() override;
+    void draw() override
+    {
+        DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+        ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
+
+        pContext->VSSetShader(pDX11Renderer->mpGridVS.Get(), nullptr, 0);
+        pContext->PSSetShader(pDX11Renderer->mpGridPS.Get(), nullptr, 0);
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pContext->Draw(6, 0);
+    }
+
+    void update(float dt) override
+    {
+
+    }
 };
 
 module :private;
@@ -68,7 +114,7 @@ void createPlane(ID3D11Device* pDevice, float width, float length, ComPtr<ID3D11
     float halfWidth = 0.5f * width;
     float halfLength = 0.5f * length;
 
-    XMFLOAT3 vertices[]{
+    const XMFLOAT3 vertices[]{
         {-halfWidth, 0.0f, +halfLength},
         {+halfWidth, 0.0f, +halfLength},
         {-halfWidth, 0.0f, -halfLength},
@@ -99,51 +145,13 @@ void createPlane(ID3D11Device* pDevice, float width, float length, ComPtr<ID3D11
     HR(pDevice->CreateBuffer(&bufferDesc, &initData, &pIndexBuffer));
 }
 
-WaterSurface::WaterSurface(float planeWidth, float planeHeight, int samplesTextureWidth, int samplesTextureHeight)
-    : _cubemap(nullptr), _normalMapTexture(nullptr),
+WaterSurface::WaterSurface(IRenderer* pRenderer, float planeWidth, float planeHeight, int samplesTextureWidth, int samplesTextureHeight)
+    : ISurface{pRenderer}, _cubemap(nullptr), _normalMapTexture(nullptr),
       _vertexShader(nullptr), _pixelShader(nullptr), _inputLayout(nullptr), mPlaneWidth(planeWidth), mPlaneHeight(planeHeight),
       mSamplesTextureWidth(samplesTextureWidth), mSamplesTextureHeight(samplesTextureHeight)
 {
     _modelMatrix = XMMatrixIdentity();
     _invModelMatrix = XMMatrixInverse(nullptr, _modelMatrix);
-}
-
-void WaterSurface::create()
-{
-    clearSamples();
-
-    const D3D11_TEXTURE2D_DESC texDesc{
-        .Width = mSamplesTextureWidth,
-        .Height = mSamplesTextureHeight,
-        .MipLevels = 1,
-        .ArraySize = 1,
-        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-        .SampleDesc{
-            .Count = 1,
-            .Quality = 0,
-        },
-        .Usage = D3D11_USAGE_DEFAULT,
-        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
-        .CPUAccessFlags = 0,
-        .MiscFlags = 0,
-    };
-
-    auto normalMapData = buildNormalMap();
-
-    D3D11_SUBRESOURCE_DATA initData{};
-    initData.pSysMem = &normalMapData[0];
-    initData.SysMemPitch = mSamplesTextureWidth * sizeof(unsigned char) * 4;
-
-    ID3D11Texture2D* pTexture = nullptr;
-    HR(mpRenderer->getDevice()->CreateTexture2D(&texDesc, &initData, &pTexture));
-
-    mpRenderer->getDevice()->CreateShaderResourceView(pTexture, nullptr, &_normalMapTexture);
-    pTexture->Release();
-
-    createPlane(mpRenderer->getDevice(), mPlaneWidth, mPlaneHeight, mpVertexBuffer, mpIndexBuffer);
-
-    _textureMatrix = XMMatrixScaling(1.0f / mPlaneWidth, 0, 1.0f / mPlaneHeight);
-    _textureMatrix = XMMatrixTranslation(0.5f * mPlaneWidth, 0, 0.5f * mPlaneHeight) * _textureMatrix;
 }
 
 void WaterSurface::applyDisturbanceInWorldSpace(XMFLOAT3 position, float strength)
@@ -221,24 +229,60 @@ void WaterSurface::update(float deltaTime)
     calculateNormalMap();
 }
 
-void WaterSurface::draw(FXMMATRIX viewProj, const XMFLOAT3& cameraPosition)
+void WaterSurface::init()
 {
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+
+    clearSamples();
+
+    const D3D11_TEXTURE2D_DESC texDesc{
+        .Width = mSamplesTextureWidth,
+        .Height = mSamplesTextureHeight,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .SampleDesc{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = D3D11_USAGE_DEFAULT,
+        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+        .CPUAccessFlags = 0,
+        .MiscFlags = 0,
+    };
+
+    auto normalMapData = buildNormalMap();
+
+    D3D11_SUBRESOURCE_DATA initData{};
+    initData.pSysMem = &normalMapData[0];
+    initData.SysMemPitch = mSamplesTextureWidth * sizeof(unsigned char) * 4;
+
+    ID3D11Texture2D* pTexture{};
+    HR(pDX11Renderer->getDevice()->CreateTexture2D(&texDesc, &initData, &pTexture));
+
+    pDX11Renderer->getDevice()->CreateShaderResourceView(pTexture, nullptr, &_normalMapTexture);
+    pTexture->Release();
+
+    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneHeight, mpVertexBuffer, mpIndexBuffer);
+
+    _textureMatrix = XMMatrixScaling(1.0f / mPlaneWidth, 0, 1.0f / mPlaneHeight);
+    _textureMatrix = XMMatrixTranslation(0.5f * mPlaneWidth, 0, 0.5f * mPlaneHeight) * _textureMatrix;
+}
+
+void WaterSurface::draw()
+{
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+
     auto normalMapData = buildNormalMap();
     copyNormalsToTexture(normalMapData);
 
     // Set the shaders
-    mpRenderer->getContext()->VSSetShader(_vertexShader, nullptr, 0);
-    mpRenderer->getContext()->PSSetShader(_pixelShader, nullptr, 0);
+    pDX11Renderer->getContext()->VSSetShader(_vertexShader, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(_pixelShader, nullptr, 0);
 
     // Set the texture and cube map
-    mpRenderer->getContext()->PSSetShaderResources(0, 1, &_normalMapTexture);
-    mpRenderer->getContext()->PSSetShaderResources(1, 1, &_cubemap);
-
-    // Create and update the constant buffer
-    ConstantBufferData cb;
-    cb.view = XMMatrixTranspose(viewProj);            // Transpose for HLSL!
-    cb.texMtx = XMMatrixTranspose(_textureMatrix); // Transpose for HLSL!
-    cb.cameraPos = cameraPosition;
+    pDX11Renderer->getContext()->PSSetShaderResources(0, 1, &_normalMapTexture);
+    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, &_cubemap);
 
     D3D11_BUFFER_DESC bd = {};
     bd.Usage = D3D11_USAGE_DYNAMIC;
@@ -246,25 +290,20 @@ void WaterSurface::draw(FXMMATRIX viewProj, const XMFLOAT3& cameraPosition)
     bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     ID3D11Buffer* pConstantBuffer = nullptr;
-    mpRenderer->getDevice()->CreateBuffer(&bd, nullptr, &pConstantBuffer);
-
-    D3D11_MAPPED_SUBRESOURCE mappedResource;
-    mpRenderer->getContext()->Map(pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-    memcpy(mappedResource.pData, &cb, sizeof(ConstantBufferData));
-    mpRenderer->getContext()->Unmap(pConstantBuffer, 0);
+    pDX11Renderer->getDevice()->CreateBuffer(&bd, nullptr, &pConstantBuffer);
 
     // Set the constant buffer in the vertex shader and pixel shader
-    mpRenderer->getContext()->VSSetConstantBuffers(0, 1, &pConstantBuffer);
-    mpRenderer->getContext()->PSSetConstantBuffers(0, 1, &pConstantBuffer);
+    pDX11Renderer->getContext()->VSSetConstantBuffers(0, 1, &pConstantBuffer);
+    pDX11Renderer->getContext()->PSSetConstantBuffers(0, 1, &pConstantBuffer);
 
     // Bind the vertex array object and draw
     UINT stride = sizeof(XMFLOAT3);
     UINT offset = 0;
-    mpRenderer->getContext()->IASetVertexBuffers(0, 1, &mpVertexBuffer, &stride, &offset);
-    mpRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, &mpVertexBuffer, &stride, &offset);
+    pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    mpRenderer->getContext()->DrawIndexed(6, 0, 0); // Assumes you're drawing two triangles (a quad)
+    pDX11Renderer->getContext()->DrawIndexed(6, 0, 0); // Assumes you're drawing two triangles (a quad)
 
     // Release resources
     pConstantBuffer->Release();
@@ -364,6 +403,7 @@ std::vector<unsigned char> WaterSurface::buildNormalMap()
 
 void WaterSurface::copyNormalsToTexture(std::vector<unsigned char>& normals)
 {
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
     // Assuming _normalMapTexture is an ID3D11Texture2D* and already created
 
     // Update the texture with the normal data
@@ -372,7 +412,7 @@ void WaterSurface::copyNormalsToTexture(std::vector<unsigned char>& normals)
 
     ID3D11Resource* resource = nullptr;
     _normalMapTexture->GetResource(&resource);
-    HRESULT hr = mpRenderer->getContext()->Map(resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    HRESULT hr = pDX11Renderer->getContext()->Map(resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
     if (SUCCEEDED(hr))
     {
         // Copy the normal data to the texture
@@ -383,7 +423,7 @@ void WaterSurface::copyNormalsToTexture(std::vector<unsigned char>& normals)
                    mSamplesTextureWidth * 3);
         }
         // Unmap the texture to apply changes
-        mpRenderer->getContext()->Unmap(resource, 0);
+        pDX11Renderer->getContext()->Unmap(resource, 0);
     }
     else
     {
@@ -392,3 +432,6 @@ void WaterSurface::copyNormalsToTexture(std::vector<unsigned char>& normals)
     }
 }
 
+void GridSurface::init()
+{
+}

@@ -127,6 +127,8 @@ public:
     static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
     virtual class IRenderable* getRenderable(IRenderable::Id mId) const = 0;
 
+    virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
+
     std::vector<std::unique_ptr<IRenderable>> mRenderables;
 
 protected:

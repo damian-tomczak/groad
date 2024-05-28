@@ -23,11 +23,50 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 namespace fs = std::filesystem;
 
+std::optional<App::Scene> showMenu(App::Settings& settings)
+{
+    std::optional<App::Scene> result{};
+
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("Scene"))
+        {
+            if (ImGui::MenuItem("CAD", "F1"))
+            {
+                result = App::Scene::CAD;
+            }
+            else if (ImGui::MenuItem("Duck", "F2"))
+            {
+                result = App::Scene::DUCK;
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Settings"))
+        {
+            ImGui::Checkbox("VSync", &settings.isVsync);
+
+            ImGui::EndMenu();
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
+    return result;
+}
+
 void App::renderUi()
 {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+
+    std::optional<App::Scene> selectedMode = showMenu(mSettings);
+    if (selectedMode != std::nullopt)
+    {
+        loadScene(*selectedMode);
+    }
 
     mIsMenuEnabled = false;
     mIsUiClicked = false;
