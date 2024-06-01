@@ -23,21 +23,21 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 namespace fs = std::filesystem;
 
-std::optional<App::Scene> showMenu(App::Settings& settings)
+std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName)
 {
-    std::optional<App::Scene> result{};
+    std::optional<App::Demo> result{};
 
     if (ImGui::BeginMainMenuBar())
     {
-        if (ImGui::BeginMenu("Scene"))
+        if (ImGui::BeginMenu("Demo"))
         {
             if (ImGui::MenuItem("CAD", "F1"))
             {
-                result = App::Scene::CAD;
+                result = App::Demo::CAD;
             }
             else if (ImGui::MenuItem("Duck", "F2"))
             {
-                result = App::Scene::DUCK;
+                result = App::Demo::DUCK;
             }
 
             ImGui::EndMenu();
@@ -49,6 +49,8 @@ std::optional<App::Scene> showMenu(App::Settings& settings)
 
             ImGui::EndMenu();
         }
+
+        ImGui::Text("| Current demo: %s", demoName);
 
         ImGui::EndMainMenuBar();
     }
@@ -62,10 +64,10 @@ void App::renderUi()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    std::optional<App::Scene> selectedMode = showMenu(mSettings);
+    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpDemoName);
     if (selectedMode != std::nullopt)
     {
-        loadScene(*selectedMode);
+        loadDemo(*selectedMode);
     }
 
     mIsMenuEnabled = false;
@@ -128,7 +130,7 @@ void App::renderUi()
         }
     }
 
-    if (ImGui::Button("Clear Scene"))
+    if (ImGui::Button("Clear Demo"))
     {
         mpRenderer->mRenderables.clear();
     }

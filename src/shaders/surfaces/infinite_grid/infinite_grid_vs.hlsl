@@ -4,7 +4,7 @@ matrix invView;
 matrix proj;
 matrix invProj;
 matrix texMtx;
-float3 cameraPos;
+float4 cameraPos;
 int flags;
 int screenWidth;
 int screenHeight;

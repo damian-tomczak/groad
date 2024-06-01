@@ -2,7 +2,7 @@ module;
 
 #include "utils.h"
 
-export module scene;
+export module demo;
 import dx11renderer;
 import surface;
 import core;
@@ -10,28 +10,29 @@ import dx11renderer;
 
 export
 {
-class IScene
+class IDemo
 {
 public:
-
     virtual void init()
     {
         mpSurface->init();
     }
-    virtual void draw() = 0;
+    virtual void draw(GlobalCB& cb) = 0;
     virtual void processInput() = 0;
     virtual void update(float dt)
     {
         mpSurface->update(dt);
     }
 
-    void drawSurface() const
+    void drawSurface(GlobalCB& cb) const
     {
-        mpSurface->draw();
+        mpSurface->draw(cb);
     }
 
+    const char* mpDemoName;
+
 protected:
-    IScene(IRenderer* pRenderer) : mpRenderer{pRenderer}
+    IDemo(const char* demoName, IRenderer* pRenderer) : mpRenderer{pRenderer}, mpDemoName{demoName}
     {
 
     }
@@ -40,32 +41,32 @@ protected:
     IRenderer* mpRenderer;
 };
 
-class CadScene : public IScene
+class CADDemo : public IDemo
 {
 public:
-    CadScene(IRenderer* pRenderer);
+    CADDemo(IRenderer* pRenderer);
 
     void init() override;
     void update(float dt) override;
-    void draw() override;
+    void draw(GlobalCB& cb) override;
     void processInput() override;
 };
 
-class DuckScene : public IScene
+class DuckDemo : public IDemo
 {
 public:
-    DuckScene(IRenderer* pRenderer);
+    DuckDemo(IRenderer* pRenderer);
 
     void init() override;
     void update(float dt) override;
-    void draw() override;
+    void draw(GlobalCB& cb) override;
     void processInput() override;
 };
 }
 
 module :private;
 
-CadScene::CadScene(IRenderer* pRenderer) : IScene{pRenderer}
+CADDemo::CADDemo(IRenderer* pRenderer) : IDemo{"CADDemo", pRenderer}
 {
     mpSurface = std::make_unique<GridSurface>(mpRenderer);
 
@@ -124,51 +125,51 @@ CadScene::CadScene(IRenderer* pRenderer) : IScene{pRenderer}
     mpRenderer->addRenderable(std::move(pBezier));
 }
 
-void CadScene::init()
+void CADDemo::init()
 {
-    IScene::init();
+    IDemo::init();
 }
 
-void CadScene::draw()
+void CADDemo::draw(GlobalCB& cb)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
     ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
 }
 
-void CadScene::processInput()
+void CADDemo::processInput()
 {
 
 }
 
-void CadScene::update(float dt)
+void CADDemo::update(float dt)
 {
-    IScene::update(dt);
+    IDemo::update(dt);
 
 }
 
-DuckScene::DuckScene(IRenderer* pRenderer) : IScene{pRenderer}
+DuckDemo::DuckDemo(IRenderer* pRenderer) : IDemo{"DuckDemo", pRenderer}
 {
     mpSurface = std::make_unique<WaterSurface>(mpRenderer, 10.0f, 10.0f, 256, 256);
 }
 
-void DuckScene::init()
+void DuckDemo::init()
 {
-    IScene::init();
+    IDemo::init();
 
 }
 
-void DuckScene::draw()
+void DuckDemo::draw(GlobalCB& cb)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
     ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
 }
 
-void DuckScene::processInput()
+void DuckDemo::processInput()
 {
 
 }
 
-void DuckScene::update(float dt)
+void DuckDemo::update(float dt)
 {
-    IScene::update(dt);
+    IDemo::update(dt);
 }

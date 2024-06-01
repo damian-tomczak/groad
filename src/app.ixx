@@ -21,7 +21,7 @@ import core;
 import core.options;
 import window;
 import dx11renderer;
-import scene;
+import demo;
 
 using namespace std::chrono;
 using namespace DirectX;
@@ -46,7 +46,7 @@ public:
     void update(float dt);
     void draw();
 
-    enum class Scene
+    enum class Demo
     {
         DEFAULT,
         CAD = DEFAULT,
@@ -55,13 +55,13 @@ public:
 
     struct Settings
     {
-        bool isVsync;
+        bool isVsync = true;
     } mSettings{};
 
 private:
     void processInput(IWindow::Message msg, float deltaTime);
     void renderUi();
-    void loadScene(App::Scene mode);
+    void loadDemo(App::Demo mode);
 
     const ParsedOptions mOptions;
     Camera mCamera{0.0f, 0.5f, -10.0f};
@@ -103,11 +103,13 @@ private:
     bool mIsShiftPressed{};
     bool mIsCameraInMovement{};
 
-    Scene mMode{};
+    Demo mMode{};
 
-    std::unique_ptr<IScene> mpScene;
+    std::unique_ptr<IDemo> mpDemo;
 
     std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
+
+    LightsCB mLights{.pos = {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}};
 };
 
 module :private;
@@ -152,8 +154,10 @@ void App::init()
     ASSERT(mpRenderer != nullptr);
     mpRenderer->init();
 
-    mpScene = std::make_unique<CadScene>(mpRenderer);
-    mpScene->init();
+    mpDemo = std::make_unique<DuckDemo>(mpRenderer);
+    mpDemo->init();
+
+    //mpRenderer->createCB(mLights);
 }
 
 void App::run()
@@ -221,7 +225,7 @@ void App::update(float dt)
         mCamera.moveCamera(Camera::FORWARD, dt);
     }
 
-    mpScene->update(dt);
+    mpDemo->update(dt);
 }
 
 void App::draw()
@@ -244,45 +248,41 @@ void App::draw()
     mViewMtx = mCamera.getViewMatrix();
     mProjMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 0.01f, 100.0f);
 
-    ConstantBufferData data
+    GlobalCB cb
     {
         .model = identity,
         .view = mViewMtx,
         .invView = XMMatrixInverse(nullptr, mViewMtx),
         .proj = mProjMtx,
         .invProj = XMMatrixInverse(nullptr, mProjMtx),
+        .texMtx = XMMatrixIdentity(),
+        .cameraPos = mCamera.getPos(),
         .screenWidth = mpWindow->getWidth(),
-        .screenHeight = mpWindow->getHeight()
+        .screenHeight = mpWindow->getHeight(),
     };
+    mpRenderer->createCB(cb);
 
-    D3D11_MAPPED_SUBRESOURCE cbData;
-    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-    memcpy(cbData.pData, &data, sizeof(data));
-    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
-
-    pContext->VSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    pContext->HSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    pContext->DSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    pContext->GSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
-    pContext->PSSetConstantBuffers(0, 1, mpRenderer->getAddressOfConstantBuffer());
+    pContext->VSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    pContext->HSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    pContext->DSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    pContext->GSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    pContext->PSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
 
     pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
-    mpScene->drawSurface();
+    mpDemo->drawSurface(cb);
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-    mpScene->draw();
+    mpDemo->draw(cb);
 #pragma region cursor
     const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
-    data.model = translationMat;
+    cb.model = translationMat;
 
-    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-    memcpy(cbData.pData, &data, sizeof(data));
-    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+    mpRenderer->updateCB(cb);
 
-    pContext->VSSetShader(mpRenderer->mpCursorVS.Get(), nullptr, 0);
-    pContext->GSSetShader(mpRenderer->mpCursorGS.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->mpCursorPS.Get(), nullptr, 0);
+    pContext->VSSetShader(mpRenderer->getShaders().pCursorVS.first.Get(), nullptr, 0);
+    pContext->GSSetShader(mpRenderer->getShaders().pCursorGS.first.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->getShaders().pCursorPS.first.Get(), nullptr, 0);
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
     pContext->Draw(6, 0);
     pContext->GSSetShader(nullptr, nullptr, 0);
@@ -332,13 +332,11 @@ void App::draw()
                 worldTranslation;
 // clang-format on
 
-        data.model = model;
+        cb.model = model;
 
-        data.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->mId) != mSelectedRenderableIds.end()) ? 1 : 0;
+        cb.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->mId) != mSelectedRenderableIds.end()) ? 1 : 0;
 
-        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-        memcpy(cbData.pData, &data, sizeof(data));
-        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+        mpRenderer->updateCB(cb);
 
         UINT vStride;
         UINT offset{};
@@ -354,20 +352,20 @@ void App::draw()
         if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
         {
             pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
-            pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
+            pContext->VSSetShader(mpRenderer->getShaders().pDefaultVS.first.Get(), nullptr, 0);
             pContext->HSSetShader(nullptr, nullptr, 0);
             pContext->DSSetShader(nullptr, nullptr, 0);
             pContext->GSSetShader(nullptr, nullptr, 0);
-            pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
+            pContext->PSSetShader(mpRenderer->getShaders().pDefaultPS.first.Get(), nullptr, 0);
         }
         else
         {
             pContext->IASetInputLayout(mpRenderer->getBezierInputLayout());
-            pContext->VSSetShader(mpRenderer->mpBezierC0VS.Get(), nullptr, 0);
-            pContext->HSSetShader(mpRenderer->mpBezierC0HS.Get(), nullptr, 0);
-            pContext->DSSetShader(mpRenderer->mpBezierC0DS.Get(), nullptr, 0);
+            pContext->VSSetShader(mpRenderer->getShaders().pBezierC0VS.first.Get(), nullptr, 0);
+            pContext->HSSetShader(mpRenderer->getShaders().pBezierC0HS.first.Get(), nullptr, 0);
+            pContext->DSSetShader(mpRenderer->getShaders().pBezierC0DS.first.Get(), nullptr, 0);
             pContext->GSSetShader(nullptr, nullptr, 0);
-            pContext->PSSetShader(mpRenderer->mpBezierC0PS.Get(), nullptr, 0);
+            pContext->PSSetShader(mpRenderer->getShaders().pBezierC0PS.first.Get(), nullptr, 0);
         }
 
         pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &vStride,
@@ -408,31 +406,26 @@ void App::draw()
 
                 pContext->Draw(1, 0);
 
-
                 if (pBezier->mIsPolygon)
                 {
                     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
                     pContext->HSSetShader(nullptr, nullptr, 0);
                     pContext->DSSetShader(nullptr, nullptr, 0);
-                    pContext->GSSetShader(mpRenderer->mpBezierC0BorderGS.Get(), nullptr, 0);
-                    int tmpFlags = data.flags;
-                    data.flags = 2;
+                    pContext->GSSetShader(mpRenderer->getShaders().pBezierC0BorderGS.first.Get(), nullptr, 0);
+                    int tmpFlags = cb.flags;
+                    cb.flags = 2;
 
-                    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-                    memcpy(cbData.pData, &data, sizeof(data));
-                    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+                    mpRenderer->updateCB(cb);
 
                     pContext->Draw(1, 0);
 
-                    data.flags = tmpFlags;
+                    cb.flags = tmpFlags;
                     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-                    pContext->HSSetShader(mpRenderer->mpBezierC0HS.Get(), nullptr, 0);
-                    pContext->DSSetShader(mpRenderer->mpBezierC0DS.Get(), nullptr, 0);
+                    pContext->HSSetShader(mpRenderer->getShaders().pBezierC0HS.first.Get(), nullptr, 0);
+                    pContext->DSSetShader(mpRenderer->getShaders().pBezierC0DS.first.Get(), nullptr, 0);
                     pContext->GSSetShader(nullptr, nullptr, 0);
 
-                    pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-                    memcpy(cbData.pData, &data, sizeof(data));
-                    pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+                    mpRenderer->updateCB(cb);
                 }
             }
         }
@@ -459,19 +452,17 @@ void App::draw()
         mpRenderer->buildGeometryBuffers();
 
         const XMMATRIX translationMat = XMMatrixTranslationFromVector(mPivotPos);
-        data.model = translationMat;
-        data.flags = 2;
+        cb.model = translationMat;
+        cb.flags = 2;
 
-        pContext->Map(mpRenderer->getConstantBuffer(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-        memcpy(cbData.pData, &data, sizeof(data));
-        pContext->Unmap(mpRenderer->getConstantBuffer(), 0);
+        mpRenderer->updateCB(cb);
 
         UINT vStride = sizeof(XMFLOAT3), offset = 0;
         pContext->IASetVertexBuffers(0, 1, &mpRenderer->mVertexBuffers.back(), &vStride, &offset);
         pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.back().Get(), DXGI_FORMAT_R32_UINT, 0);
 
-        pContext->VSSetShader(mpRenderer->mpVS.Get(), nullptr, 0);
-        pContext->PSSetShader(mpRenderer->mpPS.Get(), nullptr, 0);
+        pContext->VSSetShader(mpRenderer->getShaders().pDefaultVS.first.Get(), nullptr, 0);
+        pContext->PSSetShader(mpRenderer->getShaders().pDefaultPS.first.Get(), nullptr, 0);
         pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         auto pTest = mpRenderer->getRenderable(mId);
@@ -710,7 +701,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     };
 }
 
-void App::loadScene(App::Scene mode)
+void App::loadDemo(App::Demo mode)
 {
     mMode = mode;
 
@@ -718,15 +709,15 @@ void App::loadScene(App::Scene mode)
 
     switch (mMode)
     {
-    case App::Scene::CAD:
-        mpScene = std::make_unique<CadScene>(mpRenderer);
+    case App::Demo::CAD:
+        mpDemo = std::make_unique<CADDemo>(mpRenderer);
         break;
-    case App::Scene::DUCK:
-        mpScene = std::make_unique<DuckScene>(mpRenderer);
+    case App::Demo::DUCK:
+        mpDemo = std::make_unique<DuckDemo>(mpRenderer);
         break;
     default:
         break;
     }
 
-    mpScene->init();
+    mpDemo->init();
 }

@@ -19,7 +19,7 @@ file(GLOB_RECURSE MODULE_FILES
 os_files_filter(MODULE_FILES core/submodules/platform)
 
 file(GLOB_RECURSE SHADER_FILES
-    src/shaders/*
+    shaders/*
 )
 
 if (MSVC)
@@ -39,7 +39,7 @@ add_executable(${CMAKE_PROJECT_NAME}
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_23)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    d3d11 D3DCompiler imgui::imgui
+    d3d11 D3DCompiler imgui::imgui dxgi
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -64,9 +64,6 @@ source_group(TREE ${CMAKE_SOURCE_DIR} FILES
     ${HPP_FILES}
     ${MODULE_FILES}
     ${OTHER_FILES}
-)
-
-source_group(TREE ${ASSETS_DIR} FILES
     ${SHADER_FILES}
 )
 
