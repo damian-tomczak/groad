@@ -7,6 +7,10 @@
 #include <wrl/client.h>
 #include <DirectXMath.h>
 
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 using namespace Microsoft::WRL;
 using namespace DirectX;
 namespace std::filesystem

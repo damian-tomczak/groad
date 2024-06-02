@@ -9,28 +9,31 @@ int flags;
 int screenWidth;
 int screenHeight;
 
-struct VertexInput
+struct VSInput
 {
-    float3 position : POSITION0;
+    float3 pos : POSITION0;
 };
 
-struct PixelShaderInput
+struct PSInput
 {
-    float4 position : SV_POSITION;
-    float2 texCoord : TEXCOORD0;
-    float3 lightVec : TEXCOORD1;
-    float3 cameraVec : TEXCOORD2;
+    float4 pos : SV_POSITION;
+    float3 localPos : POSITION0;
+    float3 worldPos : POSITION1;
 };
 
-PixelShaderInput main(VertexInput input)
+PSInput main(VSInput i)
 {
-    PixelShaderInput output;
-    float4 worldPosition = float4(input.position, 1.0f);
+    PSInput o;
 
-    output.position = mul(mul(mul(projMtx, viewMtx), modelMtx), worldPosition);
-    output.texCoord = mul(texMtx, worldPosition).xz;
-    output.lightVec = float3(0, 5, 0) - input.position;
-    output.cameraVec = cameraPos.xyz - input.position;
+    o.localPos = i.pos;
+    o.localPos.y = -0.4f; /* Water Level */
 
-    return output;
+    o.pos = float4(i.pos, 1.0f);
+    o.worldPos = mul(modelMtx, o.pos).xyz;
+
+    o.pos = mul(modelMtx, o.pos);
+    o.pos = mul(viewMtx, o.pos);
+    o.pos = mul(projMtx, o.pos);
+
+    return o;
 }

@@ -46,6 +46,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     .
     ${ASSETS_DIR}
     core
+    ${EXTERNAL_DIR}/stb
 )
 
 set(PROJECT_DEFINITIONS

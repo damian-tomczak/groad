@@ -1,6 +1,3 @@
-// TODO:
-//#include "../../shaders.hpp"
-
 matrix model;
 matrix view;
 matrix invView;
@@ -12,63 +9,100 @@ int flags;
 int screenWidth;
 int screenHeight;
 
-Texture2D textureSampler : register(t0);
-SamplerState samplerState : register(s0);
+TextureCube envMap : register(t0);
+Texture2D normTexture : register(t1);
+sampler samp : register(s0);
 
-TextureCube cubemapSampler : register(t1);
-SamplerState cubeSamplerState : register(s1);
-
-struct VS_OUTPUT
+float3 normalMapping(float3 N, float3 T, float3 tn)
 {
-    float2 psTexCoord : TEXCOORD0;
+    float3 B = normalize(cross(N, T));
+
+    T = cross(B, N);
+
+    float3x3 m = { T,B,N };
+
+    return mul(transpose(m), tn);
+}
+
+float3 intersectRay(float3 position, float3 direction)
+{
+    /*
+    position - P
+    direction - R
+    */
+
+    float3 t_prim = max((1 - position) / direction, (-1 - position) / direction);
+
+    return (position + min(t_prim.x, min(t_prim.y, t_prim.z)) * direction);
+}
+
+float fresnel(float n1, float n2, float theta)
+{
+    float F0 = pow((n2 - n1) / (n2 + n1), 2);
+
+    return F0 + (1 - F0) * pow(1 - theta, 5);
+}
+
+struct PSInput
+{
+    float4 pos : SV_POSITION;
+    float3 localPos : POSITION0;
+    float3 worldPos : POSITION1;
 };
 
-float3 cubemapCoordFromAnyPoint(float3 origin, float3 direction)
+float4 main(PSInput i) : SV_TARGET
 {
-    float t = min(max((1 - origin.x) / direction.x, (-1 - origin.x) / direction.x),
-                  min(max((1 - origin.y) / direction.y, (-1 - origin.y) / direction.y),
-                      max((1 - origin.z) / direction.z, (-1 - origin.z) / direction.z)));
-    return origin + t * direction;
-}
+    float n1 = 1.0f;
+    float n2 = 4.0f / 3.0f;
 
-static const float rzero = pow((1.33 - 1.0) / (1.33 + 1.0), 2.0);
-float schlick(float cosfi)
-{
-    return rzero + (1.0 - rzero) * pow(1.0 - cosfi, 5.0);
-}
+    float3 viewVec = normalize(cameraPos.xyz - i.worldPos);
+    float2 texCoord = (i.localPos.xz + float2(1.0f, 1.0f)) / 2.0f;
 
-float4 main(VS_OUTPUT input) : SV_Target
-{
-    float3 lightColor = float3(1, 1, 1);
-    float3 lightVec = normalize(cameraPos.xyz);
-    float3 cameraVec = normalize(cameraPos.xyz);
+    /* Normal Mapping */
+    float3 N = normalize(float3(0.0f, 1.0f, 0.0f));
 
-    float3 waterNormalTex = textureSampler.Sample(samplerState, input.psTexCoord).rgb;
-    float3 waterNormal = normalize(2.0 * (waterNormalTex - float3(0.5, 0.5, 0.5)));
+    float3 dPdx = ddx(i.worldPos);
+    float3 dPdy = ddy(i.worldPos);
+    float2 dtdx = ddx(texCoord);
+    float2 dtdy = ddy(texCoord);
 
-    float diffuse = clamp(dot(waterNormal, lightVec), 0.0, 1.0);
-    float3 diffuseColor = diffuse * lightColor;
+    float3 T = normalize(-dPdx * dtdy.y + dPdy * dtdx.y);
 
-    float3 reflectVec = reflect(-lightVec, waterNormal);
-    float specularStrength = 0.4;
-    float specular = pow(max(dot(cameraVec, reflectVec), 0.0), 32);
-    float3 specularColor = specularStrength * specular * lightColor;
+    float3 normal_from_texture = normTexture.Sample(samp, texCoord).xyz;
+    normal_from_texture = 2 * normal_from_texture - float3(1.0f, 1.0f, 1.0f);
 
-    float2 positionOnCubePlane = (2.0 * input.psTexCoord) - 1.0;
-    float3 positionInCube = float3(positionOnCubePlane.x, 0, positionOnCubePlane.y);
+    float3 norm = normalize(normalMapping(N, T, normal_from_texture));
 
-    float3 waterReflectionVec = reflect(-cameraVec, waterNormal);
-    float3 fixedWaterReflectionVec = cubemapCoordFromAnyPoint(positionInCube, waterReflectionVec);
-    float3 cubemapReflectionColor = cubemapSampler.Sample(cubeSamplerState, fixedWaterReflectionVec).rgb;
+    /* Fressnel Reflection */
+    float3 reflect_vector = reflect(-viewVec, norm);
+    float3 refract_vector;
 
-    float refractionRatio = 1.0 / 1.33;
-    float3 waterRefractionVec = refract(-cameraVec, waterNormal, refractionRatio);
-    float3 fixedWaterRefractionVec = cubemapCoordFromAnyPoint(positionInCube, waterRefractionVec);
-    float3 cubemapRefractionColor = cubemapSampler.Sample(cubeSamplerState, fixedWaterRefractionVec).rgb;
+    if (dot(norm, viewVec) > 0) /* Nad wod¹ */
+    {
+        refract_vector = refract(-viewVec, norm, n1 / n2);
+    }
+    else /* Pod wod¹ */
+    {
+        norm = -norm;
+        refract_vector = refract(-viewVec, norm, n2 / n1);
+    }
 
-    float fresnelFactor = schlick(abs(cameraVec.y));
-    float3 reflRefrFactor = (1.0 - fresnelFactor) * cubemapRefractionColor + fresnelFactor * cubemapReflectionColor;
+    float3 tex_colour_reflect = envMap.Sample(samp, intersectRay(i.localPos, reflect_vector)).xyz;
+    float3 tex_colour_refract = envMap.Sample(samp, intersectRay(i.localPos, refract_vector)).xyz;
 
-    float3 finalColor = reflRefrFactor * (diffuseColor + specularColor);
-    return float4(finalColor, 1);
+    float3 color = float3(0.0f, 0.0f, 0.0f);
+
+    if (any(refract_vector)) /* Robienie ku³ka z efektem ca³kowitego wewnêtrznego odbicia */
+    {
+        float fresnel_value = fresnel(n1, n2, max(dot(norm, viewVec), 0.0f));
+        color = lerp(tex_colour_refract, tex_colour_reflect, fresnel_value);
+    }
+    else
+    {
+        color = tex_colour_reflect;
+    }
+
+    //color += float3(0.0f, 0.1f, 0.2f);
+
+    return float4(pow(color, 2), 1.0f);
 }

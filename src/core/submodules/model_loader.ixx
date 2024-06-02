@@ -99,7 +99,7 @@ namespace fs = std::filesystem;
 //         aiMaterial* material = demo->mMaterials[mesh->mMaterialIndex];
 //
 //         std::vector<Texture> diffuseMaps =
-//             this->loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", demo);
+//             loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", demo);
 //         textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
 //     }
 //
@@ -148,7 +148,7 @@ namespace fs = std::filesystem;
 //             texture.type = typeName;
 //             texture.path = str.C_Str();
 //             textures.push_back(texture);
-//             this->textures_loaded_.push_back(texture); // Store it as texture loaded for entire model, to ensure we
+//             textures_loaded_.push_back(texture); // Store it as texture loaded for entire model, to ensure we
 //                                                        // won't unnecesery load duplicate textures.
 //         }
 //     }

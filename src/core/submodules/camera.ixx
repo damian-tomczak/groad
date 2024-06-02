@@ -47,9 +47,9 @@ public:
         return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
-    void moveCamera(const CameraMovement direction, float deltaTime)
+    void moveCamera(const CameraMovement direction, float dt)
     {
-        const float velocity = mMovementSpeed * deltaTime;
+        const float velocity = mMovementSpeed * dt;
 
         switch (direction)
         {

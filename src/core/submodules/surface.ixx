@@ -31,63 +31,122 @@ export class WaterSurface : public ISurface
     static constexpr UINT offset = 0;
 
 public:
-    WaterSurface(IRenderer* pRenderer, float planeWidth, float planeHeight, int samplesTextureWidth,
-                 int samplesTextureHeight);
+    WaterSurface(IRenderer* pRenderer, float planeSize, unsigned int textureSize);
 
     void init() override;
     void draw(GlobalCB& cb) override;
 
-    void applyDisturbanceInWorldSpace(XMFLOAT3 position, float strength);
-    void update(float deltaTime) override;
-
-protected:
-    void clearSamples();
-    void calculateNormalMap();
-    std::vector<unsigned char> buildNormalMap();
-    void copyNormalsToTexture(std::vector<unsigned char>& normals);
+    void update(float dt) override;
 
 private:
+    class HeightMapTexture
+    {
+    public:
+        HeightMapTexture();
+
+        void SetValue(int x, int y, float value)
+        {
+            height_map_texture[x][y] = value;
+        }
+
+        int GetSize()
+        {
+            return mTextureSize;
+        }
+
+        float GetValue(int x, int y)
+        {
+            return height_map_texture[x][y];
+        }
+
+    private:
+        static const unsigned int mTextureSize = 256;
+        float** height_map_texture;
+    };
+
+    class WaveTexture
+    {
+    public:
+    public:
+        WaveTexture(IRenderer* pRenderer);
+
+        void Update();
+        void SetValue(int x, int y, XMFLOAT3 value);
+        unsigned int GetSize()
+        {
+            return 256;
+        }
+
+        ComPtr<ID3D11ShaderResourceView> GetTexture();
+
+    private:
+        unsigned int texture_stride;
+        unsigned int txture_size;
+
+        std::array<BYTE, 256 * 256 * 4> texture_data;
+
+        ComPtr<ID3D11Texture2D> texture;
+        ComPtr<ID3D11ShaderResourceView> texture_resource_view;
+        IRenderer* mpRenderer;
+    };
+
+    class AbsorptionTexture
+    {
+    public:
+        AbsorptionTexture();
+
+        int GetSize()
+        {
+            return mTextureSize;
+        }
+
+        float GetValue(int x, int y)
+        {
+            return absorption_texture[x][y];
+        }
+
+    private:
+        static const unsigned int mTextureSize = 256;
+        float** absorption_texture;
+    };
+
+    void CreateRipple(int x, int y)
+    {
+        mpCurrentHeightMap->SetValue(x, y, 2.25f);
+    }
+
+    void UpdateHeightMap();
+    void UpdateWaveTextureMap();
+    void GetRandomDrop()
+    {
+        static std::uniform_real_distribution<float> random(0, 100);
+
+        if (random(mRandom) > 65.0f)
+        {
+            static std::uniform_real_distribution<float> random_x(0, 256);
+            static std::uniform_real_distribution<float> random_y(0, 256);
+
+            CreateRipple((int)random_x(mRandom), (int)random_y(mRandom));
+        }
+    }
+
+    std::default_random_engine mRandom;
+
+    WaveTexture mWaveTexture;
+    AbsorptionTexture absorption_texture;
+    std::array<HeightMapTexture, 3> height_map_textures;
+    HeightMapTexture* mpNextHeightMap;
+    HeightMapTexture* mpCurrentHeightMap;
+    HeightMapTexture* mpPreviousHeightMap;
+
     ComPtr<ID3D11Buffer> mpVertexBuffer, mpIndexBuffer;
-    ComPtr<ID3D11ShaderResourceView> mCubeMap;
-
-    float mPlaneWidth, mPlaneHeight;
-    unsigned mSamplesTextureWidth, mSamplesTextureHeight;
-    std::vector<float> _samples, _samples2;
-    std::vector<XMFLOAT3> _normals;
-    ComPtr<ID3D11ShaderResourceView> mpNormalMapTexture;
-
-    std::vector<float>*_currentSamples{}, *_previousSamples{};
-
-    XMMATRIX _modelMatrix, _invModelMatrix, mTexMtx;
-
     ComPtr<ID3D11InputLayout> mpInputLayout{};
-    ComPtr<ID3D11SamplerState> mpSamplerState{};
-};
+    ComPtr<ID3D11RasterizerState> mpRasterizer;
 
-export class GridSurface : public ISurface
-{
-public:
-    GridSurface(IRenderer* pRenderer) : ISurface{pRenderer}
-    {
+    unsigned int mTextureSize;
+    float mPlaneWidth, mPlaneHeight;
 
-    }
-
-    void init() override;
-    void draw(GlobalCB& cb) override
-    {
-        DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
-        ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
-
-        pContext->VSSetShader(pDX11Renderer->getShaders().pGridVS.first.Get(), nullptr, 0);
-        pContext->PSSetShader(pDX11Renderer->getShaders().pGridPS.first.Get(), nullptr, 0);
-        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pContext->Draw(6, 0);
-    }
-
-    void update(float dt) override
-    {
-
-    }
+    XMMATRIX mTexMtx;
 };
 
 module :private;
@@ -128,163 +187,78 @@ void createPlane(ID3D11Device* pDevice, float width, float length, ID3D11Buffer*
     HR(pDevice->CreateBuffer(&bufferDesc, &initData, pIndexBuffer));
 }
 
-WaterSurface::WaterSurface(IRenderer* pRenderer, float planeWidth, float planeHeight, int samplesTextureWidth, int samplesTextureHeight)
-    : ISurface{pRenderer}, mPlaneWidth(planeWidth), mPlaneHeight(planeHeight),
-      mSamplesTextureWidth(samplesTextureWidth), mSamplesTextureHeight(samplesTextureHeight)
+WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned int textureSize)
+    : ISurface{pRenderer}, mPlaneWidth{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer}
 {
-    _modelMatrix = XMMatrixIdentity();
-    _invModelMatrix = XMMatrixInverse(nullptr, _modelMatrix);
-}
-
-void WaterSurface::applyDisturbanceInWorldSpace(XMFLOAT3 position, float strength)
-{
-    XMVECTOR posVec = XMLoadFloat3(&position);
-    posVec = XMVectorSetW(posVec, 1.0f);
-
-    XMMATRIX invModelMatrix = XMMatrixInverse(nullptr, _modelMatrix);
-    XMVECTOR textureSpacePositionVec = XMVector3TransformCoord(posVec, invModelMatrix);
-    textureSpacePositionVec = XMVector3TransformCoord(textureSpacePositionVec, mTexMtx);
-
-    XMFLOAT3 textureSpacePosition;
-    XMStoreFloat3(&textureSpacePosition, textureSpacePositionVec);
-
-    if (textureSpacePosition.x < 0.0f || textureSpacePosition.x > 1.0f || textureSpacePosition.z < 0.0f ||
-        textureSpacePosition.z > 1.0f)
-    {
-        return;
-    }
-
-    int coordX = static_cast<int>(textureSpacePosition.x * mSamplesTextureWidth);
-    int coordY = static_cast<int>(textureSpacePosition.z * mSamplesTextureHeight);
-
-    (*_currentSamples)[coordY * mSamplesTextureWidth + coordX] += strength;
-}
-
-void WaterSurface::update(float deltaTime)
-{
-    int N = 256;
-    float h = 2.0f / (N - 1);
-    float c = 1.0f;
-    float dt = 1.0f / N;
-
-    float A = (c * c) * (dt * dt) / (h * h);
-    float B = 2 - 4 * A;
-
-    for (unsigned y = 0; y < mSamplesTextureHeight; ++y)
-    {
-        for (unsigned x = 0; x < mSamplesTextureWidth; ++x)
-        {
-            int baseIndex = y * mSamplesTextureWidth + x;
-            float previous = (*_previousSamples)[baseIndex];
-            float current = (*_currentSamples)[baseIndex];
-            float neighborsSum = 0.0f;
-            int dispX[] = {-1, 1, 0, 0};
-            int dispY[] = {0, 0, -1, 1};
-
-            for (int i = 0; i < 4; ++i)
-            {
-                int fx = x + dispX[i];
-                int fy = y + dispY[i];
-                if (fx >= 0 && fx < static_cast<int>(mSamplesTextureWidth) && fy >= 0 && fy < static_cast<int>(mSamplesTextureHeight))
-                {
-                    neighborsSum += (*_currentSamples)[fy * mSamplesTextureWidth + fx];
-                }
-            }
-
-            float px = static_cast<float>(x) / (mSamplesTextureWidth - 1);
-            float py = static_cast<float>(y) / (mSamplesTextureHeight - 1);
-            float l = std::min(px, std::min(1.0f - px, std::min(py, 1.0f - py)));
-            float damping = 0.95f * std::min(1.0f, l / 0.01f);
-
-            (*_previousSamples)[baseIndex] = damping * (A * neighborsSum + B * current - previous);
-        }
-    }
-
-    swap(_currentSamples, _previousSamples);
-
-    calculateNormalMap();
 }
 
 void WaterSurface::init()
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
-    clearSamples();
+    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneHeight, mpVertexBuffer.GetAddressOf(),
+                mpIndexBuffer.GetAddressOf());
 
-    const D3D11_TEXTURE2D_DESC texDesc{
-        .Width = mSamplesTextureWidth,
-        .Height = mSamplesTextureHeight,
-        .MipLevels = 1,
-        .ArraySize = 1,
-        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-        .SampleDesc{
-            .Count = 1,
-            .Quality = 0,
-        },
-        .Usage = D3D11_USAGE_DYNAMIC,
-        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
-        .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        .MiscFlags = 0,
+    mpNextHeightMap = &this->height_map_textures[0];
+    mpCurrentHeightMap = &this->height_map_textures[1];
+    mpPreviousHeightMap = &this->height_map_textures[2];
+
+    const D3D11_RASTERIZER_DESC desc{
+        .FillMode = D3D11_FILL_SOLID,
+        .CullMode = D3D11_CULL_NONE,
+        .FrontCounterClockwise = false,
+        .DepthBias = 0,
+        .DepthBiasClamp = 0.0f,
+        .SlopeScaledDepthBias = 0.0f,
+        .DepthClipEnable = true,
+        .ScissorEnable = false,
+        .MultisampleEnable = false,
+        .AntialiasedLineEnable = false,
     };
 
-    std::vector<unsigned char> normalMapData = buildNormalMap();
+    HR(pDX11Renderer->getDevice()->CreateRasterizerState(&desc, mpRasterizer.GetAddressOf()));
+}
 
-    const D3D11_SUBRESOURCE_DATA initData{
-        .pSysMem = normalMapData.data(),
-        .SysMemPitch = mSamplesTextureWidth * 3,
-    };
 
-    ID3D11Texture2D* pTexture{};
-    HR(pDX11Renderer->getDevice()->CreateTexture2D(&texDesc, &initData, &pTexture));
+void WaterSurface::update(float dt)
+{
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
-    HR(pDX11Renderer->getDevice()->CreateShaderResourceView(pTexture, nullptr, &mpNormalMapTexture));
-    pTexture->Release();
+    UpdateHeightMap();
+    UpdateWaveTextureMap();
+    GetRandomDrop();
 
-    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneHeight, mpVertexBuffer.GetAddressOf(), mpIndexBuffer.GetAddressOf());
-
-    mTexMtx = XMMatrixScaling(1.0f / mPlaneWidth, 0, 1.0f / mPlaneHeight);
-    mTexMtx = XMMatrixTranslation(0.5f * mPlaneWidth, 0, 0.5f * mPlaneHeight) * mTexMtx;
-
-    std::array des{
-        D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-    };
-
-    HR(pDX11Renderer->getDevice()->CreateInputLayout(
-        des.data(), static_cast<UINT>(des.size()),
-                                   pDX11Renderer->getShaders().pDefaultVS.second->GetBufferPointer(),
-                                   pDX11Renderer->getShaders().pDefaultVS.second->GetBufferSize(),
-                                   &mpInputLayout));
-
-    const D3D11_SAMPLER_DESC sampDesc{
-        .Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-        .AddressU = D3D11_TEXTURE_ADDRESS_WRAP,
-        .AddressV = D3D11_TEXTURE_ADDRESS_WRAP,
-        .AddressW = D3D11_TEXTURE_ADDRESS_WRAP,
-        .ComparisonFunc = D3D11_COMPARISON_NEVER,
-        .MinLOD = 0,
-        .MaxLOD = D3D11_FLOAT32_MAX,
-    };
-
-    HR(pDX11Renderer->getDevice()->CreateSamplerState(&sampDesc, &mpSamplerState));
+    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, &mWaveTexture.GetTexture());
 }
 
 void WaterSurface::draw(GlobalCB& cb)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
-    auto normalMapData = buildNormalMap();
-    copyNormalsToTexture(normalMapData);
+    pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
+
+    //water_effect.SetCameraPosition(m_camPos);
+    //water_effect.Begin(m_device.context());
+
+    //m_cbWorldMtx->Update(m_device.context(), water_mesh_matrix);
+    //water_mesh.Render(m_device.context());
+
+    //    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+
+    //auto normalMapData = buildNormalMap();
+    //copyNormalsToTexture(normalMapData);
 
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().pWaterSurfaceVS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().pWaterSurfacePS.first.Get(), nullptr, 0);
 
-    // TODO: investigate
-    auto var = mpNormalMapTexture;
-    pDX11Renderer->getContext()->PSSetShaderResources(0, 1, &mpNormalMapTexture);
-    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, &mCubeMap);
+    cb.texMtx = mTexMtx;
+    pDX11Renderer->updateCB(cb);
 
-    ID3D11SamplerState* pSamplers[]{mpSamplerState.Get(), mpSamplerState.Get()};
-    pDX11Renderer->getContext()->PSSetSamplers(0, 2, pSamplers);
+    //pDX11Renderer->getContext()->PSSetShaderResources(0, 1, mpNormalMapTexture.GetAddressOf());
+    //pDX11Renderer->getContext()->PSSetShaderResources(1, 1, mpCubeMap.GetAddressOf());
+
+    //ID3D11SamplerState* pSamplers[]{mpSamplerState.Get(), mpSamplerState.Get()};
+    //pDX11Renderer->getContext()->PSSetSamplers(0, 2, pSamplers);
 
     pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(), &stride, &offset);
     pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
@@ -293,116 +267,195 @@ void WaterSurface::draw(GlobalCB& cb)
     pDX11Renderer->getContext()->DrawIndexed(6, 0, 0);
 }
 
-void WaterSurface::clearSamples()
+void WaterSurface::UpdateHeightMap()
 {
-    unsigned totalSamples = mSamplesTextureWidth * mSamplesTextureHeight;
-    _samples.resize(totalSamples);
-    _samples2.resize(totalSamples);
-    _normals.resize(totalSamples);
+    auto tmp_height_map_texture = mpPreviousHeightMap;
+    mpPreviousHeightMap = mpCurrentHeightMap;
+    mpCurrentHeightMap = mpNextHeightMap;
+    mpNextHeightMap = tmp_height_map_texture;
 
-    _currentSamples = &_samples;
-    _previousSamples = &_samples2;
+    const float wave_speed = 1.0f;
+    const float integration_step = 1.0f / mTextureSize;
 
-    for (unsigned i = 0; i < totalSamples; ++i)
+    float h_value = 2.0f / (mTextureSize - 1);
+    const float a_coef = wave_speed * wave_speed * integration_step * integration_step / (h_value * h_value);
+    const float b_coef = 2.0f - 4.0f * a_coef;
+
+    for (unsigned int y = 0; y < mTextureSize; ++y)
     {
-        _samples[i] = 0.0f;
-        _samples2[i] = 0.0f;
-        _normals[i] = XMFLOAT3(0.0f, 1.0f, 0.0f);
-    }
-}
-
-void WaterSurface::calculateNormalMap()
-{
-    for (unsigned y = 0; y < mSamplesTextureHeight; ++y)
-    {
-        for (unsigned x = 0; x < mSamplesTextureWidth; ++x)
+        for (unsigned int x = 0; x < mTextureSize; ++x)
         {
-            int baseIndex = y * mSamplesTextureWidth + x;
-            _normals[baseIndex] = XMFLOAT3(0.0f, 0.0f, 0.0f);
-        }
-    }
+            int lastX = x > 0 ? x - 1 : 0;
+            int nextX = x < mTextureSize - 1 ? x + 1 : mTextureSize - 1;
 
-    for (unsigned y = 0; y < mSamplesTextureHeight; ++y)
-    {
-        for (unsigned x = 0; x < mSamplesTextureWidth; ++x)
-        {
-            int baseIndex = y * mSamplesTextureWidth + x;
+            int lastY = y > 0 ? y - 1 : 0;
+            int nextY = y < mTextureSize - 1 ? y + 1 : mTextureSize - 1;
 
-            int dispX[] = {-1, 1};
-            int dispY[] = {-1, 1};
-            XMVECTOR sum{};
+            float absorption_value = absorption_texture.GetValue(x, y);
+            float value =
+                absorption_value *
+                (a_coef *
+                     (mpCurrentHeightMap->GetValue(nextX, y) + mpCurrentHeightMap->GetValue(lastX, y) +
+                      mpCurrentHeightMap->GetValue(x, lastY) + mpCurrentHeightMap->GetValue(x, nextY)) +
+                 b_coef * mpCurrentHeightMap->GetValue(x, y) - mpPreviousHeightMap->GetValue(x, y));
 
-            for (int i = 0; i < 2; ++i)
-            {
-                int fx = x + dispX[i];
-                int fy = y + dispY[i];
-                if (fx < 0 || fx >= static_cast<int>(mSamplesTextureWidth) || fy < 0 || fy >= static_cast<int>(mSamplesTextureHeight))
-                {
-                    continue;
-                }
-
-                int dxShiftIndex = y * mSamplesTextureWidth + fx;
-                int dyShiftIndex = fy * mSamplesTextureWidth + x;
-
-                XMVECTOR originPosition = XMVectorSet(static_cast<float>(x), _samples[baseIndex], static_cast<float>(y), 0.0f);
-                XMVECTOR dxPosition = XMVectorSet(static_cast<float>(fx), _samples[dxShiftIndex], static_cast<float>(y), 0.0f);
-                XMVECTOR dyPosition = XMVectorSet(static_cast<float>(x), _samples[dyShiftIndex], static_cast<float>(fy), 0.0f);
-
-                XMVECTOR dx = XMVectorSubtract(dxPosition, originPosition);
-                XMVECTOR dy = XMVectorSubtract(dyPosition, originPosition);
-                sum = XMVectorAdd(sum, XMVector3Cross(dy, dx));
-            }
-
-            sum = XMVector3Normalize(sum);
-            XMStoreFloat3(&_normals[baseIndex], sum);
+            mpNextHeightMap->SetValue(x, y, value);
         }
     }
 }
 
-std::vector<unsigned char> WaterSurface::buildNormalMap()
+void WaterSurface::UpdateWaveTextureMap()
 {
-    auto convertNormalCoordToColor = [](float coord) -> unsigned char {
-        coord = std::max(-1.0f, std::min(1.0f, coord));
-        return static_cast<unsigned char>(255.0f * (coord + 1.0f) / 2.0f);
-    };
+    int mTextureSize = mWaveTexture.GetSize();
 
-    unsigned totalSamples = mSamplesTextureWidth * mSamplesTextureHeight;
-    std::vector<unsigned char> normalMapData(3 * totalSamples);
-
-    for (unsigned y = 0; y < mSamplesTextureHeight; ++y)
+    for (int y = 0; y < mTextureSize; ++y)
     {
-        for (unsigned x = 0; x < mSamplesTextureWidth; ++x)
+        for (int x = 0; x < mTextureSize; ++x)
         {
-            int baseIndex = y * mSamplesTextureWidth + x;
-            XMFLOAT3 normal = _normals[baseIndex];
+            int prevX = (x + mTextureSize - 1) % mTextureSize;
+            int nextX = (x + 1) % mTextureSize;
+            int prevY = (y + mTextureSize - 1) % mTextureSize;
+            int nextY = (y + 1) % mTextureSize;
 
-            normalMapData[3 * baseIndex + 0] = convertNormalCoordToColor(normal.x);
-            normalMapData[3 * baseIndex + 1] = convertNormalCoordToColor(normal.y);
-            normalMapData[3 * baseIndex + 2] = convertNormalCoordToColor(normal.z);
+            auto p00 = mpNextHeightMap->GetValue(prevX, prevY);
+            auto p10 = mpNextHeightMap->GetValue(x, prevY);
+            auto p20 = mpNextHeightMap->GetValue(nextX, prevY);
+
+            auto p01 = mpNextHeightMap->GetValue(prevX, y);
+            auto p11 = mpNextHeightMap->GetValue(x, y);
+            auto p21 = mpNextHeightMap->GetValue(nextX, y);
+
+            auto p02 = mpNextHeightMap->GetValue(prevX, nextY);
+            auto p12 = mpNextHeightMap->GetValue(x, nextY);
+            auto p22 = mpNextHeightMap->GetValue(nextX, nextY);
+
+            float horizontal = (p01 - p21) * 2.0f + p20 + p22 - p00 - p02;
+            float vertical = (p12 - p10) * 2.0f + p22 + p02 - p20 - p00;
+            float depth = 1.0f / 2.0f;
+
+            float r = horizontal;
+            float g = vertical;
+            float b = depth;
+
+            float length = std::sqrt(r * r + g * g + b * b);
+            r /= length;
+            g /= length;
+            b /= length;
+
+            mWaveTexture.SetValue(x, y, XMFLOAT3{r, g, b});
         }
     }
-
-    return normalMapData;
+    mWaveTexture.Update();
 }
 
-void WaterSurface::copyNormalsToTexture(std::vector<unsigned char>& normals)
+WaterSurface::AbsorptionTexture::AbsorptionTexture()
+{
+    /* Allocate Mamory */
+    absorption_texture = new float*[mTextureSize];
+
+    for (int i = 0; i < mTextureSize; i++)
+        absorption_texture[i] = new float[mTextureSize];
+
+    /* Calculate Distance Data */
+    float half_size_value = mTextureSize / 2.0f;
+
+    for (int x = 0; x < mTextureSize; x++)
+        for (int y = 0; y < mTextureSize; y++)
+        {
+            float posX = x / static_cast<float>(mTextureSize - 1);
+            float posY = y / static_cast<float>(mTextureSize - 1);
+
+            float left = posX;
+            float right = 1.0f - posX;
+            float top = posY;
+            float bottom = 1.0f - posY;
+
+            float leftDistance = std::max(left, std::max(top, bottom));
+            float rightDistance = std::max(right, std::max(top, bottom));
+            float topDistance = std::max(top, std::max(left, right));
+            float bottomDistance = std::max(bottom, std::max(left, right));
+
+            float l = std::min(std::min(leftDistance, rightDistance), std::min(topDistance, bottomDistance));
+            float absorption_value = 0.95f * std::min(1.0f, l * 5.0f);
+
+            absorption_texture[x][y] = absorption_value;
+        }
+}
+
+WaterSurface::HeightMapTexture::HeightMapTexture()
+{
+    height_map_texture = new float*[mTextureSize];
+
+    for (int i = 0; i < mTextureSize; i++)
+        height_map_texture[i] = new float[mTextureSize];
+
+    for (int x = 0; x < mTextureSize; x++)
+        for (int y = 0; y < mTextureSize; y++)
+            height_map_texture[x][y] = 0.0f;
+}
+
+WaterSurface::WaveTexture::WaveTexture(IRenderer* pRenderer) : mpRenderer(pRenderer)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
-    if (mpNormalMapTexture != nullptr)
-    {
-        D3D11_MAPPED_SUBRESOURCE mappedResource{};
+    unsigned int texture_bpp = 4u;
+    unsigned int texture_width = 256u;
+    unsigned int texture_height = 256u;
 
-        ID3D11Resource* resource = nullptr;
-        mpNormalMapTexture->GetResource(&resource);
-        HR(pDX11Renderer->getContext()->Map(resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+    texture_stride = texture_width * texture_bpp;
+    txture_size = texture_stride * texture_height;
 
-        memcpy((unsigned char*)mappedResource.pData, normals.data(), normals.size());
+    D3D11_TEXTURE2D_DESC desc{
+        .Width = texture_width,
+        .Height = texture_height,
+        .MipLevels = 0,
+        .ArraySize = 1,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .SampleDesc{
+            .Count = 1,
+            .Quality = 0,
+        },
+        .Usage = D3D11_USAGE_DEFAULT,
+        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+        .CPUAccessFlags = 0,
+        .MiscFlags = 0,
+    };
 
-        pDX11Renderer->getContext()->Unmap(resource, 0);
-    }
+    desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+    pDX11Renderer->getDevice()->CreateTexture2D(&desc, 0, texture.GetAddressOf());
+    pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, texture_resource_view.GetAddressOf());
+
+    BYTE* value_pointer = texture_data.data();
 }
 
-void GridSurface::init()
+void WaterSurface::WaveTexture::SetValue(int x, int y, XMFLOAT3 value)
 {
+    BYTE* value_pointer = texture_data.data();
+
+    value_pointer += (256 * 4 * y + 4 * x);
+
+    *(value_pointer++) = static_cast<BYTE>(255 * (value.x + 1) / 2);
+    *(value_pointer++) = static_cast<BYTE>(255 * (value.y + 1) / 2);
+    *(value_pointer++) = static_cast<BYTE>(255 * (value.z + 1) / 2);
+    *(value_pointer++) = static_cast<BYTE>(255);
+}
+
+void WaterSurface::WaveTexture::Update()
+{
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+    pDX11Renderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
+                                          txture_size);
+}
+
+ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
+{
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+    ID3D11ShaderResourceView* pTexture;
+    HR(pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
+
+    return pTexture;
 }

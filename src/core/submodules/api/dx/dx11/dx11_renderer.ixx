@@ -145,18 +145,22 @@ public:
             .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
         };
-        HR(mpDevice->CreateBuffer(&desc, nullptr, cb.buffer.GetAddressOf()));
+
+        const D3D11_SUBRESOURCE_DATA initData{
+            .pSysMem = reinterpret_cast<void*>(reinterpret_cast<char*>(&cb) + iSize),
+        };
+
+        HR(mpDevice->CreateBuffer(&desc, &initData, cb.buffer.GetAddressOf()));
     }
 
     template <typename CB>
-    void updateCB(CB& cb)
+    void updateCB(const CB& cb)
     {
         static_assert(std::is_base_of<ICB, CB>::value, "CB must inherit from ICB");
 
-
         D3D11_MAPPED_SUBRESOURCE cbData;
         mpContext->Map(cb.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-        char* baseAddress = reinterpret_cast<char*>(&cb);
+        const char* baseAddress = reinterpret_cast<const char*>(&cb);
         memcpy(cbData.pData, baseAddress + sizeof(ICB), sizeof(CB) - sizeof(ICB));
         mpContext->Unmap(cb.buffer.Get(), 0);
     }

@@ -21,7 +21,9 @@ import core;
 import core.options;
 import window;
 import dx11renderer;
-import demo;
+
+import duck_demo;
+import cad_demo;
 
 using namespace std::chrono;
 using namespace DirectX;
@@ -59,7 +61,7 @@ public:
     } mSettings{};
 
 private:
-    void processInput(IWindow::Message msg, float deltaTime);
+    void processInput(IWindow::Message msg, float dt);
     void renderUi();
     void loadDemo(App::Demo mode);
 
@@ -109,7 +111,7 @@ private:
 
     std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
 
-    LightsCB mLights{.pos = {{0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}}};
+    LightsCB mLights{.pos = {{-10.0f, 5.0f, 0.0f, 1.0f}, {10.0f, 5.0f, 0.0f, 1.0f}}};
 };
 
 module :private;
@@ -157,7 +159,7 @@ void App::init()
     mpDemo = std::make_unique<DuckDemo>(mpRenderer);
     mpDemo->init();
 
-    //mpRenderer->createCB(mLights);
+    mpRenderer->createCB(mLights);
 }
 
 void App::run()
@@ -202,18 +204,18 @@ void App::run()
         QueryPerformanceCounter(&nowTime);
 
         double elapsedTime = static_cast<double>(nowTime.QuadPart - previousTime.QuadPart) / frequency.QuadPart;
-        float deltaTime = static_cast<float>(elapsedTime);
+        float dt = static_cast<float>(elapsedTime);
 
         previousTime = nowTime;
 
         IWindow::Message msg = mpWindow->getMessage();
         while (msg != IWindow::Message::EMPTY)
         {
-            processInput(msg, deltaTime);
+            processInput(msg, dt);
             msg = mpWindow->getMessage();
         }
 
-        update(deltaTime);
+        update(dt);
         draw();
     }
 }
@@ -476,7 +478,7 @@ void App::draw()
     mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
-void App::processInput(IWindow::Message msg, float deltaTime)
+void App::processInput(IWindow::Message msg, float dt)
 {
     switch (msg)
     {
@@ -519,19 +521,19 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::KEY_S_DOWN:
         if (!mIsUiClicked)
         {
-            mCamera.moveCamera(Camera::BACKWARD, deltaTime);
+            mCamera.moveCamera(Camera::BACKWARD, dt);
         }
         break;
     case IWindow::Message::KEY_A_DOWN:
         if (!mIsUiClicked)
         {
-            mCamera.moveCamera(Camera::LEFT, deltaTime);
+            mCamera.moveCamera(Camera::LEFT, dt);
         }
         break;
     case IWindow::Message::KEY_D_DOWN:
         if (!mIsUiClicked)
         {
-            mCamera.moveCamera(Camera::RIGHT, deltaTime);
+            mCamera.moveCamera(Camera::RIGHT, dt);
         }
         break;
     case IWindow::Message::KEY_CTRL_DOWN:
@@ -539,63 +541,6 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         break;
     case IWindow::Message::KEY_CTRL_UP:
         mIsCtrlClicked = false;
-        break;
-    case IWindow::Message::MOUSE_LEFT_DOWN: {
-            mIsLeftMouseClicked = true;
-
-            if (mInteractionType == InteractionType::SELECT)
-            {
-                const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
-
-                float mouseX = static_cast<float>(eventData.x);
-                float mouseY = static_cast<float>(eventData.y);
-                float x = (2.0f * mouseX) / mpWindow->getWidth() - 1.0f;
-                float y = 1.0f - (2.0f * mouseY) / mpWindow->getHeight();
-                float z = 1.0f;
-
-                XMVECTOR rayNDC = XMVectorSet(x, y, z, 1.0f);
-
-                XMMATRIX invProjMtx = XMMatrixInverse(nullptr, mProjMtx);
-                XMMATRIX invViewMtx = XMMatrixInverse(nullptr, mViewMtx);
-
-                XMVECTOR rayClip = XMVectorSet(x, y, -1.0f, 1.0f);
-                XMVECTOR rayView = XMVector4Transform(
-                    rayClip, invProjMtx);
-
-                rayView = XMVectorSetW(rayView, 0.0f);
-
-                XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMtx);
-                rayWorld = XMVector3Normalize(rayWorld);
-
-                XMVECTOR rayOrigin = mCamera.getPos();
-                XMVECTOR rayDir = rayWorld;
-
-                for (const auto& pRenderable : mpRenderer->mRenderables)
-                {
-                    const auto pPoint = dynamic_cast<Point*>(pRenderable.get());
-                    if (pPoint == nullptr)
-                    {
-                        continue;
-                    }
-
-                    const bool intersection = mg::rayIntersectsSphere(rayOrigin, rayDir, pRenderable->mWorldPos, pPoint->mRadius);
-
-                    if (intersection)
-                    {
-                        mSelectedRenderableIds.insert(pRenderable->mId);
-                    }
-                }
-            }
-        }
-        break;
-    case IWindow::Message::MOUSE_MIDDLE_DOWN:
-        const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
-        mCursorPos = mCamera.getPos() + mCamera.getFront() * 4.0f;
-
-        for (auto& pRenderable : mpRenderer->mRenderables)
-        {
-            pRenderable->mLocalPos = pRenderable->mWorldPos - mCursorPos;
-        }
         break;
     case IWindow::Message::MOUSE_LEFT_UP:
         mIsLeftMouseClicked = false;
@@ -612,6 +557,70 @@ void App::processInput(IWindow::Message msg, float deltaTime)
     case IWindow::Message::KEY_SHIFT_UP:
         mIsShiftPressed = false;
         break;
+    case IWindow::Message::MOUSE_WHEEL:
+        if (!mIsMenuHovered)
+        {
+            const auto mouseWheel = mpWindow->getEventData<IWindow::Event::MouseWheel>();
+            mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
+        }
+        break;
+    case IWindow::Message::MOUSE_LEFT_DOWN: {
+        mIsLeftMouseClicked = true;
+
+        if (mInteractionType == InteractionType::SELECT)
+        {
+            const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
+
+            float mouseX = static_cast<float>(eventData.x);
+            float mouseY = static_cast<float>(eventData.y);
+            float x = (2.0f * mouseX) / mpWindow->getWidth() - 1.0f;
+            float y = 1.0f - (2.0f * mouseY) / mpWindow->getHeight();
+            float z = 1.0f;
+
+            XMVECTOR rayNDC = XMVectorSet(x, y, z, 1.0f);
+
+            XMMATRIX invProjMtx = XMMatrixInverse(nullptr, mProjMtx);
+            XMMATRIX invViewMtx = XMMatrixInverse(nullptr, mViewMtx);
+
+            XMVECTOR rayClip = XMVectorSet(x, y, -1.0f, 1.0f);
+            XMVECTOR rayView = XMVector4Transform(rayClip, invProjMtx);
+
+            rayView = XMVectorSetW(rayView, 0.0f);
+
+            XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMtx);
+            rayWorld = XMVector3Normalize(rayWorld);
+
+            XMVECTOR rayOrigin = mCamera.getPos();
+            XMVECTOR rayDir = rayWorld;
+
+            for (const auto& pRenderable : mpRenderer->mRenderables)
+            {
+                const auto pPoint = dynamic_cast<Point*>(pRenderable.get());
+                if (pPoint == nullptr)
+                {
+                    continue;
+                }
+
+                const bool intersection =
+                    mg::rayIntersectsSphere(rayOrigin, rayDir, pRenderable->mWorldPos, pPoint->mRadius);
+
+                if (intersection)
+                {
+                    mSelectedRenderableIds.insert(pRenderable->mId);
+                }
+            }
+        }
+    }
+    break;
+    case IWindow::Message::MOUSE_MIDDLE_DOWN:
+        const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
+        mCursorPos = mCamera.getPos() + mCamera.getFront() * 4.0f;
+
+        for (auto& pRenderable : mpRenderer->mRenderables)
+        {
+            pRenderable->mLocalPos = pRenderable->mWorldPos - mCursorPos;
+        }
+    break;
     case IWindow::Message::MOUSE_MOVE: {
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
 
@@ -653,7 +662,7 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                 {
                 case InteractionType::ROTATE:
                     pRenderable->mPitch += pitchOffset;
-                    pRenderable->mYaw   += yawOffset;
+                    pRenderable->mYaw += yawOffset;
                     break;
                 case InteractionType::MOVE:
                     pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
@@ -672,11 +681,13 @@ void App::processInput(IWindow::Message msg, float deltaTime)
                         const auto& controlPointIds = pBezier->mControlPointRenderableIds;
                         for (const IRenderable::Id controlPointRenderableId : controlPointIds)
                         {
-                            IRenderable* const pControlPointRenderable = mpRenderer->getRenderable(controlPointRenderableId);
+                            IRenderable* const pControlPointRenderable =
+                                mpRenderer->getRenderable(controlPointRenderableId);
 
                             if (isBezierSelected)
                             {
-                                pControlPointRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
+                                pControlPointRenderable->mWorldPos +=
+                                    XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
                             }
                         }
 
@@ -689,16 +700,11 @@ void App::processInput(IWindow::Message msg, float deltaTime)
         {
             mCamera.rotateCamera(xOffset, yOffset);
         }
-        }
-        break;
-    case IWindow::Message::MOUSE_WHEEL:
-        if (!mIsMenuHovered)
-        {
-            const auto mouseWheel = mpWindow->getEventData<IWindow::Event::MouseWheel>();
-            mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
-        }
-        break;
+    }
+    break;
     };
+
+    mpDemo->processInput(msg, dt);
 }
 
 void App::loadDemo(App::Demo mode)
