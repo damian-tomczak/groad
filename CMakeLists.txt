@@ -50,5 +50,7 @@ set_property(TARGET assimp PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET UpdateAssimpLibsDebugSymbolsAndDLLs PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET zlibstatic PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET imgui PROPERTY FOLDER "ThirdPartyLibraries")
+set_property(TARGET DirectXTK PROPERTY FOLDER "ThirdPartyLibraries")
+set_property(TARGET xwbtool PROPERTY FOLDER "ThirdPartyLibraries")
 
 set_property(TARGET copy_assets PROPERTY FOLDER "tools")

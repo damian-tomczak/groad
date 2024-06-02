@@ -39,14 +39,17 @@ add_executable(${CMAKE_PROJECT_NAME}
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_23)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    d3d11 D3DCompiler imgui::imgui dxgi
+    d3d11
+    D3DCompiler
+    imgui::imgui
+    dxgi
+    DirectXTK
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     .
     ${ASSETS_DIR}
     core
-    ${EXTERNAL_DIR}/stb
 )
 
 set(PROJECT_DEFINITIONS

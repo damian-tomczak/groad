@@ -144,9 +144,12 @@ private:
     ComPtr<ID3D11RasterizerState> mpRasterizer;
 
     unsigned int mTextureSize;
-    float mPlaneWidth, mPlaneHeight;
+    float mPlaneWidth, mPlaneLength;
 
     XMMATRIX mTexMtx;
+
+    ComPtr<ID3D11ShaderResourceView> mpEnvTexture;
+    ComPtr<ID3D11SamplerState> mpSampler;
 };
 
 module :private;
@@ -188,7 +191,7 @@ void createPlane(ID3D11Device* pDevice, float width, float length, ID3D11Buffer*
 }
 
 WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned int textureSize)
-    : ISurface{pRenderer}, mPlaneWidth{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer}
+    : ISurface{pRenderer}, mPlaneWidth{planeSize}, mPlaneLength{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer}
 {
 }
 
@@ -196,14 +199,14 @@ void WaterSurface::init()
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
-    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneHeight, mpVertexBuffer.GetAddressOf(),
+    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneLength, mpVertexBuffer.GetAddressOf(),
                 mpIndexBuffer.GetAddressOf());
 
     mpNextHeightMap = &this->height_map_textures[0];
     mpCurrentHeightMap = &this->height_map_textures[1];
     mpPreviousHeightMap = &this->height_map_textures[2];
 
-    const D3D11_RASTERIZER_DESC desc{
+    const D3D11_RASTERIZER_DESC restarizerDesc{
         .FillMode = D3D11_FILL_SOLID,
         .CullMode = D3D11_CULL_NONE,
         .FrontCounterClockwise = false,
@@ -216,7 +219,26 @@ void WaterSurface::init()
         .AntialiasedLineEnable = false,
     };
 
-    HR(pDX11Renderer->getDevice()->CreateRasterizerState(&desc, mpRasterizer.GetAddressOf()));
+    HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+
+    mpEnvTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH"textures/forest.dds");
+
+    const D3D11_SAMPLER_DESC samplerDesc{
+        .Filter = D3D11_FILTER_ANISOTROPIC,
+        .AddressU = D3D11_TEXTURE_ADDRESS_BORDER,
+        .AddressV = D3D11_TEXTURE_ADDRESS_BORDER,
+        .AddressW = D3D11_TEXTURE_ADDRESS_WRAP,
+        .MipLODBias = 0.0f,
+        .MaxAnisotropy = 16,
+        .ComparisonFunc = D3D11_COMPARISON_NEVER,
+        .BorderColor{
+            1.0f, 1.0f, 1.0f, 1.0f
+        },
+        .MinLOD = -D3D11_FLOAT32_MAX,
+        .MaxLOD = D3D11_FLOAT32_MAX,
+    };
+
+    HR(pDX11Renderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
 }
 
 
@@ -227,8 +249,6 @@ void WaterSurface::update(float dt)
     UpdateHeightMap();
     UpdateWaveTextureMap();
     GetRandomDrop();
-
-    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, &mWaveTexture.GetTexture());
 }
 
 void WaterSurface::draw(GlobalCB& cb)
@@ -237,28 +257,16 @@ void WaterSurface::draw(GlobalCB& cb)
 
     pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
 
-    //water_effect.SetCameraPosition(m_camPos);
-    //water_effect.Begin(m_device.context());
-
-    //m_cbWorldMtx->Update(m_device.context(), water_mesh_matrix);
-    //water_mesh.Render(m_device.context());
-
-    //    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
-
-    //auto normalMapData = buildNormalMap();
-    //copyNormalsToTexture(normalMapData);
-
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().pWaterSurfaceVS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().pWaterSurfacePS.first.Get(), nullptr, 0);
 
     cb.texMtx = mTexMtx;
     pDX11Renderer->updateCB(cb);
 
-    //pDX11Renderer->getContext()->PSSetShaderResources(0, 1, mpNormalMapTexture.GetAddressOf());
-    //pDX11Renderer->getContext()->PSSetShaderResources(1, 1, mpCubeMap.GetAddressOf());
+    pDX11Renderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
+    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
 
-    //ID3D11SamplerState* pSamplers[]{mpSamplerState.Get(), mpSamplerState.Get()};
-    //pDX11Renderer->getContext()->PSSetSamplers(0, 2, pSamplers);
+    pDX11Renderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
 
     pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(), &stride, &offset);
     pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);

@@ -11,7 +11,7 @@ int screenHeight;
 
 TextureCube envMap : register(t0);
 Texture2D normTexture : register(t1);
-sampler samp : register(s0);
+SamplerState samp : register(s0);
 
 float3 normalMapping(float3 N, float3 T, float3 tn)
 {

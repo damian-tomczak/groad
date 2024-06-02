@@ -5,6 +5,8 @@ module;
 #include "mg.hpp"
 #include "imgui_impl_dx11.h"
 #include <d3dcompiler.h>
+#include "DDSTextureLoader.h"
+#include "WICTextureLoader.h"
 
 #define LIGHTS_NUM 2
 
@@ -84,6 +86,24 @@ public:
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+
+    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const
+    {
+        ID3D11ShaderResourceView* pRv;
+
+        if (texPath.extension() == ".dds")
+        {
+            HR(CreateDDSTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
+        }
+        else
+        {
+            HR(CreateWICTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
+        }
+
+        ComPtr<ID3D11ShaderResourceView> resourceView(pRv);
+
+        return resourceView;
+    }
 
     const Shaders& getShaders() const
     {
