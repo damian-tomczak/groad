@@ -1,13 +1,13 @@
-cbuffer CBuffer : register(b0) {
-    matrix modelMtx;
-    matrix viewMtx;
-    matrix invViewMtx;
-    matrix projMtx;
-    matrix invProj;
-    int flags;
-    int screenWidth;
-    int screenHeight;
-};
+matrix modelMtx;
+matrix viewMtx;
+matrix invViewMtx;
+matrix projMtx;
+matrix invProj;
+matrix texMtx;
+float4 cameraPos;
+int flags;
+int screenWidth;
+int screenHeight;
 
 struct VSOutput
 {

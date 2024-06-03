@@ -23,11 +23,52 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 namespace fs = std::filesystem;
 
+std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName)
+{
+    std::optional<App::Demo> result{};
+
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("Demo"))
+        {
+            if (ImGui::MenuItem("CAD", "F1"))
+            {
+                result = App::Demo::CAD;
+            }
+            else if (ImGui::MenuItem("Duck", "F2"))
+            {
+                result = App::Demo::DUCK;
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Settings"))
+        {
+            ImGui::Checkbox("VSync", &settings.isVsync);
+
+            ImGui::EndMenu();
+        }
+
+        ImGui::Text("| Current demo: %s", demoName);
+
+        ImGui::EndMainMenuBar();
+    }
+
+    return result;
+}
+
 void App::renderUi()
 {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+
+    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpDemoName);
+    if (selectedMode != std::nullopt)
+    {
+        loadDemo(*selectedMode);
+    }
 
     mIsMenuEnabled = false;
     mIsUiClicked = false;
@@ -89,7 +130,7 @@ void App::renderUi()
         }
     }
 
-    if (ImGui::Button("Clear Scene"))
+    if (ImGui::Button("Clear Demo"))
     {
         mpRenderer->mRenderables.clear();
     }
@@ -439,7 +480,7 @@ void App::renderUi()
             bool isBezierAdded = false;
             if (ImGui::Button("Add IBezier C0"))
             {
-                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer.get());
+                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;

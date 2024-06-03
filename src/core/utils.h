@@ -2,6 +2,18 @@
 
 #include <mutex>
 
+#define NOMINMAX
+#include <d3d11.h>
+#include <wrl/client.h>
+#include <DirectXMath.h>
+
+using namespace Microsoft::WRL;
+using namespace DirectX;
+namespace std::filesystem
+{
+}
+namespace fs = std::filesystem;
+
 #ifdef ERROR
 #undef ERROR
 #endif
@@ -31,6 +43,11 @@ using namespace std::literals;
 #define WARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
 #define ERR_NOTERMINATE(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR, false);
+
+#define WLOG(msg) log(DEBUG_LOG_INFO msg, LogLevel::INFO);
+#define WWARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
+#define WERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
+#define WERR_NOTERMINATE(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR, false);
 
 // clang-format off
 #define ASSERT(x)                   \
@@ -69,6 +86,7 @@ enum class LogLevel : uint8_t
 };
 
 void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT, bool shouldTerminate = true);
+void log(const std::wstring_view msg, const LogLevel level = LogLevel::DEFAULT, bool shouldTerminate = true);
 
 class NonCopyable
 {

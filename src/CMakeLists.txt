@@ -39,7 +39,11 @@ add_executable(${CMAKE_PROJECT_NAME}
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_23)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    d3d11 D3DCompiler imgui::imgui
+    d3d11
+    D3DCompiler
+    imgui::imgui
+    dxgi
+    DirectXTK
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -64,9 +68,6 @@ source_group(TREE ${CMAKE_SOURCE_DIR} FILES
     ${HPP_FILES}
     ${MODULE_FILES}
     ${OTHER_FILES}
-)
-
-source_group(TREE ${ASSETS_DIR} FILES
     ${SHADER_FILES}
 )
 

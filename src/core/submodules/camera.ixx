@@ -6,8 +6,6 @@ module;
 export module core.camera;
 import std.core;
 
-using namespace DirectX;
-
 export inline constexpr float mouseSensitivity = 0.05f;
 
 export class Camera : public NonCopyableAndMoveable
@@ -49,9 +47,9 @@ public:
         return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
     }
 
-    void moveCamera(const CameraMovement direction, float deltaTime)
+    void moveCamera(const CameraMovement direction, float dt)
     {
-        const float velocity = mMovementSpeed * deltaTime;
+        const float velocity = mMovementSpeed * dt;
 
         switch (direction)
         {

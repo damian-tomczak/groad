@@ -31,10 +31,10 @@ namespace fs = std::filesystem;
 //     std::vector<Texture> textures_loaded_;
 //     HWND hwnd_;
 //
-//     void processNode(aiNode* node, const aiScene* scene);
-//     Mesh processMesh(aiMesh* mesh, const aiScene* scene);
+//     void processNode(aiNode* node, const aiDemo* demo);
+//     Mesh processMesh(aiMesh* mesh, const aiDemo* demo);
 //     std::vector<Texture> loadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName,
-//                                               const aiScene* scene);
+//                                               const aiDemo* demo);
 //     ID3D11ShaderResourceView* loadEmbeddedTexture(const aiTexture* embeddedTexture);
 // };
 //
@@ -44,11 +44,11 @@ namespace fs = std::filesystem;
 //{
 //     Assimp::Importer importer;
 //
-//     const aiScene* pScene = importer.ReadFile(filename, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded);
+//     const aiDemo* pDemo = importer.ReadFile(filename, aiProcess_Triangulate | aiProcess_ConvertToLeftHanded);
 //
-//     ASSERT(pScene);
+//     ASSERT(pDemo);
 //
-//     processNode(pScene->mRootNode, pScene);
+//     processNode(pDemo->mRootNode, pDemo);
 //
 //     return true;
 // }
@@ -61,7 +61,7 @@ namespace fs = std::filesystem;
 //     }
 // }
 //
-// Mesh ModelLoader::processMesh(aiMesh* mesh, const aiScene* scene)
+// Mesh ModelLoader::processMesh(aiMesh* mesh, const aiDemo* demo)
 //{
 //     // Data to fill
 //     std::vector<VERTEX> vertices;
@@ -96,10 +96,10 @@ namespace fs = std::filesystem;
 //
 //     if (mesh->mMaterialIndex >= 0)
 //     {
-//         aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+//         aiMaterial* material = demo->mMaterials[mesh->mMaterialIndex];
 //
 //         std::vector<Texture> diffuseMaps =
-//             this->loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", scene);
+//             loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse", demo);
 //         textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
 //     }
 //
@@ -107,7 +107,7 @@ namespace fs = std::filesystem;
 // }
 //
 // std::vector<Texture> ModelLoader::loadMaterialTextures(aiMaterial* mat, aiTextureType type, std::string typeName,
-//                                                        const aiScene* scene)
+//                                                        const aiDemo* demo)
 //{
 //     std::vector<Texture> textures;
 //     for (UINT i = 0; i < mat->GetTextureCount(type); i++)
@@ -131,7 +131,7 @@ namespace fs = std::filesystem;
 //             HRESULT hr;
 //             Texture texture;
 //
-//             const aiTexture* embeddedTexture = scene->GetEmbeddedTexture(str.C_Str());
+//             const aiTexture* embeddedTexture = demo->GetEmbeddedTexture(str.C_Str());
 //             if (embeddedTexture != nullptr)
 //             {
 //                 texture.texture = loadEmbeddedTexture(embeddedTexture);
@@ -148,7 +148,7 @@ namespace fs = std::filesystem;
 //             texture.type = typeName;
 //             texture.path = str.C_Str();
 //             textures.push_back(texture);
-//             this->textures_loaded_.push_back(texture); // Store it as texture loaded for entire model, to ensure we
+//             textures_loaded_.push_back(texture); // Store it as texture loaded for entire model, to ensure we
 //                                                        // won't unnecesery load duplicate textures.
 //         }
 //     }
@@ -166,17 +166,17 @@ namespace fs = std::filesystem;
 //     }
 // }
 //
-// void ModelLoader::processNode(aiNode* node, const aiScene* scene)
+// void ModelLoader::processNode(aiNode* node, const aiDemo* demo)
 //{
 //     for (UINT i = 0; i < node->mNumMeshes; i++)
 //     {
-//         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-//         meshes_.push_back(processMesh(mesh, scene));
+//         aiMesh* mesh = demo->mMeshes[node->mMeshes[i]];
+//         meshes_.push_back(processMesh(mesh, demo));
 //     }
 //
 //     for (UINT i = 0; i < node->mNumChildren; i++)
 //     {
-//         processNode(node->mChildren[i], scene);
+//         processNode(node->mChildren[i], demo);
 //     }
 // }
 //
