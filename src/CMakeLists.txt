@@ -19,7 +19,7 @@ file(GLOB_RECURSE MODULE_FILES
 os_files_filter(MODULE_FILES core/submodules/platform)
 
 file(GLOB_RECURSE SHADER_FILES
-    shaders/*
+    src/shaders/*
 )
 
 if (MSVC)
