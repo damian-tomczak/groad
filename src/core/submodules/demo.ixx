@@ -23,11 +23,6 @@ public:
         mpSurface->update(dt);
     }
 
-    void drawSurface(GlobalCB& cb) const
-    {
-        mpSurface->draw(cb);
-    }
-
     const char* mpDemoName;
 
 protected:

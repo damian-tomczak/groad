@@ -11,7 +11,7 @@ int screenHeight;
 
 struct VSInput
 {
-    float3 pos : POSITION0;
+    uint vertexID : SV_VertexID;
 };
 
 struct PSInput
@@ -21,14 +21,24 @@ struct PSInput
     float3 worldPos : POSITION1;
 };
 
-PSInput main(VSInput i)
+static const float3 plane[6] =
+{
+    float3(-0.5f, 0.0f,  0.5f),
+    float3( 0.5f, 0.0f,  0.5f),
+    float3(-0.5f, 0.0f, -0.5f),
+    float3(-0.5f, 0.0f, -0.5f),
+    float3( 0.5f, 0.0f,  0.5f),
+    float3( 0.5f, 0.0f, -0.5f)
+};
+
+PSInput main(VSInput input)
 {
     PSInput o;
 
-    o.localPos = i.pos;
+    o.localPos = plane[input.vertexID];
     o.localPos.y = -0.4f; /* Water Level */
 
-    o.pos = float4(i.pos, 1.0f);
+    o.pos = float4(o.localPos, 1.0f);
     o.worldPos = mul(modelMtx, o.pos).xyz;
 
     o.pos = mul(modelMtx, o.pos);

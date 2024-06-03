@@ -252,7 +252,7 @@ void App::draw()
 
     GlobalCB cb
     {
-        .model = identity,
+        .modelMtx = identity,
         .view = mViewMtx,
         .invView = XMMatrixInverse(nullptr, mViewMtx),
         .proj = mProjMtx,
@@ -272,13 +272,12 @@ void App::draw()
 
     pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
-    mpDemo->drawSurface(cb);
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     mpDemo->draw(cb);
 #pragma region cursor
     const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
-    cb.model = translationMat;
+    cb.modelMtx = translationMat;
 
     mpRenderer->updateCB(cb);
 
@@ -334,14 +333,14 @@ void App::draw()
                 worldTranslation;
 // clang-format on
 
-        cb.model = model;
+        cb.modelMtx = model;
 
         cb.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->mId) != mSelectedRenderableIds.end()) ? 1 : 0;
 
         mpRenderer->updateCB(cb);
 
-        UINT vStride;
-        UINT offset{};
+        unsigned int vStride;
+        unsigned int offset = 0;
         if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
         {
             vStride = sizeof(XMFLOAT3);
@@ -454,7 +453,7 @@ void App::draw()
         mpRenderer->buildGeometryBuffers();
 
         const XMMATRIX translationMat = XMMatrixTranslationFromVector(mPivotPos);
-        cb.model = translationMat;
+        cb.modelMtx = translationMat;
         cb.flags = 2;
 
         mpRenderer->updateCB(cb);

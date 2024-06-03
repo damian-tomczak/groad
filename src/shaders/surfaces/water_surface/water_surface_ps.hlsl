@@ -13,96 +13,88 @@ TextureCube envMap : register(t0);
 Texture2D normTexture : register(t1);
 SamplerState samp : register(s0);
 
-float3 normalMapping(float3 N, float3 T, float3 tn)
+float3 normalMapping(float3 normal, float3 tangent, float3 tangentNormal)
 {
-    float3 B = normalize(cross(N, T));
+    float3 binormal = normalize(cross(normal, tangent));
 
-    T = cross(B, N);
+    tangent = cross(binormal, normal);
 
-    float3x3 m = { T,B,N };
+    float3x3 mtx = { tangent, binormal, normal };
 
-    return mul(transpose(m), tn);
+    return mul(transpose(mtx), tangentNormal);
 }
 
 float3 intersectRay(float3 position, float3 direction)
 {
-    /*
-    position - P
-    direction - R
-    */
+    float3 tPrimary = max((1 - position) / direction, (-1 - position) / direction);
 
-    float3 t_prim = max((1 - position) / direction, (-1 - position) / direction);
-
-    return (position + min(t_prim.x, min(t_prim.y, t_prim.z)) * direction);
+    return (position + min(tPrimary.x, min(tPrimary.y, tPrimary.z)) * direction);
 }
 
-float fresnel(float n1, float n2, float theta)
+float fresnel(float index1, float index2, float theta)
 {
-    float F0 = pow((n2 - n1) / (n2 + n1), 2);
+    float F0 = pow((index2 - index1) / (index2 + index1), 2);
 
     return F0 + (1 - F0) * pow(1 - theta, 5);
 }
 
 struct PSInput
 {
-    float4 pos : SV_POSITION;
-    float3 localPos : POSITION0;
-    float3 worldPos : POSITION1;
+    float4 position : SV_POSITION;
+    float3 localPosition : POSITION0;
+    float3 worldPosition : POSITION1;
 };
 
-float4 main(PSInput i) : SV_TARGET
+float4 main(PSInput input) : SV_TARGET
 {
-    float n1 = 1.0f;
-    float n2 = 4.0f / 3.0f;
+    float index1 = 1.0f;
+    float index2 = 4.0f / 3.0f;
 
-    float3 viewVec = normalize(cameraPos.xyz - i.worldPos);
-    float2 texCoord = (i.localPos.xz + float2(1.0f, 1.0f)) / 2.0f;
+    float3 viewVector = normalize(cameraPos.xyz - input.worldPosition);
+    float2 textureCoordinate = (input.localPosition.xz + float2(1.0f, 1.0f)) / 2.0f;
 
-    /* Normal Mapping */
-    float3 N = normalize(float3(0.0f, 1.0f, 0.0f));
+    float3 normal = normalize(float3(0.0f, 1.0f, 0.0f));
 
-    float3 dPdx = ddx(i.worldPos);
-    float3 dPdy = ddy(i.worldPos);
-    float2 dtdx = ddx(texCoord);
-    float2 dtdy = ddy(texCoord);
+    float3 dPdx = ddx(input.worldPosition);
+    float3 dPdy = ddy(input.worldPosition);
+    float2 dtdx = ddx(textureCoordinate);
+    float2 dtdy = ddy(textureCoordinate);
 
-    float3 T = normalize(-dPdx * dtdy.y + dPdy * dtdx.y);
+    float3 tangent = normalize(-dPdx * dtdy.y + dPdy * dtdx.y);
 
-    float3 normal_from_texture = normTexture.Sample(samp, texCoord).xyz;
-    normal_from_texture = 2 * normal_from_texture - float3(1.0f, 1.0f, 1.0f);
+    float3 normalFromTexture = normTexture.Sample(samp, textureCoordinate).xyz;
+    normalFromTexture = 2 * normalFromTexture - float3(1.0f, 1.0f, 1.0f);
 
-    float3 norm = normalize(normalMapping(N, T, normal_from_texture));
+    float3 norm = normalize(normalMapping(normal, tangent, normalFromTexture));
 
-    /* Fressnel Reflection */
-    float3 reflect_vector = reflect(-viewVec, norm);
-    float3 refract_vector;
+    float3 reflectVector = reflect(-viewVector, norm);
+    float3 refractVector;
 
-    if (dot(norm, viewVec) > 0) /* Nad wod¹ */
+    if (dot(norm, viewVector) > 0)
     {
-        refract_vector = refract(-viewVec, norm, n1 / n2);
-    }
-    else /* Pod wod¹ */
-    {
-        norm = -norm;
-        refract_vector = refract(-viewVec, norm, n2 / n1);
-    }
-
-    float3 tex_colour_reflect = envMap.Sample(samp, intersectRay(i.localPos, reflect_vector)).xyz;
-    float3 tex_colour_refract = envMap.Sample(samp, intersectRay(i.localPos, refract_vector)).xyz;
-
-    float3 color = float3(0.0f, 0.0f, 0.0f);
-
-    if (any(refract_vector)) /* Robienie ku³ka z efektem ca³kowitego wewnêtrznego odbicia */
-    {
-        float fresnel_value = fresnel(n1, n2, max(dot(norm, viewVec), 0.0f));
-        color = lerp(tex_colour_refract, tex_colour_reflect, fresnel_value);
+        refractVector = refract(-viewVector, norm, index1 / index2);
     }
     else
     {
-        color = tex_colour_reflect;
+        norm = -norm;
+        refractVector = refract(-viewVector, norm, index2 / index1);
     }
 
-    //color += float3(0.0f, 0.1f, 0.2f);
+    float3 textureColorReflect = envMap.Sample(samp, intersectRay(input.localPosition, reflectVector)).xyz;
+    float3 textureColorRefract = envMap.Sample(samp, intersectRay(input.localPosition, refractVector)).xyz;
 
-    return float4(pow(color, 2), 1.0f);
+    float3 color = float3(0.0f, 0.0f, 0.0f);
+
+    if (any(refractVector))
+    {
+        float fresnelValue = fresnel(index1, index2, max(dot(norm, viewVector), 0.0f));
+        color = lerp(textureColorRefract, textureColorReflect, fresnelValue);
+    }
+    else
+    {
+        color = textureColorReflect;
+    }
+
+    return float4(color, 1.0f);
 }
+

@@ -80,6 +80,7 @@ public:
     virtual void init() = 0;
     virtual void show() = 0;
     virtual Message getMessage() = 0;
+    // TODO: implement logic to put a new message
 
     [[nodiscard]] int getWidth() const
     {
@@ -89,6 +90,15 @@ public:
     {
         return mHeight;
     }
+
+    //void resize(unsigned int width, unsigned int height)
+    //{
+    //    mWidth = width;
+    //    mHeight = height;
+
+    //    mEventData =
+    //}
+
     [[nodiscard]] float getAspectRatio() const
     {
         return static_cast<float>(mWidth) / mHeight;
@@ -105,6 +115,6 @@ public:
 
 protected:
     EventData mEventData;
-    unsigned mWidth;
-    unsigned mHeight;
+    unsigned int mWidth;
+    unsigned int mHeight;
 };

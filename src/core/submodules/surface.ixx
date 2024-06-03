@@ -27,8 +27,7 @@ protected:
 
 export class WaterSurface : public ISurface
 {
-    static constexpr UINT stride = sizeof(XMFLOAT3);
-    static constexpr UINT offset = 0;
+    static constexpr float dropRatePerSecond = 5.0f;
 
 public:
     WaterSurface(IRenderer* pRenderer, float planeSize, unsigned int textureSize);
@@ -110,27 +109,14 @@ private:
         float** absorption_texture;
     };
 
-    void CreateRipple(int x, int y)
+    void createRipple(unsigned int x, unsigned int y)
     {
         mpCurrentHeightMap->SetValue(x, y, 2.25f);
     }
 
-    void UpdateHeightMap();
-    void UpdateWaveTextureMap();
-    void GetRandomDrop()
-    {
-        static std::uniform_real_distribution<float> random(0, 100);
-
-        if (random(mRandom) > 65.0f)
-        {
-            static std::uniform_real_distribution<float> random_x(0, 256);
-            static std::uniform_real_distribution<float> random_y(0, 256);
-
-            CreateRipple((int)random_x(mRandom), (int)random_y(mRandom));
-        }
-    }
-
-    std::default_random_engine mRandom;
+    void updateHeightMap();
+    void updateWaveTextureMap();
+    void randomDrop(float dt);
 
     WaveTexture mWaveTexture;
     AbsorptionTexture absorption_texture;
@@ -139,12 +125,11 @@ private:
     HeightMapTexture* mpCurrentHeightMap;
     HeightMapTexture* mpPreviousHeightMap;
 
-    ComPtr<ID3D11Buffer> mpVertexBuffer, mpIndexBuffer;
-    ComPtr<ID3D11InputLayout> mpInputLayout{};
+    ComPtr<ID3D11InputLayout> mpInputLayout;
     ComPtr<ID3D11RasterizerState> mpRasterizer;
 
     unsigned int mTextureSize;
-    float mPlaneWidth, mPlaneLength;
+    float mPlaneSize;
 
     XMMATRIX mTexMtx;
 
@@ -154,53 +139,14 @@ private:
 
 module :private;
 
-void createPlane(ID3D11Device* pDevice, float width, float length, ID3D11Buffer** pVertexBuffer, ID3D11Buffer** pIndexBuffer)
-{
-    float halfWidth = 0.5f * width;
-    float halfLength = 0.5f * length;
-
-    const XMFLOAT3 vertices[]{
-        {-halfWidth, 0.0f, +halfLength},
-        {+halfWidth, 0.0f, +halfLength},
-        {-halfWidth, 0.0f, -halfLength},
-        {+halfWidth, 0.0f, -halfLength},
-    };
-
-    UINT indices[]{0, 1, 2, 1, 3, 2};
-
-    D3D11_BUFFER_DESC bufferDesc;
-    D3D11_SUBRESOURCE_DATA initData;
-
-    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    bufferDesc.ByteWidth = sizeof(vertices);
-    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    bufferDesc.CPUAccessFlags = 0;
-    bufferDesc.MiscFlags = 0;
-    initData.pSysMem = vertices;
-
-    HR(pDevice->CreateBuffer(&bufferDesc, &initData, pVertexBuffer));
-
-    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    bufferDesc.ByteWidth = sizeof(indices);
-    bufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-    bufferDesc.CPUAccessFlags = 0;
-    bufferDesc.MiscFlags = 0;
-    initData.pSysMem = indices;
-
-    HR(pDevice->CreateBuffer(&bufferDesc, &initData, pIndexBuffer));
-}
-
 WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned int textureSize)
-    : ISurface{pRenderer}, mPlaneWidth{planeSize}, mPlaneLength{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer}
+    : ISurface{pRenderer}, mPlaneSize{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer}
 {
 }
 
 void WaterSurface::init()
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
-
-    createPlane(pDX11Renderer->getDevice(), mPlaneWidth, mPlaneLength, mpVertexBuffer.GetAddressOf(),
-                mpIndexBuffer.GetAddressOf());
 
     mpNextHeightMap = &this->height_map_textures[0];
     mpCurrentHeightMap = &this->height_map_textures[1];
@@ -221,7 +167,7 @@ void WaterSurface::init()
 
     HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
 
-    mpEnvTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH"textures/forest.dds");
+    mpEnvTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH"textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,
@@ -246,9 +192,9 @@ void WaterSurface::update(float dt)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
-    UpdateHeightMap();
-    UpdateWaveTextureMap();
-    GetRandomDrop();
+    updateHeightMap();
+    updateWaveTextureMap();
+    randomDrop(dt);
 }
 
 void WaterSurface::draw(GlobalCB& cb)
@@ -260,6 +206,7 @@ void WaterSurface::draw(GlobalCB& cb)
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().pWaterSurfaceVS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().pWaterSurfacePS.first.Get(), nullptr, 0);
 
+    cb.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
     cb.texMtx = mTexMtx;
     pDX11Renderer->updateCB(cb);
 
@@ -268,14 +215,12 @@ void WaterSurface::draw(GlobalCB& cb)
 
     pDX11Renderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
 
-    pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(), &stride, &offset);
-    pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDX11Renderer->getContext()->DrawIndexed(6, 0, 0);
+    pDX11Renderer->getContext()->Draw(6, 0);
 }
 
-void WaterSurface::UpdateHeightMap()
+void WaterSurface::updateHeightMap()
 {
     auto tmp_height_map_texture = mpPreviousHeightMap;
     mpPreviousHeightMap = mpCurrentHeightMap;
@@ -312,13 +257,13 @@ void WaterSurface::UpdateHeightMap()
     }
 }
 
-void WaterSurface::UpdateWaveTextureMap()
+void WaterSurface::updateWaveTextureMap()
 {
-    int mTextureSize = mWaveTexture.GetSize();
+    unsigned int mTextureSize = mWaveTexture.GetSize();
 
-    for (int y = 0; y < mTextureSize; ++y)
+    for (unsigned int y = 0; y < mTextureSize; ++y)
     {
-        for (int x = 0; x < mTextureSize; ++x)
+        for (unsigned int x = 0; x < mTextureSize; ++x)
         {
             int prevX = (x + mTextureSize - 1) % mTextureSize;
             int nextX = (x + 1) % mTextureSize;
@@ -466,4 +411,21 @@ ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
     HR(pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
 
     return pTexture;
+}
+
+void WaterSurface::randomDrop(float dt)
+{
+    static std::default_random_engine random;
+    static std::uniform_real_distribution<float> dropChance(0.0f, 1.0f);
+    static std::uniform_int_distribution<unsigned int> randomX(0, mTextureSize - 1);
+    static std::uniform_int_distribution<unsigned int> randomY(0, mTextureSize - 1);
+
+    float frameThreshold = dropRatePerSecond * dt;
+
+    frameThreshold = std::min(frameThreshold, 1.0f);
+
+    if (dropChance(random) < frameThreshold)
+    {
+        createRipple(randomX(random), randomY(random));
+    }
 }

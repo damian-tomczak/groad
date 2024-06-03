@@ -24,7 +24,7 @@ export struct alignas(16) ICB
 
 export struct GlobalCB : public ICB
 {
-    XMMATRIX model;
+    XMMATRIX modelMtx;
     XMMATRIX view;
     XMMATRIX invView;
     XMMATRIX proj;
@@ -82,6 +82,9 @@ public:
 
         std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pWaterSurfaceVS;
         std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pWaterSurfacePS;
+
+        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> wallsVS;
+        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> wallsPS;
     };
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
@@ -619,6 +622,19 @@ void DX11Renderer::createShaders()
                                            &mShaders.pWaterSurfacePS.first);
     });
 #pragma endregion watersurface
+
+#pragma region env
+    compileShader("walls/walls_vs.hlsl", "vs_5_0", mShaders.wallsVS.second, [this]() {
+        return mpDevice->CreateVertexShader(mShaders.wallsVS.second->GetBufferPointer(),
+                                            mShaders.wallsVS.second->GetBufferSize(), nullptr,
+                                            &mShaders.wallsVS.first);
+    });
+    compileShader("walls/walls_ps.hlsl", "ps_5_0", mShaders.wallsPS.second, [this]() {
+        return mpDevice->CreatePixelShader(mShaders.wallsPS.second->GetBufferPointer(),
+                                           mShaders.wallsPS.second->GetBufferSize(), nullptr,
+                                           &mShaders.wallsPS.first);
+    });
+#pragma endregion env
 #pragma endregion
 
     firstCall = false;

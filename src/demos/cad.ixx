@@ -110,6 +110,8 @@ void CADDemo::draw(GlobalCB& cb)
 {
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
     ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
+
+    mpSurface->draw(cb);
 }
 
 void CADDemo::processInput(IWindow::Message msg, float dt)
