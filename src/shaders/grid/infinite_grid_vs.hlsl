@@ -1,13 +1,13 @@
-cbuffer CBuffer: register(b0) {
-    matrix model;
-    matrix view;
-    matrix invView;
-    matrix proj;
-    matrix invProj;
-    int flags;
-    int screenWidth;
-    int screenHeight;
-};
+matrix modelMtx;
+matrix viewMtx;
+matrix invViewMtx;
+matrix projMtx;
+matrix invProjMtx;
+matrix texMtx;
+float4 cameraPos;
+int flags;
+int screenWidth;
+int screenHeight;
 
 struct VertexInput {
     uint vertexID : SV_VertexID;

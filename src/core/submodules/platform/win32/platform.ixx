@@ -19,7 +19,7 @@ export class Win32Window final : public IWindow
     friend LRESULT staticWindowProcedure(HWND hwnd, UINT msg, WPARAM pWParam, LPARAM wLParam);
 
 public:
-    Win32Window(unsigned width, unsigned height) : IWindow{width, height}
+    Win32Window(int width, int height) : IWindow{width, height}
     {
     }
     ~Win32Window();
@@ -43,7 +43,6 @@ private:
 
     HINSTANCE mHInstance{};
     HWND mHwnd{};
-    MSG mMsg{};
 
     void init() override;
 };
@@ -105,20 +104,36 @@ void Win32Window::show()
 
 IWindow::Message Win32Window::getMessage()
 {
-    const bool isEmpty = PeekMessage(&mMsg, nullptr, 0, 0, PM_REMOVE) == 0;
-    if (isEmpty)
+    Message msg = IWindow::getMessage();
+    if (msg == Message::EMPTY)
     {
-        return Message::EMPTY;
-    }
-    else if (mMsg.message == WM_QUIT)
-    {
-        return Message::QUIT;
+        MSG winMsg;
+
+        const bool isEmpty = PeekMessage(&winMsg, nullptr, 0, 0, PM_REMOVE) == 0;
+        if (isEmpty)
+        {
+            return Message::EMPTY;
+        }
+        else if (winMsg.message == WM_QUIT)
+        {
+            return Message::QUIT;
+        }
+
+        TranslateMessage(&winMsg);
+        DispatchMessage(&winMsg);
+
+        auto potentialMsg = static_cast<Message>(winMsg.message);
+        if (potentialMsg > Message::EMPTY && potentialMsg < Message::COUNT)
+        {
+            msg = static_cast<Message>(winMsg.message);
+        }
+        else
+        {
+            msg = Message::EMPTY;
+        }
     }
 
-    TranslateMessage(&mMsg);
-    DispatchMessage(&mMsg);
-
-    return static_cast<Message>(mMsg.message);
+    return msg;
 }
 
 bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -136,6 +151,45 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
     case WM_KEYDOWN:
         switch (wParam)
         {
+        case VK_F1:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F1), wParam, lParam);
+            break;
+        case VK_F2:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F2), wParam, lParam);
+            break;
+        case VK_F3:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F3), wParam, lParam);
+            break;
+        case VK_F4:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F4), wParam, lParam);
+            break;
+        case VK_F5:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F5), wParam, lParam);
+            break;
+        case VK_F6:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F6), wParam, lParam);
+            break;
+        case VK_F7:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F7), wParam, lParam);
+            break;
+        case VK_F8:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F8), wParam, lParam);
+            break;
+        case VK_F9:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F9), wParam, lParam);
+            break;
+        case VK_F10:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F10), wParam, lParam);
+            break;
+        case VK_F11:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F11), wParam, lParam);
+            break;
+        case VK_F12:
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_F12), wParam, lParam);
+            break;
+        case 'E':
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_E_DOWN), wParam, lParam);
+            return true;
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_DOWN), wParam, lParam);
             return true;
@@ -162,6 +216,9 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
     case WM_KEYUP:
         switch (wParam)
         {
+        case 'E':
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_E_UP), wParam, lParam);
+            return true;
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_UP), wParam, lParam);
             return true;
@@ -212,7 +269,7 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         const Event::MouseWheel mouseWheel{
             .yOffset = GET_WHEEL_DELTA_WPARAM(wParam),
         };
-        mEventData = mouseWheel;
+        mEventData.push(mouseWheel);
 
         return true;
     }
@@ -225,7 +282,7 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
             .y = y,
         };
 
-        mEventData = mousePosition;
+        mEventData.push(mousePosition);
         return true;
     }
 

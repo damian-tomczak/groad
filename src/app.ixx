@@ -4,6 +4,8 @@ module;
 #include <Windows.h>
 #include <cmath>
 
+#include <filesystem>
+
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -24,13 +26,8 @@ import dx11renderer;
 
 import duck_demo;
 import cad_demo;
-
-using namespace std::chrono;
-using namespace DirectX;
-using namespace Microsoft::WRL;
-namespace fs = std::filesystem;
-
-export inline const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELECT"};
+import gable_demo;
+import sso_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -53,6 +50,8 @@ public:
         DEFAULT,
         CAD = DEFAULT,
         DUCK,
+        GABLE,
+        SSO,
     };
 
     struct Settings
@@ -64,54 +63,36 @@ private:
     void processInput(IWindow::Message msg, float dt);
     void renderUi();
     void loadDemo(App::Demo mode);
+    void checkShaders();
 
     const ParsedOptions mOptions;
-    Camera mCamera{0.0f, 0.5f, -10.0f};
-    XMVECTOR mCursorPos{};
 
     std::shared_ptr<IWindow> mpWindow;
     DX11Renderer* mpRenderer;
 
-    enum class InteractionType
-    {
-        ROTATE,
-        MOVE,
-        SCALE,
-        SELECT,
-    } mInteractionType{};
-
     bool mIsRunning{};
-    bool mIsMenuEnabled{};
-    bool mIsUiClicked{};
-    bool mIsLeftMouseClicked{};
-    bool mIsRightMouseClicked{};
-    bool mIsCtrlClicked{};
-    bool mIsMenuHovered{};
 
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
 
-    IRenderable::Id mLastSelectedRenderableId = IRenderable::invalidId;
-
-    XMMATRIX mViewMtx = XMMatrixIdentity();
-    XMMATRIX mProjMtx = XMMatrixIdentity();
-
-    XMVECTOR mPivotPos{};
-    float mPivotPitch{};
-    float mPivotYaw{};
-    float mPivotRoll{};
-    float mPivotScale{};
-
-    bool mIsShiftPressed{};
     bool mIsCameraInMovement{};
 
+    std::unique_ptr<IDemo> mpDemo;
     Demo mMode{};
 
-    std::unique_ptr<IDemo> mpDemo;
 
-    std::unordered_set<IRenderable::Id> mSelectedRenderableIds;
+    //LightsCB mLights
+    //{
+    //    .pos =
+    //    {
+    //        {-10.0f, 5.0f, 0.0f, 1.0f},
+    //        {10.0f, 5.0f, 0.0f, 1.0f},
+    //    },
+    //};
 
-    LightsCB mLights{.pos = {{-10.0f, 5.0f, 0.0f, 1.0f}, {10.0f, 5.0f, 0.0f, 1.0f}}};
+    Context mCtx{};
+
+    fs::file_time_type mLastShadersCompilationTime;
 };
 
 module :private;
@@ -132,6 +113,8 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 App::~App()
 {
     mpWindow.reset();
+    mpDemo.reset();
+
     delete mpRenderer;
 
     ImGui::DestroyContext();
@@ -156,10 +139,10 @@ void App::init()
     ASSERT(mpRenderer != nullptr);
     mpRenderer->init();
 
-    mpDemo = std::make_unique<DuckDemo>(mpRenderer);
+    mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
     mpDemo->init();
 
-    mpRenderer->createCB(mLights);
+    //mpRenderer->createCB(mLights);
 }
 
 void App::run()
@@ -173,32 +156,13 @@ void App::run()
     QueryPerformanceCounter(&previousTime);
 
 #ifndef NDEBUG
-    auto lastShadersCompilationTime = fs::file_time_type::clock::now();
+    mLastShadersCompilationTime = fs::file_time_type::clock::now();
 #endif
 
     while (mIsRunning)
     {
 #ifndef NDEBUG
-        bool shouldRecompileShaders = false;
-        for (const auto& entry : fs::recursive_directory_iterator(SHADERS_PATH))
-        {
-            if (fs::is_regular_file(entry.status()))
-            {
-                const auto lastModified = fs::last_write_time(entry);
-                if (lastModified > lastShadersCompilationTime)
-                {
-                    shouldRecompileShaders = true;
-                    lastShadersCompilationTime = fs::file_time_type::clock::now();
-                }
-            }
-        }
-
-        if (shouldRecompileShaders)
-        {
-            WARN("Starting recompiling shaders!");
-            mpRenderer->createShaders();
-            WARN("Shaders recompiled!");
-        }
+        checkShaders();
 #endif
         LARGE_INTEGER nowTime;
         QueryPerformanceCounter(&nowTime);
@@ -224,7 +188,7 @@ void App::update(float dt)
 {
     if (mIsCameraInMovement)
     {
-        mCamera.moveCamera(Camera::FORWARD, dt);
+        mpDemo->mCamera.moveCamera(Camera::FORWARD, dt);
     }
 
     mpDemo->update(dt);
@@ -245,20 +209,30 @@ void App::draw()
     pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
     pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
+        .DepthEnable = TRUE,
+        .DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL,
+        .DepthFunc = D3D11_COMPARISON_LESS,
+        .StencilEnable = FALSE,
+    };
 
-    const XMMATRIX identity = XMMatrixIdentity();
-    mViewMtx = mCamera.getViewMatrix();
-    mProjMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mCamera.getZoom()), mpWindow->getAspectRatio(), 0.01f, 100.0f);
+    ComPtr<ID3D11DepthStencilState> pDepthStencilState;
+    mpRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
+    mpRenderer->getContext()->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
+
+    XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
+    XMMATRIX projMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mpDemo->mCamera.getZoom()),
+                                                mpWindow->getAspectRatio(), 0.01f, 100.0f);
 
     GlobalCB cb
     {
-        .modelMtx = identity,
-        .view = mViewMtx,
-        .invView = XMMatrixInverse(nullptr, mViewMtx),
-        .proj = mProjMtx,
-        .invProj = XMMatrixInverse(nullptr, mProjMtx),
+        .modelMtx = XMMatrixIdentity(),
+        .view = viewMtx,
+        .invView = XMMatrixInverse(nullptr, viewMtx),
+        .proj = projMtx,
+        .invProj = XMMatrixInverse(nullptr, projMtx),
         .texMtx = XMMatrixIdentity(),
-        .cameraPos = mCamera.getPos(),
+        .cameraPos = mpDemo->mCamera.getPos(),
         .screenWidth = mpWindow->getWidth(),
         .screenHeight = mpWindow->getHeight(),
     };
@@ -272,212 +246,27 @@ void App::draw()
 
     pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
-    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-
     mpDemo->draw(cb);
+
 #pragma region cursor
-    const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCursorPos);
-    cb.modelMtx = translationMat;
+    cb.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
     mpRenderer->updateCB(cb);
 
-    pContext->VSSetShader(mpRenderer->getShaders().pCursorVS.first.Get(), nullptr, 0);
-    pContext->GSSetShader(mpRenderer->getShaders().pCursorGS.first.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->getShaders().pCursorPS.first.Get(), nullptr, 0);
+    pContext->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+    pContext->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
     pContext->Draw(6, 0);
     pContext->GSSetShader(nullptr, nullptr, 0);
 #pragma endregion
-
-    for (const auto [renderableIdx, pRenderable] : std::views::enumerate(mpRenderer->mRenderables))
-    {
-        if (pRenderable == nullptr)
-        {
-            continue;
-        }
-
-        XMMATRIX model = XMMatrixIdentity();
-
-        XMMATRIX localScaleMat = XMMatrixScaling(pRenderable->mScale, pRenderable->mScale, pRenderable->mScale);
-        XMMATRIX pivotScaleMat = XMMatrixIdentity();
-
-        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
-        XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
-
-        XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
-        XMMATRIX pivotRotationMat = XMMatrixIdentity();
-
-        XMMATRIX translationToOrigin = XMMatrixIdentity();
-        XMMATRIX translationBack = XMMatrixIdentity();
-
-        if (mSelectedRenderableIds.contains(pRenderable->mId))
-        {
-            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mPivotPitch);
-            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mPivotYaw);
-            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mPivotRoll);
-
-            pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
-
-            pivotScaleMat = XMMatrixScaling(mPivotScale, mPivotScale, mPivotScale);
-
-            translationToOrigin = XMMatrixTranslationFromVector(-(mPivotPos - pRenderable->mWorldPos));
-            translationBack = XMMatrixTranslationFromVector((mPivotPos - pRenderable->mWorldPos));
-        }
-
-        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
-
-// clang-format off
-        model = localScaleMat * localRotationMat *
-                translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
-                worldTranslation;
-// clang-format on
-
-        cb.modelMtx = model;
-
-        cb.flags = (std::ranges::find(mSelectedRenderableIds, pRenderable->mId) != mSelectedRenderableIds.end()) ? 1 : 0;
-
-        mpRenderer->updateCB(cb);
-
-        unsigned int vStride;
-        unsigned int offset = 0;
-        if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
-        {
-            vStride = sizeof(XMFLOAT3);
-        }
-        else
-        {
-            vStride = 4 * sizeof(XMFLOAT3);
-        }
-
-        if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
-        {
-            pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
-            pContext->VSSetShader(mpRenderer->getShaders().pDefaultVS.first.Get(), nullptr, 0);
-            pContext->HSSetShader(nullptr, nullptr, 0);
-            pContext->DSSetShader(nullptr, nullptr, 0);
-            pContext->GSSetShader(nullptr, nullptr, 0);
-            pContext->PSSetShader(mpRenderer->getShaders().pDefaultPS.first.Get(), nullptr, 0);
-        }
-        else
-        {
-            pContext->IASetInputLayout(mpRenderer->getBezierInputLayout());
-            pContext->VSSetShader(mpRenderer->getShaders().pBezierC0VS.first.Get(), nullptr, 0);
-            pContext->HSSetShader(mpRenderer->getShaders().pBezierC0HS.first.Get(), nullptr, 0);
-            pContext->DSSetShader(mpRenderer->getShaders().pBezierC0DS.first.Get(), nullptr, 0);
-            pContext->GSSetShader(nullptr, nullptr, 0);
-            pContext->PSSetShader(mpRenderer->getShaders().pBezierC0PS.first.Get(), nullptr, 0);
-        }
-
-        pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &vStride,
-                                     &offset);
-        const ComPtr<ID3D11Buffer> indexBuffer = mpRenderer->mIndexBuffers.at(renderableIdx);
-        if (indexBuffer != nullptr)
-        {
-            pContext->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-        }
-
-        if (dynamic_cast<Point*>(pRenderable.get()) != nullptr)
-        {
-            pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        }
-        else if (dynamic_cast<IBezier*>(pRenderable.get()) != nullptr)
-        {
-            pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-        }
-        else
-        {
-            pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-        }
-
-        if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier == nullptr)
-        {
-            pContext->DrawIndexed(static_cast<UINT>(pRenderable->getTopology().size()), 0, 0);
-        }
-        else
-        {
-            const auto& controlPoints = pBezier->mControlPointRenderableIds;
-            const auto controlPointsSize = controlPoints.size();
-            for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::controlPointsNumber)
-            {
-                offset = i * sizeof(XMFLOAT3);
-                pContext->IASetVertexBuffers(0, 1, mpRenderer->mVertexBuffers.at(renderableIdx).GetAddressOf(),
-                                             &vStride,
-                                             &offset);
-
-                pContext->Draw(1, 0);
-
-                if (pBezier->mIsPolygon)
-                {
-                    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
-                    pContext->HSSetShader(nullptr, nullptr, 0);
-                    pContext->DSSetShader(nullptr, nullptr, 0);
-                    pContext->GSSetShader(mpRenderer->getShaders().pBezierC0BorderGS.first.Get(), nullptr, 0);
-                    int tmpFlags = cb.flags;
-                    cb.flags = 2;
-
-                    mpRenderer->updateCB(cb);
-
-                    pContext->Draw(1, 0);
-
-                    cb.flags = tmpFlags;
-                    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-                    pContext->HSSetShader(mpRenderer->getShaders().pBezierC0HS.first.Get(), nullptr, 0);
-                    pContext->DSSetShader(mpRenderer->getShaders().pBezierC0DS.first.Get(), nullptr, 0);
-                    pContext->GSSetShader(nullptr, nullptr, 0);
-
-                    mpRenderer->updateCB(cb);
-                }
-            }
-        }
-    }
-
-    if (mSelectedRenderableIds.size() > 1)
-    {
-        XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        for (const auto& selectedRenderableId : mSelectedRenderableIds)
-        {
-            const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
-            sum = XMVectorAdd(sum, pRenderable->mLocalPos + pRenderable->mWorldPos);
-        }
-
-        float numPositions = static_cast<float>(mSelectedRenderableIds.size());
-        mPivotPos = XMVectorScale(sum, 1.0f / numPositions);
-
-        auto pPoint = std::make_unique<Point>(mPivotPos, 0.1f, 25, false);
-        pPoint->regenerateData();
-        IRenderable::Id mId = pPoint->mId;
-        mpRenderer->addRenderable(std::move(pPoint));
-        pPoint.reset();
-
-        mpRenderer->buildGeometryBuffers();
-
-        const XMMATRIX translationMat = XMMatrixTranslationFromVector(mPivotPos);
-        cb.modelMtx = translationMat;
-        cb.flags = 2;
-
-        mpRenderer->updateCB(cb);
-
-        UINT vStride = sizeof(XMFLOAT3), offset = 0;
-        pContext->IASetVertexBuffers(0, 1, &mpRenderer->mVertexBuffers.back(), &vStride, &offset);
-        pContext->IASetIndexBuffer(mpRenderer->mIndexBuffers.back().Get(), DXGI_FORMAT_R32_UINT, 0);
-
-        pContext->VSSetShader(mpRenderer->getShaders().pDefaultVS.first.Get(), nullptr, 0);
-        pContext->PSSetShader(mpRenderer->getShaders().pDefaultPS.first.Get(), nullptr, 0);
-        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        auto pTest = mpRenderer->getRenderable(mId);
-        pContext->DrawIndexed(static_cast<UINT>(pTest->getTopology().size()), 0, 0);
-
-        mpRenderer->removeRenderable(mId);
-    }
 
     renderUi();
 
     mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
-void App::processInput(IWindow::Message msg, float dt)
+void App::processInput(const IWindow::Message msg, float dt)
 {
     switch (msg)
     {
@@ -494,130 +283,84 @@ void App::processInput(IWindow::Message msg, float dt)
         }
     }
         break;
-    case IWindow::Message::KEY_DELETE_DOWN:
-        for (auto it = mSelectedRenderableIds.begin(); it != mSelectedRenderableIds.end(); it = mSelectedRenderableIds.begin())
-        {
-            mpRenderer->removeRenderable(*it);
-            mSelectedRenderableIds.erase(*it);
-        }
-        for (auto& pRenderable : mpRenderer->mRenderables)
-        {
-            pRenderable->regenerateData();
-        }
+    case IWindow::Message::KEY_F1:
+        loadDemo(Demo::CAD);
+        break;
+    case IWindow::Message::KEY_F2:
+        loadDemo(Demo::DUCK);
+        break;
+    case IWindow::Message::KEY_F3:
+        loadDemo(Demo::GABLE);
         break;
     case IWindow::Message::KEY_W_DOWN:
-        if (!mIsUiClicked)
+        if (!mCtx.isUiClicked)
         {
             mIsCameraInMovement = true;
         }
         break;
     case IWindow::Message::KEY_W_UP:
-        if (!mIsUiClicked)
+        if (!mCtx.isUiClicked)
         {
             mIsCameraInMovement = false;
         }
         break;
     case IWindow::Message::KEY_S_DOWN:
-        if (!mIsUiClicked)
+        if (!mCtx.isUiClicked)
         {
-            mCamera.moveCamera(Camera::BACKWARD, dt);
+            mpDemo->mCamera.moveCamera(Camera::BACKWARD, dt);
         }
         break;
     case IWindow::Message::KEY_A_DOWN:
-        if (!mIsUiClicked)
+        if (!mCtx.isUiClicked)
         {
-            mCamera.moveCamera(Camera::LEFT, dt);
+            mpDemo->mCamera.moveCamera(Camera::LEFT, dt);
         }
         break;
     case IWindow::Message::KEY_D_DOWN:
-        if (!mIsUiClicked)
+        if (!mCtx.isUiClicked)
         {
-            mCamera.moveCamera(Camera::RIGHT, dt);
+            mpDemo->mCamera.moveCamera(Camera::RIGHT, dt);
         }
         break;
     case IWindow::Message::KEY_CTRL_DOWN:
-        mIsCtrlClicked = true;
+        mCtx.isCtrlClicked = true;
         break;
     case IWindow::Message::KEY_CTRL_UP:
-        mIsCtrlClicked = false;
+        mCtx.isCtrlClicked = false;
         break;
     case IWindow::Message::MOUSE_LEFT_UP:
-        mIsLeftMouseClicked = false;
+        mCtx.isLeftMouseClicked = false;
         break;
     case IWindow::Message::MOUSE_RIGHT_DOWN:
-        mIsRightMouseClicked = true;
+        mCtx.isRightMouseClicked = true;
         break;
     case IWindow::Message::MOUSE_RIGHT_UP:
-        mIsRightMouseClicked = false;
+        mCtx.isRightMouseClicked = false;
         break;
     case IWindow::Message::KEY_SHIFT_DOWN:
-        mIsShiftPressed = true;
+        mCtx.isShiftPressed = true;
         break;
     case IWindow::Message::KEY_SHIFT_UP:
-        mIsShiftPressed = false;
+        mCtx.isShiftPressed = false;
         break;
     case IWindow::Message::MOUSE_WHEEL:
-        if (!mIsMenuHovered)
+        if (!mCtx.isMenuHovered)
         {
             const auto mouseWheel = mpWindow->getEventData<IWindow::Event::MouseWheel>();
-            mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
+            mpDemo->mCamera.setZoom(static_cast<float>(mouseWheel.yOffset));
         }
         break;
     case IWindow::Message::MOUSE_LEFT_DOWN: {
-        mIsLeftMouseClicked = true;
-
-        if (mInteractionType == InteractionType::SELECT)
-        {
-            const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
-
-            float mouseX = static_cast<float>(eventData.x);
-            float mouseY = static_cast<float>(eventData.y);
-            float x = (2.0f * mouseX) / mpWindow->getWidth() - 1.0f;
-            float y = 1.0f - (2.0f * mouseY) / mpWindow->getHeight();
-            float z = 1.0f;
-
-            XMVECTOR rayNDC = XMVectorSet(x, y, z, 1.0f);
-
-            XMMATRIX invProjMtx = XMMatrixInverse(nullptr, mProjMtx);
-            XMMATRIX invViewMtx = XMMatrixInverse(nullptr, mViewMtx);
-
-            XMVECTOR rayClip = XMVectorSet(x, y, -1.0f, 1.0f);
-            XMVECTOR rayView = XMVector4Transform(rayClip, invProjMtx);
-
-            rayView = XMVectorSetW(rayView, 0.0f);
-
-            XMVECTOR rayWorld = XMVector4Transform(rayView, invViewMtx);
-            rayWorld = XMVector3Normalize(rayWorld);
-
-            XMVECTOR rayOrigin = mCamera.getPos();
-            XMVECTOR rayDir = rayWorld;
-
-            for (const auto& pRenderable : mpRenderer->mRenderables)
-            {
-                const auto pPoint = dynamic_cast<Point*>(pRenderable.get());
-                if (pPoint == nullptr)
-                {
-                    continue;
-                }
-
-                const bool intersection =
-                    mg::rayIntersectsSphere(rayOrigin, rayDir, pRenderable->mWorldPos, pPoint->mRadius);
-
-                if (intersection)
-                {
-                    mSelectedRenderableIds.insert(pRenderable->mId);
-                }
-            }
-        }
+        mCtx.isLeftMouseClicked = true;
     }
     break;
     case IWindow::Message::MOUSE_MIDDLE_DOWN:
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
-        mCursorPos = mCamera.getPos() + mCamera.getFront() * 4.0f;
+        mCtx.cursorPos = mpDemo->mCamera.getPos() + mpDemo->mCamera.getFront() * 4.0f;
 
         for (auto& pRenderable : mpRenderer->mRenderables)
         {
-            pRenderable->mLocalPos = pRenderable->mWorldPos - mCursorPos;
+            pRenderable->mLocalPos = pRenderable->mWorldPos - mCtx.cursorPos;
         }
     break;
     case IWindow::Message::MOUSE_MOVE: {
@@ -635,75 +378,17 @@ void App::processInput(IWindow::Message msg, float dt)
         mLastXMousePosition = eventData.x;
         mLastYMousePosition = eventData.y;
 
-        if (mIsLeftMouseClicked && (!mIsUiClicked) && !(mSelectedRenderableIds.empty()))
+        if (mCtx.isRightMouseClicked && (!mCtx.isUiClicked))
         {
-            const float pitchOffset = yOffset * 0.2f;
-            const float yawOffset = xOffset * 0.2f;
-
-            if ((mSelectedRenderableIds.size() > 1) && (mInteractionType == InteractionType::ROTATE))
-            {
-                mPivotPitch += pitchOffset;
-                mPivotYaw += yawOffset;
-                break;
-            }
-
-            if ((mSelectedRenderableIds.size() > 1) && (mInteractionType == InteractionType::SCALE))
-            {
-                mPivotScale += -yOffset * 0.1f;
-                break;
-            }
-
-            for (const IRenderable::Id selectedRenderableId : mSelectedRenderableIds)
-            {
-                IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
-
-                switch (mInteractionType)
-                {
-                case InteractionType::ROTATE:
-                    pRenderable->mPitch += pitchOffset;
-                    pRenderable->mYaw += yawOffset;
-                    break;
-                case InteractionType::MOVE:
-                    pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
-                    break;
-                case InteractionType::SCALE:
-                    pRenderable->mScale += -yOffset * 0.1f;
-                    break;
-                }
-
-                const bool isBezierSelected = dynamic_cast<IBezier*>(pRenderable) != nullptr;
-
-                for (const auto& pRenderable : mpRenderer->mRenderables)
-                {
-                    if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier != nullptr)
-                    {
-                        const auto& controlPointIds = pBezier->mControlPointRenderableIds;
-                        for (const IRenderable::Id controlPointRenderableId : controlPointIds)
-                        {
-                            IRenderable* const pControlPointRenderable =
-                                mpRenderer->getRenderable(controlPointRenderableId);
-
-                            if (isBezierSelected)
-                            {
-                                pControlPointRenderable->mWorldPos +=
-                                    XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
-                            }
-                        }
-
-                        pBezier->generateGeometry();
-                    }
-                }
-            }
-        }
-        else if (mIsRightMouseClicked && (!mIsUiClicked))
-        {
-            mCamera.rotateCamera(xOffset, yOffset);
+            mpDemo->mCamera.rotateCamera(xOffset, yOffset);
         }
     }
     break;
     };
 
     mpDemo->processInput(msg, dt);
+
+    mpWindow->popEventData();
 }
 
 void App::loadDemo(App::Demo mode)
@@ -715,14 +400,107 @@ void App::loadDemo(App::Demo mode)
     switch (mMode)
     {
     case App::Demo::CAD:
-        mpDemo = std::make_unique<CADDemo>(mpRenderer);
+        mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
         break;
     case App::Demo::DUCK:
-        mpDemo = std::make_unique<DuckDemo>(mpRenderer);
+        mpDemo = std::make_unique<DuckDemo>(mCtx, mpRenderer, mpWindow);
+        break;
+    case App::Demo::GABLE:
+        mpDemo = std::make_unique<GableDemo>(mCtx, mpRenderer, mpWindow);
+        break;
+    case App::Demo::SSO:
+        mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
     default:
         break;
     }
 
     mpDemo->init();
+}
+
+void App::checkShaders()
+{
+    bool shouldRecompileShaders = false;
+    for (const auto& entry : fs::recursive_directory_iterator(SHADERS_PATH))
+    {
+        if (fs::is_regular_file(entry.status()))
+        {
+            const auto lastModified = fs::last_write_time(entry);
+            if (lastModified > mLastShadersCompilationTime)
+            {
+                shouldRecompileShaders = true;
+                mLastShadersCompilationTime = fs::file_time_type::clock::now();
+            }
+        }
+    }
+
+    if (shouldRecompileShaders)
+    {
+        WARN("Starting recompiling shaders!");
+        mpRenderer->createShaders();
+        WARN("Shaders recompiled!");
+    }
+}
+
+std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName, float& menuBarHeight)
+{
+    std::optional<App::Demo> result{};
+
+    if (ImGui::BeginMainMenuBar())
+    {
+        menuBarHeight = ImGui::GetFrameHeight();
+
+        if (ImGui::BeginMenu("Demo"))
+        {
+            if (ImGui::MenuItem("CADDemo", "F1"))
+            {
+                result = App::Demo::CAD;
+            }
+            else if (ImGui::MenuItem("DuckDemo", "F2"))
+            {
+                result = App::Demo::DUCK;
+            }
+            else if (ImGui::MenuItem("GableDemo", "F3"))
+            {
+                result = App::Demo::GABLE;
+            }
+            else if (ImGui::MenuItem("SSODemo", ""))
+            {
+                result = App::Demo::SSO;
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Settings"))
+        {
+            ImGui::Checkbox("VSync", &settings.isVsync);
+
+            ImGui::EndMenu();
+        }
+
+        ImGui::Text("| Current demo: %s", demoName);
+
+        ImGui::EndMainMenuBar();
+    }
+
+    return result;
+}
+
+void App::renderUi()
+{
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
+
+    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpDemoName, mCtx.menuBarHeight);
+    if (selectedMode != std::nullopt)
+    {
+        loadDemo(*selectedMode);
+    }
+
+    mpDemo->renderUi();
+
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }

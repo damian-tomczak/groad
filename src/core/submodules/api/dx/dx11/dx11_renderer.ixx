@@ -17,9 +17,10 @@ import std.filesystem;
 
 import platform;
 
-export struct alignas(16) ICB
+export struct ICB
 {
     ComPtr<ID3D11Buffer> buffer;
+    char padding[8];
 };
 
 export struct GlobalCB : public ICB
@@ -64,49 +65,47 @@ public:
     // TODO: remove p prefix
     struct Shaders
     {
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pDefaultVS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pDefaultPS;
+        template <typename ShaderType>
+        using Shader = std::pair<ComPtr<ShaderType>, ComPtr<ID3D10Blob>>;
 
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pGridVS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pGridPS;
+        Shader<ID3D11VertexShader> defaultVS;
+        Shader<ID3D11PixelShader> defaultPS;
 
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pCursorVS;
-        std::pair<ComPtr<ID3D11GeometryShader>, ComPtr<ID3D10Blob>> pCursorGS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pCursorPS;
+        Shader<ID3D11VertexShader> gridVS;
+        Shader<ID3D11PixelShader> gridPS;
 
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pBezierC0VS;
-        std::pair<ComPtr<ID3D11HullShader>, ComPtr<ID3D10Blob>> pBezierC0HS;
-        std::pair<ComPtr<ID3D11DomainShader>, ComPtr<ID3D10Blob>> pBezierC0DS;
-        std::pair<ComPtr<ID3D11GeometryShader>, ComPtr<ID3D10Blob>> pBezierC0BorderGS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pBezierC0PS;
+        Shader<ID3D11VertexShader> cursorVS;
+        Shader<ID3D11GeometryShader> cursorGS;
+        Shader<ID3D11PixelShader> cursorPS;
 
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> pWaterSurfaceVS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> pWaterSurfacePS;
+        Shader<ID3D11VertexShader> bezierC0VS;
+        Shader<ID3D11HullShader> bezierC0HS;
+        Shader<ID3D11DomainShader> bezierC0DS;
+        Shader<ID3D11GeometryShader> bezierC0BorderGS;
+        Shader<ID3D11PixelShader> bezierC0PS;
 
-        std::pair<ComPtr<ID3D11VertexShader>, ComPtr<ID3D10Blob>> wallsVS;
-        std::pair<ComPtr<ID3D11PixelShader>, ComPtr<ID3D10Blob>> wallsPS;
+        Shader<ID3D11VertexShader> waterSurfaceVS;
+        Shader<ID3D11PixelShader> waterSurfacePS;
+
+        Shader<ID3D11VertexShader> wallsVS;
+        Shader<ID3D11PixelShader> wallsPS;
+
+        Shader<ID3D11VertexShader> duckVS;
+        Shader<ID3D11PixelShader> duckPS;
+
+        Shader<ID3D11VertexShader> gableBorderVS;
+        Shader<ID3D11PixelShader> gableBorderPS;
+
+        Shader<ID3D11VertexShader> gableVS;
+        Shader<ID3D11HullShader> gableHS;
+        Shader<ID3D11DomainShader> gableDS;
+        Shader<ID3D11PixelShader> gablePS;
     };
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
-    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const
-    {
-        ID3D11ShaderResourceView* pRv;
-
-        if (texPath.extension() == ".dds")
-        {
-            HR(CreateDDSTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
-        }
-        else
-        {
-            HR(CreateWICTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
-        }
-
-        ComPtr<ID3D11ShaderResourceView> resourceView(pRv);
-
-        return resourceView;
-    }
+    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const;
 
     const Shaders& getShaders() const
     {
@@ -187,42 +186,9 @@ public:
         memcpy(cbData.pData, baseAddress + sizeof(ICB), sizeof(CB) - sizeof(ICB));
         mpContext->Unmap(cb.buffer.Get(), 0);
     }
-
-    void addRenderable(std::unique_ptr<IRenderable>&& renderable)
-    {
-        mRenderables.emplace_back(std::move(renderable));
-        mVertexBuffers.emplace_back();
-        mIndexBuffers.emplace_back();
-
-        //mRebuildBuffers = true;
-    }
-
-    void removeRenderable(IRenderable::Id mId)
-    {
-        for (int i{}; i < mRenderables.size(); ++i)
-        {
-            if (mRenderables.at(i)->mId == mId)
-            {
-                mRenderables.erase(mRenderables.begin() + i);
-                mVertexBuffers.erase(mVertexBuffers.begin() + i);
-                mIndexBuffers.erase(mIndexBuffers.begin() + i);
-            }
-        }
-    }
-
-    IRenderable* getRenderable(IRenderable::Id mId) const override
-    {
-        auto it =
-            std::find_if(mRenderables.begin(), mRenderables.end(), [mId](const auto& item) { return item->mId == mId; });
-
-        if (it != mRenderables.end())
-        {
-            return it->get();
-        }
-
-        return nullptr;
-    }
-
+    void addRenderable(std::unique_ptr<IRenderable>&& renderable);
+    void removeRenderable(IRenderable::Id mId);
+    IRenderable* getRenderable(IRenderable::Id mId) const override;
     void createShaders();
 
 private:
@@ -415,7 +381,7 @@ void DX11Renderer::initCore()
 
 void DX11Renderer::buildGeometryBuffers()
 {
-    for (unsigned int i{}; i < mRenderables.size(); ++i)
+    for (unsigned i{}; i < mRenderables.size(); ++i)
     {
         auto& pRenderable = mRenderables[i];
         //if (mRenderables[i] == nullptr)
@@ -514,14 +480,25 @@ void DX11Renderer::createShaders()
 
         if (FAILED(hr) || containMessage)
         {
-            std::ostringstream errorMessage;
-            errorMessage << "Shader compilation error (" << std::system_category().message(hr) << ")[" << hr << "]"
-                         << (containMessage ? ":" : "")
-                         << (containMessage ? reinterpret_cast<char*>(compilationMsgs->GetBufferPointer()) : "");
+            bool isWarning{};
 
-            if (firstCall)
+            std::string message{reinterpret_cast<char*>(compilationMsgs->GetBufferPointer())};
+            if (message.contains(": warning"))
+            {
+                isWarning = true;
+            }
+
+            std::ostringstream errorMessage;
+            errorMessage << "Shader compilation " << (isWarning ? "warning" : "error") << ": "
+                         << std::system_category().message(hr) << ")[" << hr << "] " << message;
+
+            if (firstCall && !isWarning)
             {
                 ERR(errorMessage.str());
+            }
+            else if (isWarning)
+            {
+                WARN(errorMessage.str());
             }
             else
             {
@@ -541,101 +518,7 @@ void DX11Renderer::createShaders()
         }
     };
 
-#pragma region torus
-    compileShader("torus/default_renderable_vs.hlsl", "vs_5_0", mShaders.pDefaultVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.pDefaultVS.second->GetBufferPointer(), mShaders.pDefaultVS.second->GetBufferSize(),
-                                                 nullptr, &mShaders.pDefaultVS.first);
-    });
-
-    compileShader("torus/default_renderable_ps.hlsl", "ps_5_0", mShaders.pDefaultPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.pDefaultPS.second->GetBufferPointer(), mShaders.pDefaultPS.second->GetBufferSize(),
-                                                nullptr, &mShaders.pDefaultPS.first);
-    });
-#pragma endregion
-
-#pragma region grid
-    compileShader("surfaces/infinite_grid/infinite_grid_vs.hlsl", "vs_5_0", mShaders.pGridVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.pGridVS.second->GetBufferPointer(), mShaders.pGridVS.second->GetBufferSize(),
-                                            nullptr, &mShaders.pGridVS.first);
-    });
-    compileShader("surfaces/infinite_grid/infinite_grid_ps.hlsl", "ps_5_0", mShaders.pGridPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.pGridPS.second->GetBufferPointer(), mShaders.pGridPS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.pGridPS.first);
-    });
-#pragma endregion
-
-#pragma region cursor
-    compileShader("cursor/cursor_vs.hlsl", "vs_5_0", mShaders.pCursorVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.pCursorVS.second->GetBufferPointer(), mShaders.pCursorVS.second->GetBufferSize(),
-                                            nullptr, &mShaders.pCursorVS.first);
-    });
-    compileShader("cursor/cursor_gs.hlsl", "gs_5_0", mShaders.pCursorGS.second, [this]() {
-        return mpDevice->CreateGeometryShader(mShaders.pCursorGS.second->GetBufferPointer(), mShaders.pCursorGS.second->GetBufferSize(),
-                                              nullptr, &mShaders.pCursorGS.first);
-    });
-    compileShader("cursor/cursor_ps.hlsl", "ps_5_0", mShaders.pCursorPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.pCursorPS.second->GetBufferPointer(), mShaders.pCursorPS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.pCursorPS.first);
-    });
-#pragma endregion
-
-
-#pragma region beziers
-#pragma region bezier_c0
-    compileShader("beziers/bezier_c0/bezier_c0_vs.hlsl", "vs_5_0", mShaders.pBezierC0VS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.pBezierC0VS.second->GetBufferPointer(), mShaders.pBezierC0VS.second->GetBufferSize(),
-                                            nullptr, &mShaders.pBezierC0VS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_hs.hlsl", "hs_5_0", mShaders.pBezierC0HS.second, [this]() {
-        return mpDevice->CreateHullShader(mShaders.pBezierC0HS.second->GetBufferPointer(), mShaders.pBezierC0HS.second->GetBufferSize(),
-                                          nullptr,
-                                          &mShaders.pBezierC0HS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_ds.hlsl", "ds_5_0", mShaders.pBezierC0DS.second, [this]() {
-        return mpDevice->CreateDomainShader(mShaders.pBezierC0DS.second->GetBufferPointer(), mShaders.pBezierC0DS.second->GetBufferSize(),
-                                            nullptr, &mShaders.pBezierC0DS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_border_gs.hlsl", "gs_5_0", mShaders.pBezierC0BorderGS.second, [this]() {
-        return mpDevice->CreateGeometryShader(mShaders.pBezierC0BorderGS.second->GetBufferPointer(), mShaders.pBezierC0BorderGS.second->GetBufferSize(),
-                                              nullptr, &mShaders.pBezierC0BorderGS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", mShaders.pBezierC0PS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.pBezierC0PS.second->GetBufferPointer(), mShaders.pBezierC0PS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.pBezierC0PS.first);
-    });
-#pragma endregion bezier_c0
-
-#pragma region bezier_c2
-    // Include similar lambda function calls as above for the Bezier C2 shaders
-#pragma endregion bezier_c2
-
-#pragma region watersurface
-    compileShader("surfaces/water_surface/water_surface_vs.hlsl", "vs_5_0", mShaders.pWaterSurfaceVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.pWaterSurfaceVS.second->GetBufferPointer(), mShaders.pWaterSurfaceVS.second->GetBufferSize(), nullptr,
-                                           &mShaders.pWaterSurfaceVS.first);
-    });
-    compileShader("surfaces/water_surface/water_surface_ps.hlsl", "ps_5_0", mShaders.pWaterSurfacePS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.pWaterSurfacePS.second->GetBufferPointer(), mShaders.pWaterSurfacePS.second->GetBufferSize(), nullptr,
-                                           &mShaders.pWaterSurfacePS.first);
-    });
-#pragma endregion watersurface
-
-#pragma region env
-    compileShader("walls/walls_vs.hlsl", "vs_5_0", mShaders.wallsVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.wallsVS.second->GetBufferPointer(),
-                                            mShaders.wallsVS.second->GetBufferSize(), nullptr,
-                                            &mShaders.wallsVS.first);
-    });
-    compileShader("walls/walls_ps.hlsl", "ps_5_0", mShaders.wallsPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.wallsPS.second->GetBufferPointer(),
-                                           mShaders.wallsPS.second->GetBufferSize(), nullptr,
-                                           &mShaders.wallsPS.first);
-    });
-#pragma endregion env
-#pragma endregion
+    #include "shaders_loader.inl"
 
     firstCall = false;
 
@@ -659,8 +542,8 @@ void DX11Renderer::buildVertexLayout()
             D3D11_INPUT_ELEMENT_DESC{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
         };
 
-        HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()), mShaders.pDefaultVS.second->GetBufferPointer(),
-            mShaders.pDefaultVS.second->GetBufferSize(), &mpDefaultInputLayout));
+        HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()), mShaders.defaultVS.second->GetBufferPointer(),
+            mShaders.defaultVS.second->GetBufferSize(), &mpDefaultInputLayout));
     }
 
     {
@@ -673,7 +556,60 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.pBezierC0VS.second->GetBufferPointer(), mShaders.pBezierC0VS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierC0VS.second->GetBufferPointer(), mShaders.bezierC0VS.second->GetBufferSize(), &mpBezierInputLayout));
     }
     // clang-format on
+}
+
+ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs::path& texPath) const
+{
+    ID3D11ShaderResourceView* pRv;
+
+    if (texPath.extension() == ".dds")
+    {
+        HR(CreateDDSTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
+    }
+    else
+    {
+        HR(CreateWICTextureFromFile(mpDevice.Get(), mpContext.Get(), texPath.c_str(), nullptr, &pRv));
+    }
+
+    ComPtr<ID3D11ShaderResourceView> resourceView(pRv);
+
+    return resourceView;
+}
+
+void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& renderable)
+{
+    mRenderables.emplace_back(std::move(renderable));
+    mVertexBuffers.emplace_back();
+    mIndexBuffers.emplace_back();
+
+    // mRebuildBuffers = true;
+}
+
+void DX11Renderer::removeRenderable(IRenderable::Id mId)
+{
+    for (int i{}; i < mRenderables.size(); ++i)
+    {
+        if (mRenderables.at(i)->mId == mId)
+        {
+            mRenderables.erase(mRenderables.begin() + i);
+            mVertexBuffers.erase(mVertexBuffers.begin() + i);
+            mIndexBuffers.erase(mIndexBuffers.begin() + i);
+        }
+    }
+}
+
+IRenderable* DX11Renderer::getRenderable(IRenderable::Id mId) const
+{
+    auto it =
+        std::find_if(mRenderables.begin(), mRenderables.end(), [mId](const auto& item) { return item->mId == mId; });
+
+    if (it != mRenderables.end())
+    {
+        return it->get();
+    }
+
+    return nullptr;
 }

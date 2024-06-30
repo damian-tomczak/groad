@@ -111,6 +111,9 @@ public:
         return mPosition;
     }
 
+    XMMATRIX mViewMtx = XMMatrixIdentity();
+    XMMATRIX mProjMtx = XMMatrixIdentity();
+
 private:
     void updateCameraVectors()
     {

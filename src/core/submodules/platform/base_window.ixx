@@ -16,6 +16,11 @@ export class IWindow : public NonCopyableAndMoveable
 public:
     struct Event
     {
+        struct Empty
+        {
+
+        };
+
         struct MousePosition
         {
             int x;
@@ -26,15 +31,23 @@ public:
         {
             int yOffset;
         };
+
+        struct WindowSize
+        {
+            int width;
+            int height;
+        };
     };
     // clang-format off
     using EventData = std::variant<
+        Event::Empty,
         Event::MousePosition,
-        Event::MouseWheel
+        Event::MouseWheel,
+        Event::WindowSize
     >;
-    // clang-format
+    // clang-format on
 
-    IWindow(unsigned width, unsigned height) : mWidth{width}, mHeight{height}
+    IWindow(int width, int height) : mWidth{width}, mHeight{height}
     {
     }
 
@@ -45,14 +58,25 @@ public:
 
     enum class Message
     {
-        EMPTY,
 #ifdef _WIN32
-        RESIZE = WM_USER + 1,
+        EMPTY = WM_USER,
 #else
-        RESIZE,
-#error not implemented
+        EMPTY
 #endif // _WIN32
+        RESIZE,
         QUIT,
+        KEY_F1,
+        KEY_F2,
+        KEY_F3,
+        KEY_F4,
+        KEY_F5,
+        KEY_F6,
+        KEY_F7,
+        KEY_F8,
+        KEY_F9,
+        KEY_F10,
+        KEY_F11,
+        KEY_F12,
         KEY_W_DOWN,
         KEY_W_UP,
         KEY_S_DOWN,
@@ -67,6 +91,8 @@ public:
         KEY_CTRL_UP,
         KEY_SHIFT_DOWN,
         KEY_SHIFT_UP,
+        KEY_E_DOWN,
+        KEY_E_UP,
         MOUSE_LEFT_DOWN,
         MOUSE_LEFT_UP,
         MOUSE_MIDDLE_DOWN,
@@ -75,12 +101,21 @@ public:
         MOUSE_RIGHT_UP,
         MOUSE_WHEEL,
         MOUSE_MOVE,
+        COUNT,
     };
 
     virtual void init() = 0;
     virtual void show() = 0;
-    virtual Message getMessage() = 0;
-    // TODO: implement logic to put a new message
+    virtual Message getMessage();
+    virtual void putMessage(Message msg)
+    {
+        mMessages.push(msg);
+    }
+    virtual void putMessage(Message msg, EventData data)
+    {
+        mMessages.push(msg);
+        mEventData.push(data);
+    }
 
     [[nodiscard]] int getWidth() const
     {
@@ -91,13 +126,11 @@ public:
         return mHeight;
     }
 
-    //void resize(unsigned int width, unsigned int height)
-    //{
-    //    mWidth = width;
-    //    mHeight = height;
-
-    //    mEventData =
-    //}
+    void resize(int width, int height)
+    {
+        mWidth = width;
+        mHeight = height;
+    }
 
     [[nodiscard]] float getAspectRatio() const
     {
@@ -105,16 +138,40 @@ public:
     }
 
     template <typename EventType>
-    [[nodiscard]] EventType getEventData() const
+    [[nodiscard]] EventType getEventData()
     {
-        ASSERT(std::holds_alternative<EventType>(mEventData));
-        return std::get<EventType>(mEventData);
+        const EventData data = mEventData.front();
+        ASSERT(std::holds_alternative<EventType>(data));
+        return std::get<EventType>(data);
+    }
+
+    void popEventData()
+    {
+        if (mEventData.size() > 0)
+        {
+            mEventData.pop();
+        }
     }
 
     static IWindow* createWindow(uint32_t width = 1280, uint32_t height = 720);
 
 protected:
-    EventData mEventData;
-    unsigned int mWidth;
-    unsigned int mHeight;
+    std::queue<EventData> mEventData;
+    std::queue<Message> mMessages;
+    int mWidth;
+    int mHeight;
 };
+
+module :private;
+
+IWindow::Message IWindow::getMessage()
+{
+    Message msg = Message::EMPTY;
+    if (!mMessages.empty())
+    {
+        msg = mMessages.front();
+        mMessages.pop();
+    }
+
+    return msg;
+}

@@ -1,6 +1,3 @@
-[submodule "external/assimp"]
-	path = external/assimp
-	url = https://github.com/assimp/assimp.git
-[submodule "external/directxtk"]
-	path = external/directxtk
-	url = https://github.com/microsoft/DirectXTK.git
+[submodule "external/DirectXTK"]
+	path = external/DirectXTK
+	url = https://github.com/microsoft/DirectXTK
