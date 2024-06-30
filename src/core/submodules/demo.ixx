@@ -12,7 +12,7 @@ import window;
 export class IDemo
 {
 public:
-    virtual ~IDemo(){};
+    virtual ~IDemo();
 
     virtual void init()
     {
@@ -52,3 +52,10 @@ protected:
     Context& mCtx;
     std::shared_ptr<IWindow> mpWindow;
 };
+
+module :private;
+
+IDemo::~IDemo()
+{
+    mCtx.selectedRenderableIds.clear();
+}

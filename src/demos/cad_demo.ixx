@@ -15,6 +15,7 @@ export class CADDemo : public IDemo
 {
 public:
     CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    ~CADDemo();
 
     void init() override;
     void update(float dt) override;
@@ -111,6 +112,10 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
     mpRenderer->addRenderable(std::move(pBezier));
 }
 
+CADDemo::~CADDemo()
+{
+}
+
 void CADDemo::init()
 {
     IDemo::init();
@@ -118,7 +123,7 @@ void CADDemo::init()
 
 void CADDemo::draw(GlobalCB& cb)
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
     ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
 
     mpSurface->draw(cb);
@@ -283,33 +288,7 @@ void CADDemo::draw(GlobalCB& cb)
         float numPositions = static_cast<float>(mCtx.selectedRenderableIds.size());
         mCtx.pivotPos = XMVectorScale(sum, 1.0f / numPositions);
 
-        auto pPoint = std::make_unique<Point>(mCtx.pivotPos, 0.1f, 25, false);
-        pPoint->regenerateData();
-        IRenderable::Id mId = pPoint->mId;
-        pDX11Renderer->addRenderable(std::move(pPoint));
-        pPoint.reset();
-
-        pDX11Renderer->buildGeometryBuffers();
-
-        const XMMATRIX translationMat = XMMatrixTranslationFromVector(mCtx.pivotPos);
-        cb.modelMtx = translationMat;
-        cb.flags = 2;
-
-        pDX11Renderer->updateCB(cb);
-
-        UINT vStride = sizeof(XMFLOAT3), offset = 0;
-        pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, &pDX11Renderer->mVertexBuffers.back(), &vStride, &offset);
-        pDX11Renderer->getContext()->IASetIndexBuffer(pDX11Renderer->mIndexBuffers.back().Get(), DXGI_FORMAT_R32_UINT,
-                                                      0);
-
-        pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
-        pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
-        pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        auto pTest = pDX11Renderer->getRenderable(mId);
-        pDX11Renderer->getContext()->DrawIndexed(static_cast<UINT>(pTest->getTopology().size()), 0, 0);
-
-        pDX11Renderer->removeRenderable(mId);
+        Point::drawPrimitive(mpRenderer, cb, mCtx.pivotPos);
     }
 }
 
@@ -878,7 +857,9 @@ void CADDemo::renderUi()
             ImGui::SameLine();
             if (ImGui::Button("Add IBezier C2"))
             {
-                ASSERT(false);
+                auto pBezier = std::make_unique<BezierC2>(selectedPointsIds, mpRenderer);
+                pBezier->regenerateData();
+                mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;
             }
 
