@@ -9,128 +9,157 @@ export module core.renderer;
 import window;
 import std.core;
 
-using namespace DirectX;
+export
+{
+    using Color = XMFLOAT4;
 
 // clang-format off
-export namespace Colors
-{
-    inline constexpr XMFLOAT4 White  {1.0f, 1.0f, 1.0f, 1.0f};
-    inline constexpr XMFLOAT4 Black  {0.0f, 0.0f, 0.0f, 1.0f};
-    inline constexpr XMFLOAT4 Red    {1.0f, 0.0f, 0.0f, 1.0f};
-    inline constexpr XMFLOAT4 Green  {0.0f, 1.0f, 0.0f, 1.0f};
-    inline constexpr XMFLOAT4 Blue   {0.0f, 0.0f, 1.0f, 1.0f};
-    inline constexpr XMFLOAT4 Yellow {1.0f, 1.0f, 0.0f, 1.0f};
-    inline constexpr XMFLOAT4 Cyan   {0.0f, 1.0f, 1.0f, 1.0f};
-    inline constexpr XMFLOAT4 Magenta{1.0f, 0.0f, 1.0f, 1.0f};
-}
+    namespace Colors
+    {
+    inline constexpr Color white  {1.0f, 1.0f,  1.0f, 1.0f};
+    inline constexpr Color black  {0.0f, 0.0f,  0.0f, 1.0f};
+    inline constexpr Color red    {1.0f, 0.0f,  0.0f, 1.0f};
+    inline constexpr Color green  {0.0f, 1.0f,  0.0f, 1.0f};
+    inline constexpr Color blue   {0.0f, 0.0f,  1.0f, 1.0f};
+    inline constexpr Color yellow {1.0f, 1.0f,  0.0f, 1.0f};
+    inline constexpr Color cyan   {0.0f, 1.0f,  1.0f, 1.0f};
+    inline constexpr Color magenta{1.0f, 0.0f,  1.0f, 1.0f};
+    inline constexpr Color pink   {1.0f, 0.75f, 0.8f, 1.0f};
+    inline constexpr Color orange {1.0f, 0.5f,  0.0f, 1.0f};
+
+    inline constexpr Color defaultColor = blue;
+    inline constexpr Color defaultSelectionColor = red;
+    }
 // clang-format on
 
-export enum class API : uint8_t
-{
-    DEFAULT,
-    DX11,
-    DX12,
-    OGL,
-    VULKAN,
-    COUNT
-};
 
-export constexpr const char* apiToStr(const API api)
-{
-    switch (api)
+    enum class API : uint8_t
     {
-    case API::DX11:
-        return "Directx 11";
-    case API::DX12:
-        return "Directx 12";
-    case API::OGL:
-        return "OpenGL";
-    case API::VULKAN:
-        return "Vulkan";
-    default:
-        return "INVALID_GRAPHICS_API";
-    }
-}
+        DEFAULT,
+        DX11,
+        DX12,
+        OGL,
+        VULKAN,
+        COUNT
+    };
 
-export class IRenderable : public NonCopyable
-{
-public:
+    constexpr const char* apiToStr(const API api)
+    {
+        switch (api)
+        {
+        case API::DX11:
+            return "Directx 11";
+        case API::DX12:
+            return "Directx 12";
+        case API::OGL:
+            return "OpenGL";
+        case API::VULKAN:
+            return "Vulkan";
+        default:
+            return "INVALID_GRAPHICS_API";
+        }
+    }
+
     using Id = int;
-    static constexpr Id invalidId = -1;
+    inline constexpr Id invalidId = -1;
 
-    IRenderable(FXMVECTOR pos, std::string_view tag) : mTag{tag}, mId{counter++}, mWorldPos{pos}
+    struct IIdentifiable : public NonCopyable
     {
-    }
+        IIdentifiable(Id id) : id{id}
+        {
 
-    std::string mTag;
-    Id mId;
-    bool isVisible = true;
+        }
 
-    XMVECTOR mLocalPos{};
-    XMVECTOR mWorldPos{};
+        Id id;
+    };
 
-    float mPitch{};
-    float mYaw{};
-    float mRoll{};
-    float mScale = 1.f;
-
-    virtual const std::vector<XMFLOAT3>& getGeometry() const
+    class IRenderable : public IIdentifiable
     {
-        return mGeometry;
-    }
+    public:
+        IRenderable(FXMVECTOR pos, std::string_view tag, Color color = Colors::defaultColor)
+            : IIdentifiable{counter++}, mTag{tag}, mWorldPos{pos}, mColor{color}
+        {
+        }
 
-    virtual const std::vector<unsigned>& getTopology() const
+        std::string mTag;
+        bool isVisible = true;
+
+        XMVECTOR mLocalPos{};
+        XMVECTOR mWorldPos{};
+
+        float mPitch{};
+        float mYaw{};
+        float mRoll{};
+        float mScale = 1.f;
+
+        Color mColor;
+
+        const XMVECTOR getGlobalPos()
+        {
+            return mLocalPos + mWorldPos;
+        }
+
+        virtual const std::vector<XMFLOAT3>& getGeometry() const
+        {
+            return mGeometry;
+        }
+
+        virtual const std::vector<unsigned>& getTopology() const
+        {
+            return mTopology;
+        }
+
+        virtual void regenerateData()
+        {
+            generateGeometry();
+            generateTopology();
+        }
+
+        virtual void generateGeometry()
+        {
+        }
+
+        virtual void generateTopology()
+        {
+        }
+
+        virtual bool isScalable()
+        {
+            return false;
+        }
+
+    protected:
+        std::vector<XMFLOAT3> mGeometry;
+        std::vector<unsigned> mTopology;
+
+    private:
+        inline static Id counter = 0;
+    };
+
+    class IRenderer : public NonCopyableAndMoveable
     {
-        return mTopology;
-    }
+        inline static bool isRendererCreated{};
 
-    void regenerateData()
-    {
-        generateGeometry();
-        generateTopology();
-    }
+    public:
+        IRenderer(std::weak_ptr<IWindow> pWindow) : mpWindow{pWindow}
+        {
+        }
+        ~IRenderer()
+        {
+            isRendererCreated = false;
+        }
 
-    virtual void generateGeometry()
-    {
-    }
+        virtual void init() = 0;
+        virtual void onResize() = 0;
 
-    virtual void generateTopology()
-    {
-    }
+        static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
+        virtual class IRenderable* getRenderable(Id id) const = 0;
 
-protected:
-    std::vector<XMFLOAT3> mGeometry;
-    std::vector<unsigned> mTopology;
+        virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
 
-private:
-    inline static Id counter = 0;
-};
+        std::vector<std::unique_ptr<IRenderable>> mRenderables;
 
-
-
-export class IRenderer : public NonCopyableAndMoveable
-{
-    inline static bool isRendererCreated{};
-
-public:
-    IRenderer(std::weak_ptr<IWindow> pWindow) : mpWindow{pWindow}
-    {
-    }
-    ~IRenderer()
-    {
-        isRendererCreated = false;
-    }
-
-    virtual void init() = 0;
-    virtual void onResize() = 0;
-
-    static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
-    virtual class IRenderable* getRenderable(IRenderable::Id mId) const = 0;
-
-    virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
-
-    std::vector<std::unique_ptr<IRenderable>> mRenderables;
-
-protected:
-    std::weak_ptr<IWindow> mpWindow;
-};
+    protected:
+        std::weak_ptr<IWindow> mpWindow;
+    };
+}

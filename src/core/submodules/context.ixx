@@ -32,8 +32,8 @@ export inline const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELE
 
 export struct Context
 {
-    std::unordered_set<IRenderable::Id> selectedRenderableIds;
-    IRenderable::Id lastSelectedRenderableId = IRenderable::invalidId;
+    std::unordered_set<Id> selectedRenderableIds;
+    Id lastSelectedRenderableId = invalidId;
 
     XMVECTOR pivotPos;
     float pivotPitch;
@@ -56,4 +56,7 @@ export struct Context
     bool isRightMouseClicked;
 
     float menuBarHeight;
+
+    int lastXMousePosition = -1;
+    int lastYMousePosition = -1;
 };

@@ -13,6 +13,8 @@ import core.renderables;
 
 export class CADDemo : public IDemo
 {
+    static constexpr float renderablesListHeight = 0.25f;
+
 public:
     CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
     ~CADDemo();
@@ -24,8 +26,9 @@ public:
     void renderUi() override;
 
 private:
-    std::optional<int> mLastXMousePosition;
-    std::optional<int> mLastYMousePosition;
+    void drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPoints, GlobalCB& cb);
+
+    long long int mSelectedBernsteinPointIdx = -1;
 };
 
 class GridSurface : public ISurface
@@ -38,13 +41,12 @@ public:
     void init() override{};
     void draw(GlobalCB& cb) override
     {
-        DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
-        ID3D11DeviceContext* const pContext = pDX11Renderer->getContext();
+        DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
-        pContext->VSSetShader(pDX11Renderer->getShaders().gridVS.first.Get(), nullptr, 0);
-        pContext->PSSetShader(pDX11Renderer->getShaders().gridPS.first.Get(), nullptr, 0);
-        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pContext->Draw(6, 0);
+        pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gridVS.first.Get(), nullptr, 0);
+        pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().gridPS.first.Get(), nullptr, 0);
+        pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pDX11Renderer->getContext()->Draw(6, 0);
     }
 
     void update(float dt) override
@@ -57,59 +59,65 @@ module :private;
 CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "CADDemo", pRenderer, pWindow, std::make_unique<GridSurface>(pRenderer)}
 {
-    std::unordered_set<IRenderable::Id> selectedPointsIds;
+    reloadCounters();
+
+    std::vector<Id> deBoorIds;
 
     XMVECTOR pos{-2.f, 3.f, 0};
     auto pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-1.f, 3.f, 0};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{0.0f, 3.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{1.0f, 3.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-2.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{-1.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{0.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
     pos = XMVECTOR{1.0f, 1.0f, 0.0f};
     pPoint = std::make_unique<Point>(pos);
     pPoint->regenerateData();
-    selectedPointsIds.insert(pPoint->mId);
+    deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
-    auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
-    pBezier->regenerateData();
-    mpRenderer->addRenderable(std::move(pBezier));
+    auto pBezierC0 = std::make_unique<BezierC0>(deBoorIds, mpRenderer, Colors::pink);
+    pBezierC0->regenerateData();
+    mpRenderer->addRenderable(std::move(pBezierC0));
+
+    auto pBezierC2 = std::make_unique<BezierC2>(deBoorIds, mpRenderer, Colors::orange);
+    pBezierC2->regenerateData();
+    mpRenderer->addRenderable(std::move(pBezierC2));
 }
 
 CADDemo::~CADDemo()
@@ -128,12 +136,24 @@ void CADDemo::draw(GlobalCB& cb)
 
     mpSurface->draw(cb);
 
+    std::unordered_set<Id> pointIdsPartOfSelectedBeziers;
+    for (const auto selectedRenderableId : mCtx.selectedRenderableIds)
+    {
+        auto pSelectedRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
+        if (auto pBezier = dynamic_cast<IBezier*>(pSelectedRenderable); pBezier != nullptr)
+        {
+            pointIdsPartOfSelectedBeziers.insert(pBezier->mDeBoorIds.begin(), pBezier->mDeBoorIds.end());
+        }
+    }
+
     for (const auto [renderableIdx, pRenderable] : std::views::enumerate(pDX11Renderer->mRenderables))
     {
         if (pRenderable == nullptr)
         {
             continue;
         }
+
+        cb.color = pRenderable->mColor;
 
         XMMATRIX model = XMMatrixIdentity();
 
@@ -150,7 +170,7 @@ void CADDemo::draw(GlobalCB& cb)
         XMMATRIX translationToOrigin = XMMatrixIdentity();
         XMMATRIX translationBack = XMMatrixIdentity();
 
-        if (mCtx.selectedRenderableIds.contains(pRenderable->mId))
+        if (mCtx.selectedRenderableIds.contains(pRenderable->id))
         {
             XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
             XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
@@ -174,14 +194,16 @@ void CADDemo::draw(GlobalCB& cb)
 
         cb.modelMtx = model;
 
-        cb.flags =
-            (std::ranges::find(mCtx.selectedRenderableIds, pRenderable->mId) != mCtx.selectedRenderableIds.end()) ? 1
-                                                                                                                    : 0;
+        if (mCtx.selectedRenderableIds.contains(pRenderable->id) ||
+            pointIdsPartOfSelectedBeziers.contains(pRenderable->id))
+        {
+            cb.color = Colors::defaultSelectionColor;
+        }
 
         pDX11Renderer->updateCB(cb);
 
-        unsigned vStride;
-        unsigned offset = 0;
+        static unsigned vStride;
+        static unsigned offset = 0;
         if (dynamic_cast<IBezier*>(pRenderable.get()) == nullptr)
         {
             vStride = sizeof(XMFLOAT3);
@@ -203,11 +225,11 @@ void CADDemo::draw(GlobalCB& cb)
         else
         {
             pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierInputLayout());
-            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierC0VS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierC0HS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierC0DS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(), nullptr, 0);
             pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierC0PS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPS.first.Get(), nullptr, 0);
         }
 
         pDX11Renderer->getContext()->IASetVertexBuffers(
@@ -237,9 +259,9 @@ void CADDemo::draw(GlobalCB& cb)
         }
         else
         {
-            const auto& controlPoints = pBezier->mControlPointRenderableIds;
+            const auto& controlPoints = pBezier->getGeometry();
             const auto controlPointsSize = controlPoints.size();
-            for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::controlPointsNumber)
+            for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::deBoorNumber)
             {
                 offset = i * sizeof(XMFLOAT3);
                 pDX11Renderer->getContext()->IASetVertexBuffers(
@@ -252,21 +274,19 @@ void CADDemo::draw(GlobalCB& cb)
                     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
                     pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
                     pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-                    pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierC0BorderGS.first.Get(),
+                    pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierBorderGS.first.Get(),
                                                              nullptr, 0);
-                    int tmpFlags = cb.flags;
-                    cb.flags = 2;
+                    cb.color = Colors::green;
 
                     pDX11Renderer->updateCB(cb);
 
                     pDX11Renderer->getContext()->Draw(1, 0);
 
-                    cb.flags = tmpFlags;
                     pDX11Renderer->getContext()->IASetPrimitiveTopology(
                         D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-                    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierC0HS.first.Get(),
+                    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(),
                                                              nullptr, 0);
-                    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierC0DS.first.Get(),
+                    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(),
                                                              nullptr, 0);
                     pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
 
@@ -276,13 +296,22 @@ void CADDemo::draw(GlobalCB& cb)
         }
     }
 
-    if (mCtx.selectedRenderableIds.size() > 1)
+    if (mCtx.selectedRenderableIds.size() == 1)
+    {
+        Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
+        IRenderable* pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
+        if (auto pBezierC2 = dynamic_cast<BezierC2*>(pRenderable); pBezierC2 != nullptr)
+        {
+            drawBernsteins(pBezierC2->getBernsteinPositions(), cb);
+        }
+    }
+    else if (mCtx.selectedRenderableIds.size() > 1)
     {
         XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
         for (const auto& selectedRenderableId : mCtx.selectedRenderableIds)
         {
             const auto pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
-            sum = XMVectorAdd(sum, pRenderable->mLocalPos + pRenderable->mWorldPos);
+            sum = XMVectorAdd(sum, pRenderable->getGlobalPos());
         }
 
         float numPositions = static_cast<float>(mCtx.selectedRenderableIds.size());
@@ -338,7 +367,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
                 if (intersection)
                 {
-                    mCtx.selectedRenderableIds.insert(pRenderable->mId);
+                    mCtx.selectedRenderableIds.insert(pRenderable->id);
                 }
             }
         }
@@ -347,17 +376,17 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
     case IWindow::Message::MOUSE_MOVE: {
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
 
-        if ((mLastXMousePosition == std::nullopt) && (mLastYMousePosition == std::nullopt))
+        if ((mCtx.lastXMousePosition == -1) && (mCtx.lastYMousePosition == -1))
         {
-            mLastXMousePosition = std::make_optional(eventData.x);
-            mLastYMousePosition = std::make_optional(eventData.y);
+            mCtx.lastXMousePosition = eventData.x;
+            mCtx.lastYMousePosition = eventData.y;
         }
 
-        const float xOffset = (eventData.x - *mLastXMousePosition) * 10 * mouseSensitivity;
-        const float yOffset = (eventData.y - *mLastYMousePosition) * 10 * mouseSensitivity;
+        const float xOffset = (eventData.x - mCtx.lastXMousePosition) * 10 * mouseSensitivity;
+        const float yOffset = (eventData.y - mCtx.lastYMousePosition) * 10 * mouseSensitivity;
 
-        mLastXMousePosition = eventData.x;
-        mLastYMousePosition = eventData.y;
+        mCtx.lastXMousePosition = eventData.x;
+        mCtx.lastYMousePosition = eventData.y;
 
         if (mCtx.isLeftMouseClicked && (!mCtx.isUiClicked) && !(mCtx.selectedRenderableIds.empty()))
         {
@@ -377,44 +406,78 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                 break;
             }
 
-            for (const IRenderable::Id selectedRenderableId : mCtx.selectedRenderableIds)
+            const XMVECTOR offsetVec = XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
+
+            for (const Id selectedRenderableId : mCtx.selectedRenderableIds)
             {
-                IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+                IRenderable* const pSelectedRenderable = mpRenderer->getRenderable(selectedRenderableId);
 
-                switch (mCtx.interactionType)
+                if (auto pBezierC2 = dynamic_cast<BezierC2*>(pSelectedRenderable); (pBezierC2 != nullptr) && (mSelectedBernsteinPointIdx != -1))
                 {
-                case InteractionType::ROTATE:
-                    pRenderable->mPitch += pitchOffset;
-                    pRenderable->mYaw += yawOffset;
-                    break;
-                case InteractionType::MOVE:
-                    pRenderable->mWorldPos += XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
-                    break;
-                case InteractionType::SCALE:
-                    pRenderable->mScale += -yOffset * 0.1f;
-                    break;
-                }
-
-                const bool isBezierSelected = dynamic_cast<IBezier*>(pRenderable) != nullptr;
-
-                for (const auto& pRenderable : mpRenderer->mRenderables)
-                {
-                    if (auto pBezier = dynamic_cast<IBezier*>(pRenderable.get()); pBezier != nullptr)
+                    long long int idx = 0;
+                    for (XMFLOAT3& bernsteinPos : pBezierC2->getBernsteinPositions())
                     {
-                        const auto& controlPointIds = pBezier->mControlPointRenderableIds;
-                        for (const IRenderable::Id controlPointRenderableId : controlPointIds)
+                        if (idx == mSelectedBernsteinPointIdx)
                         {
-                            IRenderable* const pControlPointRenderable =
-                                mpRenderer->getRenderable(controlPointRenderableId);
+                            XMVECTOR va = XMLoadFloat3(&bernsteinPos);
+                            const XMVECTOR vc = va + offsetVec;
 
-                            if (isBezierSelected)
-                            {
-                                pControlPointRenderable->mWorldPos +=
-                                    XMVectorSet(xOffset * 0.1f, yOffset * 0.1f, 0.0f, 0.0f);
-                            }
+                            XMStoreFloat3(&bernsteinPos, vc);
+                            break;
+                        }
+                        idx++;
+                    }
+                }
+                else
+                {
+                    switch (mCtx.interactionType)
+                    {
+                    case InteractionType::ROTATE:
+                        pSelectedRenderable->mPitch += pitchOffset;
+                        pSelectedRenderable->mYaw += yawOffset;
+                        break;
+                    case InteractionType::MOVE: {
+                        auto pSelectedBezier = dynamic_cast<IBezier*>(pSelectedRenderable);
+                        if (pSelectedBezier == nullptr)
+                        {
+                            pSelectedRenderable->mWorldPos += offsetVec;
                         }
 
-                        pBezier->generateGeometry();
+                        for (const auto& pRenderable : mpRenderer->mRenderables)
+                        {
+                            auto pBezierC2 = dynamic_cast<BezierC2*>(pRenderable.get());
+
+                            if ((pSelectedBezier != nullptr) && (pBezierC2 != nullptr) &&
+                                (mSelectedBernsteinPointIdx == -1))
+                            {
+                                const auto& deBoorIds = pBezierC2->mDeBoorIds;
+                                for (const Id controlPointRenderableId : deBoorIds)
+                                {
+                                    IRenderable* const pControlPointRenderable =
+                                        mpRenderer->getRenderable(controlPointRenderableId);
+
+                                    pControlPointRenderable->mWorldPos += offsetVec;
+                                }
+
+                                for (XMFLOAT3& bernsteinPos : pBezierC2->getBernsteinPositions())
+                                {
+                                    XMVECTOR va = XMLoadFloat3(&bernsteinPos);
+                                    XMVECTOR vc = XMVectorAdd(va, offsetVec);
+
+                                    XMStoreFloat3(&bernsteinPos, vc);
+                                }
+                            }
+
+                            if ((dynamic_cast<IBezier*>(pRenderable.get()) != nullptr) && (pBezierC2 == nullptr))
+                            {
+                                pRenderable->regenerateData();
+                            }
+                        }
+                    }
+                    break;
+                    case InteractionType::SCALE:
+                        pSelectedRenderable->mScale += -yOffset * 0.1f;
+                        break;
                     }
                 }
             }
@@ -443,10 +506,10 @@ void CADDemo::renderUi()
     mCtx.isMenuEnabled = false;
     mCtx.isUiClicked = false;
 
-    const float menuWidth = mpWindow->getWidth() * 0.2f;
+    const float menuWidth = ImGui::GetIO().DisplaySize.x * 0.2f;
 
-    ImGui::SetNextWindowPos(ImVec2{mpWindow->getWidth() - menuWidth, mCtx.menuBarHeight});
-    ImGui::SetNextWindowSize(ImVec2{menuWidth, static_cast<float>(mpWindow->getHeight())});
+    ImGui::SetNextWindowPos(ImVec2{ImGui::GetIO().DisplaySize.x - menuWidth, mCtx.menuBarHeight});
+    ImGui::SetNextWindowSize(ImVec2{menuWidth, ImGui::GetIO().DisplaySize.y - mCtx.menuBarHeight});
 
     if (ImGui::Begin("Menu", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize))
     {
@@ -460,6 +523,13 @@ void CADDemo::renderUi()
     else
     {
         mCtx.isMenuHovered = false;
+    }
+
+    bool isBernsteinEdited = mSelectedBernsteinPointIdx != -1;
+
+    if (isBernsteinEdited)
+    {
+        ImGui::BeginDisabled();
     }
 
     ImGui::Text("CAD: ");
@@ -484,25 +554,31 @@ void CADDemo::renderUi()
         IBezier* pBezier = nullptr;
         if (mCtx.selectedRenderableIds.size() == 1)
         {
-            const IRenderable::Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
+            const Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
             IRenderable* const pRenderable = mpRenderer->getRenderable(selectedRenderableId);
             pBezier = dynamic_cast<IBezier*>(pRenderable);
         }
 
         auto pPoint = std::make_unique<Point>(mCtx.cursorPos);
         pPoint->regenerateData();
-        const IRenderable::Id pointId = pPoint->mId;
+        const Id pointId = pPoint->id;
         mpRenderer->addRenderable(std::move(pPoint));
 
-        if (pBezier->mId != IRenderable::invalidId)
+        if (pBezier->id != invalidId)
         {
-            pBezier->insertControlPoint(pointId);
+            pBezier->insertDeBoorPointId(pointId);
         }
     }
 
     if (ImGui::Button("Clear Demo"))
     {
         mpRenderer->mRenderables.clear();
+        mCtx.selectedRenderableIds.clear();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Unselect All"))
+    {
+        mCtx.selectedRenderableIds.clear();
     }
 
     ImGui::Separator();
@@ -514,7 +590,7 @@ void CADDemo::renderUi()
     backgroundColor.z *= 2.2f;
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg, backgroundColor);
-    const float renderablesHeight = mpWindow->getHeight() * 0.2f;
+    const float renderablesHeight = mpWindow->getHeight() * renderablesListHeight;
 
     ImGui::Text("Renderables:");
     ImGui::BeginChild("Scrolling", ImVec2{menuWidth * 0.9f, renderablesHeight});
@@ -524,7 +600,7 @@ void CADDemo::renderUi()
     {
         const auto& pRenderable = mpRenderer->mRenderables.at(i);
 
-        if (ImGui::Selectable(pRenderable->mTag.c_str(), mCtx.selectedRenderableIds.contains(pRenderable->mId)))
+        if (ImGui::Selectable(pRenderable->mTag.c_str(), mCtx.selectedRenderableIds.contains(pRenderable->id)))
         {
             newSelectedItemIdx = i;
             mCtx.isUiClicked |= ImGui::IsItemActive();
@@ -561,7 +637,7 @@ void CADDemo::renderUi()
             XMMATRIX translationToOrigin = XMMatrixIdentity();
             XMMATRIX translationBack = XMMatrixIdentity();
 
-            if (mCtx.selectedRenderableIds.contains(pRenderable->mId))
+            if (mCtx.selectedRenderableIds.contains(pRenderable->id))
             {
                 XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
                 XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
@@ -602,10 +678,11 @@ void CADDemo::renderUi()
 
         mCtx.pivotScale = 1;
 
-        if (mCtx.isShiftPressed && (mCtx.lastSelectedRenderableId != IRenderable::invalidId))
+        // TODO: add unselection with shift pressed
+        if (mCtx.isShiftPressed && (mCtx.lastSelectedRenderableId != invalidId))
         {
             auto it = std::ranges::find_if(mpRenderer->mRenderables, [this](const auto& pRenderable) {
-                return pRenderable->mId == mCtx.lastSelectedRenderableId;
+                return pRenderable->id == mCtx.lastSelectedRenderableId;
             });
 
             if (it != mpRenderer->mRenderables.end())
@@ -618,14 +695,15 @@ void CADDemo::renderUi()
 
                 for (size_t idx = minIdx; idx <= maxIdx; ++idx)
                 {
-                    const IRenderable::Id id = mpRenderer->mRenderables.at(idx)->mId;
+                    const Id id = mpRenderer->mRenderables.at(idx)->id;
                     mCtx.selectedRenderableIds.insert(id);
+                    mSelectedBernsteinPointIdx = -1;
                 }
             }
         }
         else
         {
-            const auto newId = mpRenderer->mRenderables.at(newSelectedItemIdx)->mId;
+            const auto newId = mpRenderer->mRenderables.at(newSelectedItemIdx)->id;
             if (!mCtx.selectedRenderableIds.contains(newId))
             {
                 if (!mCtx.isCtrlClicked)
@@ -635,10 +713,12 @@ void CADDemo::renderUi()
 
                 mCtx.selectedRenderableIds.insert(newId);
                 mCtx.lastSelectedRenderableId = newId;
+                mSelectedBernsteinPointIdx = -1;
             }
             else
             {
                 mCtx.selectedRenderableIds.erase(newId);
+                mSelectedBernsteinPointIdx = -1;
             }
         }
     }
@@ -651,7 +731,7 @@ void CADDemo::renderUi()
 
     if (mCtx.selectedRenderableIds.size() == 1)
     {
-        const IRenderable::Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
+        const Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
 
         bool dataChanged{};
         IRenderable* pSelectedRenderable = mpRenderer->getRenderable(selectedRenderableId);
@@ -712,9 +792,44 @@ void CADDemo::renderUi()
         }
         mCtx.isUiClicked |= ImGui::IsItemActive();
 
+        if (pSelectedRenderable->isScalable())
+        {
+            ImGui::BeginDisabled();
+        }
+
         ImGui::Text("Scale:");
         ImGui::DragFloat("##scale", &pSelectedRenderable->mScale);
         mCtx.isUiClicked |= ImGui::IsItemActive();
+
+        if (pSelectedRenderable->isScalable())
+        {
+            ImGui::EndDisabled();
+        }
+        ImVec2 dragSize = ImGui::GetItemRectSize();
+
+        // TODO: color picker
+        ImVec4 color = ImVec4(0.42f, 0.65f, 0.88f, 1.0f);
+
+        if (ImGui::Button("Open Color Picker", dragSize))
+        {
+            ImGui::OpenPopup("Color Picker Popup");
+        }
+
+        if (ImGui::BeginPopupModal("Color Picker Popup", NULL, ImGuiWindowFlags_AlwaysAutoResize))
+        {
+            ImGui::Text("Adjust color settings:");
+
+            if (ImGui::ColorPicker4("My Color Picker", (float*)&color))
+            {
+            }
+
+            if (ImGui::Button("Close"))
+            {
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
 
         if (auto pTorus = dynamic_cast<Torus*>(pSelectedRenderable); pTorus != nullptr)
         {
@@ -750,76 +865,95 @@ void CADDemo::renderUi()
         {
             ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
 
-            // ImGui::Text("De Boor control points:");
-            // std::vector<std::string> deboorControlPointsNames;
-            // std::vector<const char*> deboorControlPointsNamesPtrs;
-
-            // for (size_t i = 0; i < mControlPointRenderableIds.size(); ++i)
-            //{
-            //     deboorControlPointsNames.emplace_back("Point " + std::to_string(i));
-            // }
-
-            // for (const std::string& deboorControlPointName : deboorControlPointsNames)
-            //{
-            //     deboorControlPointsNamesPtrs.emplace_back(deboorControlPointName.c_str());
-            // }
-
-            // int selectedItem = -1;
-            // if (ImGui::ListBox("##deboor", &selectedItem, deboorControlPointsNamesPtrs.data(),
-            // static_cast<int>(deboorControlPointsNamesPtrs.size()), 4))
-            //{
-            // }
-            // isUiClicked |= ImGui::IsItemActive();
-
-            // ImGui::Text("De Boor control points:");
-            // if (ImGui::ListBox("##deboor", &selectedItem, deboorControlPointsNamesPtrs.data(),
-            //                    static_cast<int>(deboorControlPointsNamesPtrs.size()), 4))
-            //{
-            // }
-
             ImGui::Text("Control points:");
             if (ImGui::TreeNode("de Boor points"))
             {
-                IRenderable::Id idToDelete = IRenderable::invalidId;
-                size_t i = 0;
-                for (const IRenderable::Id id : pBezier->mControlPointRenderableIds)
+                Id idToDelete = invalidId;
+                Id idToEdit = invalidId;
+                for (const Id id : pBezier->mDeBoorIds)
                 {
                     if (ImGui::Button(("X##" + std::to_string(id)).c_str()))
                     {
                         idToDelete = id;
                     }
+                    ImGui::SameLine();
+                    if (ImGui::Button(("Edit##" + std::to_string(id)).c_str()))
+                    {
+                        idToEdit = id;
+                    }
 
                     ImGui::SameLine();
-                    ImGui::Text("- Point %d", i);
-                    i++;
+                    ImGui::Text("- %s", pDX11Renderer->getRenderable(id)->mTag.c_str());
                 }
 
-                if (idToDelete != IRenderable::invalidId)
+                if (idToDelete != invalidId)
                 {
-                    pBezier->mControlPointRenderableIds.erase(idToDelete);
+                    pBezier->mDeBoorIds.erase(std::ranges::remove(pBezier->mDeBoorIds, idToDelete).begin(),
+                                              pBezier->mDeBoorIds.end());
                     pBezier->regenerateData();
+                }
+
+                if (idToEdit != invalidId)
+                {
+                    mCtx.selectedRenderableIds.clear();
+                    mCtx.selectedRenderableIds.insert(idToEdit);
                 }
 
                 ImGui::TreePop();
             }
 
-            if (ImGui::TreeNode("Bernstein points"))
+            if (auto pBezierC2 = dynamic_cast<BezierC2*>(pBezier); pBezierC2 != nullptr)
             {
-                size_t i = 0;
-                for (const IRenderable::Id id : pBezier->mControlPointRenderableIds)
+                if (ImGui::TreeNode("Bernstein points"))
                 {
-                    if (ImGui::Button(("Edit##" + std::to_string(id)).c_str()))
+                    size_t idx = 0;
+                    for (XMFLOAT3& bernsteinPoint : pBezierC2->getBernsteinPositions())
                     {
-                        mCtx.selectedRenderableIds.clear();
-                        mCtx.selectedRenderableIds.insert(id);
+                        bool isThisBernsteinPointSelected = mSelectedBernsteinPointIdx == idx;
+                        const char* buttonName =
+                            !isThisBernsteinPointSelected ? "Edit##bernstein" : "Stop Edit##bernstein";
+
+                        if (isThisBernsteinPointSelected)
+                        {
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{1.0f, 0.0f, 0.0f, 1.0f});
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{1.0f, 0.2f, 0.2f, 1.0f});
+                            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{1.0f, 0.2f, 0.2f, 1.0f});
+                        }
+
+                        if (isBernsteinEdited)
+                        {
+                            ImGui::EndDisabled();
+                        }
+
+                        if (ImGui::Button((buttonName + std::to_string(idx)).c_str()))
+                        {
+                            if (!isThisBernsteinPointSelected)
+                            {
+                                mSelectedBernsteinPointIdx = idx;
+                            }
+                            else
+                            {
+                                mSelectedBernsteinPointIdx = -1;
+                            }
+                        }
+
+                        if (isBernsteinEdited)
+                        {
+                            ImGui::BeginDisabled();
+                        }
+
+                        if (isThisBernsteinPointSelected)
+                        {
+                            ImGui::PopStyleColor(3);
+                        }
+
+                        ImGui::SameLine();
+                        ImGui::Text("- Point %d", idx);
+                        idx++;
                     }
 
-                    ImGui::SameLine();
-                    ImGui::Text("- Point %d", i);
-                    i++;
+                    ImGui::TreePop();
                 }
-
-                ImGui::TreePop();
             }
         }
 
@@ -833,23 +967,23 @@ void CADDemo::renderUi()
     }
     else if (mCtx.selectedRenderableIds.size() > 1)
     {
-        std::unordered_set<IRenderable::Id> selectedPointsIds;
+        std::vector<Id> deBoorIds;
 
-        for (const auto mId : mCtx.selectedRenderableIds)
+        for (const auto id : mCtx.selectedRenderableIds)
         {
-            IRenderable* pSelectedRenderable = mpRenderer->getRenderable(mId);
+            IRenderable* pSelectedRenderable = mpRenderer->getRenderable(id);
             if (dynamic_cast<Point*>(pSelectedRenderable) != nullptr)
             {
-                selectedPointsIds.insert(mId);
+                deBoorIds.push_back(id);
             }
         }
 
-        if (selectedPointsIds.size() >= 3)
+        if (deBoorIds.size() >= 3)
         {
             bool isBezierAdded = false;
             if (ImGui::Button("Add IBezier C0"))
             {
-                auto pBezier = std::make_unique<BezierC0>(selectedPointsIds, mpRenderer);
+                auto pBezier = std::make_unique<BezierC0>(deBoorIds, mpRenderer);
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;
@@ -857,7 +991,7 @@ void CADDemo::renderUi()
             ImGui::SameLine();
             if (ImGui::Button("Add IBezier C2"))
             {
-                auto pBezier = std::make_unique<BezierC2>(selectedPointsIds, mpRenderer);
+                auto pBezier = std::make_unique<BezierC2>(deBoorIds, mpRenderer);
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;
@@ -897,6 +1031,11 @@ void CADDemo::renderUi()
         mCtx.isUiClicked |= ImGui::IsItemActive();
     }
 
+    if (isBernsteinEdited)
+    {
+        ImGui::EndDisabled();
+    }
+
     ImGui::End();
 }
 
@@ -905,4 +1044,35 @@ void CADDemo::update(float dt)
     IDemo::update(dt);
 
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+}
+
+void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions, GlobalCB& cb)
+{
+    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().billboardVS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().billboardPS.first.Get(), nullptr, 0);
+
+    long long int idx = 0;
+    for (const XMFLOAT3& bernsteinPos : bernsteinPositions)
+    {
+        const XMVECTOR bernsteinVec = XMLoadFloat3(&bernsteinPos);
+        cb.modelMtx = XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixTranslationFromVector(bernsteinVec);
+        if (idx == mSelectedBernsteinPointIdx)
+        {
+            cb.color = Colors::defaultSelectionColor;
+        }
+        else
+        {
+            cb.color = Colors::defaultColor;
+        }
+        pDX11Renderer->updateCB(cb);
+        pDX11Renderer->getContext()->Draw(6, 0); // TODO: drawInstanced
+        idx++;
+    }
 }

@@ -10,13 +10,7 @@ int flags;
 int screenWidth;
 int screenHeight;
 
-struct PSInput
+float4 main() : SV_Target
 {
-    float4 pos : SV_POSITION;
-};
-
-float4 main(PSInput i) : SV_TARGET
-{
-    return float4(0.8, 0.0, 0.0, 1.0);
-;
+    return color;
 }

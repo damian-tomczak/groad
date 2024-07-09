@@ -10,18 +10,12 @@ int flags;
 int screenWidth;
 int screenHeight;
 
-SamplerState samp;
-TextureCube envMap;
-
-struct PSInput
+struct VOut
 {
     float4 pos : SV_POSITION;
-    float3 tex : TEXCOORD0;
 };
 
-float4 main(PSInput i) : SV_TARGET
+float4 main(VOut vout) : SV_Target
 {
-    float3 color = envMap.Sample(samp , i.tex).rgb;
-
-    return float4(color, 1.0f);
+    return color;
 }

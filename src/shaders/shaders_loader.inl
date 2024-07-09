@@ -1,136 +1,72 @@
-#pragma region torus
-    compileShader("torus/default_renderable_vs.hlsl", "vs_5_0", mShaders.defaultVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.defaultVS.second->GetBufferPointer(), mShaders.defaultVS.second->GetBufferSize(),
-                                                 nullptr, &mShaders.defaultVS.first);
+#define DEFAULT_SHADER_VER "_5_0"
+
+#define COMPILE_SHADER(shaderName, shaderModel, shaderVar, deviceMethod)                                               \
+    compileShader(shaderName, shaderModel DEFAULT_SHADER_VER, shaderVar.second, [this]() {                             \
+        return mpDevice->deviceMethod(shaderVar.second->GetBufferPointer(), shaderVar.second->GetBufferSize(),         \
+                                      nullptr, &shaderVar.first);                                                      \
     });
 
-    compileShader("torus/default_renderable_ps.hlsl", "ps_5_0", mShaders.defaultPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.defaultPS.second->GetBufferPointer(), mShaders.defaultPS.second->GetBufferSize(),
-                                                nullptr, &mShaders.defaultPS.first);
-    });
+#define COMPILE_VERTEX_SHADER(shaderName, shaderVar) COMPILE_SHADER(shaderName, "vs", shaderVar, CreateVertexShader)
+
+#define COMPILE_HULL_SHADER(shaderName, shaderVar) COMPILE_SHADER(shaderName, "hs", shaderVar, CreateHullShader)
+
+#define COMPILE_DOMAIN_SHADER(shaderName, shaderVar) COMPILE_SHADER(shaderName, "ds", shaderVar, CreateDomainShader)
+
+#define COMPILE_GEOMETRY_SHADER(shaderName, shaderVar) COMPILE_SHADER(shaderName, "gs", shaderVar, CreateGeometryShader)
+
+#define COMPILE_PIXEL_SHADER(shaderName, shaderVar) COMPILE_SHADER(shaderName, "ps", shaderVar, CreatePixelShader)
+
+#pragma region torus
+    COMPILE_VERTEX_SHADER("default_renderable/default_renderable_vs.hlsl", mShaders.defaultVS);
+    COMPILE_PIXEL_SHADER("default_renderable/default_renderable_ps.hlsl", mShaders.defaultPS);
 #pragma endregion
 
 #pragma region grid
-    compileShader("surfaces/infinite_grid/infinite_grid_vs.hlsl", "vs_5_0", mShaders.gridVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.gridVS.second->GetBufferPointer(), mShaders.gridVS.second->GetBufferSize(),
-                                            nullptr, &mShaders.gridVS.first);
-    });
-    compileShader("surfaces/infinite_grid/infinite_grid_ps.hlsl", "ps_5_0", mShaders.gridPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.gridPS.second->GetBufferPointer(), mShaders.gridPS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.gridPS.first);
-    });
+    COMPILE_VERTEX_SHADER("surfaces/infinite_grid/infinite_grid_vs.hlsl", mShaders.gridVS);
+    COMPILE_PIXEL_SHADER("surfaces/infinite_grid/infinite_grid_ps.hlsl", mShaders.gridPS);
 #pragma endregion
 
 #pragma region cursor
-    compileShader("cursor/cursor_vs.hlsl", "vs_5_0", mShaders.cursorVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.cursorVS.second->GetBufferPointer(), mShaders.cursorVS.second->GetBufferSize(),
-                                            nullptr, &mShaders.cursorVS.first);
-    });
-    compileShader("cursor/cursor_gs.hlsl", "gs_5_0", mShaders.cursorGS.second, [this]() {
-        return mpDevice->CreateGeometryShader(mShaders.cursorGS.second->GetBufferPointer(), mShaders.cursorGS.second->GetBufferSize(),
-                                              nullptr, &mShaders.cursorGS.first);
-    });
-    compileShader("cursor/cursor_ps.hlsl", "ps_5_0", mShaders.cursorPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.cursorPS.second->GetBufferPointer(), mShaders.cursorPS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.cursorPS.first);
-    });
+    COMPILE_VERTEX_SHADER("cursor/cursor_vs.hlsl", mShaders.cursorVS);
+    COMPILE_GEOMETRY_SHADER("cursor/cursor_gs.hlsl", mShaders.cursorGS);
+    COMPILE_PIXEL_SHADER("cursor/cursor_ps.hlsl", mShaders.cursorPS);
 #pragma endregion
 
 
-#pragma region beziers
-#pragma region bezier_c0
-    compileShader("beziers/bezier_c0/bezier_c0_vs.hlsl", "vs_5_0", mShaders.bezierC0VS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.bezierC0VS.second->GetBufferPointer(), mShaders.bezierC0VS.second->GetBufferSize(),
-                                            nullptr, &mShaders.bezierC0VS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_hs.hlsl", "hs_5_0", mShaders.bezierC0HS.second, [this]() {
-        return mpDevice->CreateHullShader(mShaders.bezierC0HS.second->GetBufferPointer(), mShaders.bezierC0HS.second->GetBufferSize(),
-                                          nullptr,
-                                          &mShaders.bezierC0HS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_ds.hlsl", "ds_5_0", mShaders.bezierC0DS.second, [this]() {
-        return mpDevice->CreateDomainShader(mShaders.bezierC0DS.second->GetBufferPointer(), mShaders.bezierC0DS.second->GetBufferSize(),
-                                            nullptr, &mShaders.bezierC0DS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_border_gs.hlsl", "gs_5_0", mShaders.bezierC0BorderGS.second, [this]() {
-        return mpDevice->CreateGeometryShader(mShaders.bezierC0BorderGS.second->GetBufferPointer(), mShaders.bezierC0BorderGS.second->GetBufferSize(),
-                                              nullptr, &mShaders.bezierC0BorderGS.first);
-    });
-    compileShader("beziers/bezier_c0/bezier_c0_ps.hlsl", "ps_5_0", mShaders.bezierC0PS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.bezierC0PS.second->GetBufferPointer(), mShaders.bezierC0PS.second->GetBufferSize(),
-                                           nullptr,
-                                           &mShaders.bezierC0PS.first);
-    });
-#pragma endregion bezier_c0
-
-#pragma region bezier_c2
-    // Include similar lambda function calls as above for the Bezier C2 shaders
-#pragma endregion bezier_c2
+#pragma region curves
+#pragma region bezier
+    COMPILE_VERTEX_SHADER("bezier/bezier_vs.hlsl", mShaders.bezierVS);
+    COMPILE_HULL_SHADER("bezier/bezier_hs.hlsl", mShaders.bezierHS);
+    COMPILE_DOMAIN_SHADER("bezier/bezier_ds.hlsl", mShaders.bezierDS);
+    COMPILE_GEOMETRY_SHADER("bezier/bezier_border_gs.hlsl", mShaders.bezierBorderGS);
+    COMPILE_PIXEL_SHADER("bezier/bezier_ps.hlsl", mShaders.bezierPS);
+#pragma endregion curves
 
 #pragma region watersurface
-    compileShader("surfaces/water_surface/water_surface_vs.hlsl", "vs_5_0", mShaders.waterSurfaceVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.waterSurfaceVS.second->GetBufferPointer(), mShaders.waterSurfaceVS.second->GetBufferSize(), nullptr,
-                                           &mShaders.waterSurfaceVS.first);
-    });
-    compileShader("surfaces/water_surface/water_surface_ps.hlsl", "ps_5_0", mShaders.waterSurfacePS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.waterSurfacePS.second->GetBufferPointer(), mShaders.waterSurfacePS.second->GetBufferSize(), nullptr,
-                                           &mShaders.waterSurfacePS.first);
-    });
+    COMPILE_VERTEX_SHADER("surfaces/water_surface/water_surface_vs.hlsl", mShaders.waterSurfaceVS);
+    COMPILE_PIXEL_SHADER("surfaces/water_surface/water_surface_ps.hlsl", mShaders.waterSurfacePS);
 #pragma endregion watersurface
 
 #pragma region duck
-    compileShader("walls/walls_vs.hlsl", "vs_5_0", mShaders.wallsVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.wallsVS.second->GetBufferPointer(),
-                                            mShaders.wallsVS.second->GetBufferSize(), nullptr,
-                                            &mShaders.wallsVS.first);
-    });
-    compileShader("walls/walls_ps.hlsl", "ps_5_0", mShaders.wallsPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.wallsPS.second->GetBufferPointer(),
-                                           mShaders.wallsPS.second->GetBufferSize(), nullptr,
-                                           &mShaders.wallsPS.first);
-    });
+    COMPILE_VERTEX_SHADER("walls/walls_vs.hlsl", mShaders.wallsVS);
+    COMPILE_PIXEL_SHADER("walls/walls_ps.hlsl", mShaders.wallsPS);
 
-    compileShader("duck/duck_vs.hlsl", "vs_5_0", mShaders.duckVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.duckVS.second->GetBufferPointer(),
-                                            mShaders.duckVS.second->GetBufferSize(), nullptr, &mShaders.duckVS.first);
-    });
-    compileShader("duck/duck_ps.hlsl", "ps_5_0", mShaders.duckPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.duckPS.second->GetBufferPointer(),
-                                           mShaders.duckPS.second->GetBufferSize(), nullptr, &mShaders.duckPS.first);
-    });
+    COMPILE_VERTEX_SHADER("duck/duck_vs.hlsl", mShaders.duckVS);
+    COMPILE_PIXEL_SHADER("duck/duck_ps.hlsl", mShaders.duckPS);
 #pragma endregion duck
 
 #pragma region gable
-    compileShader("gable/gable_border_vs.hlsl", "vs_5_0", mShaders.gableBorderVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.gableBorderVS.second->GetBufferPointer(),
-                                            mShaders.gableBorderVS.second->GetBufferSize(), nullptr, &mShaders.gableBorderVS.first);
-    });
-    compileShader("gable/gable_border_ps.hlsl", "ps_5_0", mShaders.gableBorderPS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.gableBorderPS.second->GetBufferPointer(),
-                                           mShaders.gableBorderPS.second->GetBufferSize(), nullptr, &mShaders.gableBorderPS.first);
-    });
+    COMPILE_VERTEX_SHADER("gable/gable_border_vs.hlsl", mShaders.gableBorderVS);
+    COMPILE_PIXEL_SHADER("gable/gable_border_ps.hlsl", mShaders.gableBorderPS);
 
-    compileShader("gable/gable_vs.hlsl", "vs_5_0", mShaders.gableVS.second, [this]() {
-        return mpDevice->CreateVertexShader(mShaders.gableVS.second->GetBufferPointer(),
-                                            mShaders.gableVS.second->GetBufferSize(), nullptr,
-                                            &mShaders.gableVS.first);
-    });
-    compileShader("gable/gable_hs.hlsl", "hs_5_0", mShaders.gableHS.second, [this]() {
-        return mpDevice->CreateHullShader(mShaders.gableHS.second->GetBufferPointer(),
-                                          mShaders.gableHS.second->GetBufferSize(), nullptr,
-                                          &mShaders.gableHS.first);
-    });
-    compileShader("gable/gable_ds.hlsl", "ds_5_0", mShaders.gableDS.second, [this]() {
-        return mpDevice->CreateDomainShader(mShaders.gableDS.second->GetBufferPointer(),
-                                            mShaders.gableDS.second->GetBufferSize(), nullptr,
-                                            &mShaders.gableDS.first);
-    });
-    compileShader("gable/gable_ps.hlsl", "ps_5_0", mShaders.gablePS.second, [this]() {
-        return mpDevice->CreatePixelShader(mShaders.gablePS.second->GetBufferPointer(),
-                                           mShaders.gablePS.second->GetBufferSize(), nullptr,
-                                           &mShaders.gablePS.first);
-    });
+    COMPILE_VERTEX_SHADER("gable/gable_vs.hlsl", mShaders.gableVS);
+    COMPILE_HULL_SHADER("gable/gable_hs.hlsl", mShaders.gableHS);
+    COMPILE_DOMAIN_SHADER("gable/gable_ds.hlsl", mShaders.gableDS);
+    COMPILE_PIXEL_SHADER("gable/gable_ps.hlsl", mShaders.gablePS);
 #pragma endregion gable
+
+#pragma region billboard
+    COMPILE_VERTEX_SHADER("billboard/billboard_vs.hlsl", mShaders.billboardVS);
+    COMPILE_PIXEL_SHADER("billboard/billboard_ps.hlsl", mShaders.billboardPS);
+#pragma endregion watersurface
 #pragma endregion

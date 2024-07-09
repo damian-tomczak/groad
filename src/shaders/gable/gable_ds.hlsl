@@ -7,6 +7,7 @@ matrix projMtx;
 matrix invProjMtx;
 matrix texMtx;
 float4 cameraPos;
+float4 color;
 int flags;
 int screenWidth;
 int screenHeight;
@@ -39,13 +40,21 @@ struct PositionNormal
 float bezier1D(int i, float t)
 {
     if (i == 0)
+    {
         return pow(1 - t, 3);
+    }
     if (i == 1)
+    {
         return 3.f * t * (1 - t) * (1 - t);
+    }
     if (i == 2)
+    {
         return 3.f * t * t * (1 - t);
+    }
     if (i == 3)
+    {
         return t * t * t;
+    }
 
     return 0.f;
 }
@@ -53,13 +62,21 @@ float bezier1D(int i, float t)
 float d_bezier1D(int i, float t)
 {
     if (i == 0)
+    {
         return -2 * (1 - t) * (1 - t);
+    }
     if (i == 1)
+    {
         return 3 * (1 - t) * (1 - 3 * t);
+    }
     if (i == 2)
+    {
         return 3 * t * (2 - 3 * t);
+    }
     if (i == 3)
+    {
         return 3 * t * t;
+    }
 
     return 0.f;
 }

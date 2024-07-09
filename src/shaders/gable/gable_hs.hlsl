@@ -8,6 +8,7 @@ matrix projMtx;
 matrix invProjMtx;
 matrix texMtx;
 float4 cameraPos;
+float4 color;
 int flags;
 int screenWidth;
 int screenHeight;

@@ -80,15 +80,7 @@ private:
     std::unique_ptr<IDemo> mpDemo;
     Demo mMode{};
 
-
-    //LightsCB mLights
-    //{
-    //    .pos =
-    //    {
-    //        {-10.0f, 5.0f, 0.0f, 1.0f},
-    //        {10.0f, 5.0f, 0.0f, 1.0f},
-    //    },
-    //};
+    void drawCursor(GlobalCB& cb);
 
     Context mCtx{};
 
@@ -196,18 +188,16 @@ void App::update(float dt)
 
 void App::draw()
 {
-    ID3D11DeviceContext* const pContext = mpRenderer->getContext();
-
-    pContext->VSSetShader(nullptr, nullptr, 0);
-    pContext->HSSetShader(nullptr, nullptr, 0);
-    pContext->DSSetShader(nullptr, nullptr, 0);
-    pContext->GSSetShader(nullptr, nullptr, 0);
-    pContext->PSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->VSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(nullptr, nullptr, 0);
 
     mpRenderer->buildGeometryBuffers();
 
-    pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
+    mpRenderer->getContext()->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
+    mpRenderer->getContext()->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
@@ -238,28 +228,17 @@ void App::draw()
     };
     mpRenderer->createCB(cb);
 
-    pContext->VSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    pContext->HSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    pContext->DSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    pContext->GSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    pContext->PSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->VSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->HSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->DSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->GSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->PSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
 
-    pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
+    mpRenderer->getContext()->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
     mpDemo->draw(cb);
 
-#pragma region cursor
-    cb.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
-
-    mpRenderer->updateCB(cb);
-
-    pContext->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
-    pContext->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
-    pContext->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
-    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-    pContext->Draw(6, 0);
-    pContext->GSSetShader(nullptr, nullptr, 0);
-#pragma endregion
+    drawCursor(cb);
 
     renderUi();
 
@@ -440,6 +419,21 @@ void App::checkShaders()
         mpRenderer->createShaders();
         WARN("Shaders recompiled!");
     }
+}
+
+void App::drawCursor(GlobalCB& cb)
+{
+    cb.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
+
+    mpRenderer->updateCB(cb);
+
+    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    mpRenderer->getContext()->Draw(6, 0);
 }
 
 std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName, float& menuBarHeight)

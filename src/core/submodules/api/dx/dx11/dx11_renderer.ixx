@@ -32,6 +32,7 @@ export struct GlobalCB : public ICB
     XMMATRIX invProj;
     XMMATRIX texMtx;
     XMVECTOR cameraPos;
+    XMFLOAT4 color;
     int flags;
     int screenWidth;
     int screenHeight;
@@ -78,11 +79,11 @@ public:
         Shader<ID3D11GeometryShader> cursorGS;
         Shader<ID3D11PixelShader> cursorPS;
 
-        Shader<ID3D11VertexShader> bezierC0VS;
-        Shader<ID3D11HullShader> bezierC0HS;
-        Shader<ID3D11DomainShader> bezierC0DS;
-        Shader<ID3D11GeometryShader> bezierC0BorderGS;
-        Shader<ID3D11PixelShader> bezierC0PS;
+        Shader<ID3D11VertexShader> bezierVS;
+        Shader<ID3D11HullShader> bezierHS;
+        Shader<ID3D11DomainShader> bezierDS;
+        Shader<ID3D11GeometryShader> bezierBorderGS;
+        Shader<ID3D11PixelShader> bezierPS;
 
         Shader<ID3D11VertexShader> waterSurfaceVS;
         Shader<ID3D11PixelShader> waterSurfacePS;
@@ -100,6 +101,9 @@ public:
         Shader<ID3D11HullShader> gableHS;
         Shader<ID3D11DomainShader> gableDS;
         Shader<ID3D11PixelShader> gablePS;
+
+        Shader<ID3D11VertexShader> billboardVS;
+        Shader<ID3D11PixelShader> billboardPS;
     };
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
@@ -187,8 +191,8 @@ public:
         mpContext->Unmap(cb.buffer.Get(), 0);
     }
     void addRenderable(std::unique_ptr<IRenderable>&& renderable);
-    void removeRenderable(IRenderable::Id mId);
-    IRenderable* getRenderable(IRenderable::Id mId) const override;
+    void removeRenderable(Id id);
+    IRenderable* getRenderable(Id id) const override;
     void createShaders();
 
 private:
@@ -556,7 +560,7 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.bezierC0VS.second->GetBufferPointer(), mShaders.bezierC0VS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierVS.second->GetBufferPointer(), mShaders.bezierVS.second->GetBufferSize(), &mpBezierInputLayout));
     }
     // clang-format on
 }
@@ -588,11 +592,11 @@ void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& renderable)
     // mRebuildBuffers = true;
 }
 
-void DX11Renderer::removeRenderable(IRenderable::Id mId)
+void DX11Renderer::removeRenderable(Id id)
 {
     for (int i{}; i < mRenderables.size(); ++i)
     {
-        if (mRenderables.at(i)->mId == mId)
+        if (mRenderables.at(i)->id == id)
         {
             mRenderables.erase(mRenderables.begin() + i);
             mVertexBuffers.erase(mVertexBuffers.begin() + i);
@@ -601,10 +605,10 @@ void DX11Renderer::removeRenderable(IRenderable::Id mId)
     }
 }
 
-IRenderable* DX11Renderer::getRenderable(IRenderable::Id mId) const
+IRenderable* DX11Renderer::getRenderable(Id id) const
 {
     auto it =
-        std::find_if(mRenderables.begin(), mRenderables.end(), [mId](const auto& item) { return item->mId == mId; });
+        std::find_if(mRenderables.begin(), mRenderables.end(), [id](const auto& item) { return item->id == id; });
 
     if (it != mRenderables.end())
     {

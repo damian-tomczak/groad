@@ -6,15 +6,21 @@ module;
 #include <d3d11.h>
 #include <wrl/client.h>
 
+#define COUNTER()                       \
+    friend void reloadCounters();       \
+    inline static unsigned counter = 1; \
+
 export module core.renderables;
-import std.core;
 import dx11renderer;
 
 export
 {
+    class CounterReloader;
+
     class Point : public IRenderable
     {
-        inline static unsigned counter = 1;
+        COUNTER()
+
         static constexpr float defaultRadius = 0.1f;
         static constexpr int defaultNumberOfSegments = 50;
 
@@ -30,7 +36,7 @@ export
         static void drawPrimitive(IRenderer* pRenderer, GlobalCB& cb, XMVECTOR pos, float radius = defaultRadius,
                                   int segments = defaultNumberOfSegments)
         {
-            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+            auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
             std::vector<XMFLOAT3> geometry = produceGeometry(radius, segments);
             std::vector<unsigned> topology = produceTopology(segments);
@@ -66,8 +72,8 @@ export
 
             const XMMATRIX translationMat = XMMatrixTranslationFromVector(pos);
             cb.modelMtx = translationMat;
-            cb.flags = 2;
 
+            cb.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
             pDX11Renderer->updateCB(cb);
 
             UINT vStride = sizeof(XMFLOAT3), offset = 0;
@@ -106,19 +112,27 @@ export
             return geometry;
         }
 
-        static std::vector<unsigned> produceTopology(int segments)
+        static std::vector<unsigned int> produceTopology(int segments)
         {
-            std::vector<unsigned> topology;
+            std::vector<unsigned int> topology;
 
             for (int i = 0; i < segments; ++i)
             {
                 for (int j = 0; j < segments; ++j)
                 {
-                    unsigned first = (i * (segments + 1)) + j;
-                    unsigned second = first + segments + 1;
+                    const unsigned int topLeft = i * (segments + 1) + j;
+                    unsigned int topRight = topLeft + 1;
+                    const unsigned int bottomLeft = topLeft + (segments + 1);
+                    unsigned int bottomRight = bottomLeft + 1;
 
-                    topology.insert(topology.end(), {first, second, first + 1});
-                    topology.insert(topology.end(), {second, second + 1, first + 1});
+                    if (j == segments - 1)
+                    {
+                        topRight = i * (segments + 1);
+                        bottomRight = (i + 1) * (segments + 1);
+                    }
+
+                    topology.insert(topology.end(), {topLeft, bottomLeft, topRight});
+                    topology.insert(topology.end(), {topRight, bottomLeft, bottomRight});
                 }
             }
 
@@ -138,7 +152,7 @@ export
 
     class Torus : public IRenderable
     {
-        inline static unsigned counter = 1;
+        COUNTER();
 
     public:
         Torus(XMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100,
@@ -191,32 +205,37 @@ export
     class IBezier : public IRenderable
     {
     public:
-        IBezier(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, std::string_view tag)
-            : IRenderable{XMVectorZero(), tag}, mControlPointRenderableIds{selectedRenderableIds}
+        IBezier(const std::vector<Id>& selectedRenderableIds, std::string_view tag, Color color)
+            : IRenderable{XMVectorZero(), tag, color}, mDeBoorIds{selectedRenderableIds}
         {
         }
 
-        static constexpr unsigned controlPointsNumber = 4;
+        static constexpr unsigned deBoorNumber = 4;
 
-        std::unordered_set<IRenderable::Id> mControlPointRenderableIds;
+        std::vector<Id> mDeBoorIds;
         bool mIsPolygon{};
 
-        void insertControlPoint(const IRenderable::Id mId)
+        void insertDeBoorPointId(const Id id)
         {
-            mControlPointRenderableIds.insert(mId);
+            mDeBoorIds.push_back(id);
             generateGeometry();
+        }
+
+        bool isScalable() override
+        {
+            return true;
         }
     };
 
     class BezierC0 final : public IBezier
     {
-        inline static unsigned counter = 1;
+        COUNTER();
 
         const IRenderer* mpRenderer;
 
     public:
-        BezierC0(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, const IRenderer* pRenderer)
-            : IBezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str()}, mpRenderer{pRenderer}
+        BezierC0(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = Colors::defaultColor)
+            : IBezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
         {
         }
 
@@ -226,16 +245,16 @@ export
 
             unsigned idx = 0;
 
-            for (const auto mId : mControlPointRenderableIds)
+            for (const auto id : mDeBoorIds)
             {
-                if ((idx != 0) && (idx % controlPointsNumber == 0))
+                if ((idx != 0) && (idx % deBoorNumber == 0))
                 {
                     const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
                     mGeometry.push_back(previousPoint);
                     idx++;
                 }
 
-                auto pRenderable = mpRenderer->getRenderable(mId);
+                auto pRenderable = mpRenderer->getRenderable(id);
                 if (pRenderable)
                 {
                     const XMVECTOR positionVec = pRenderable->mWorldPos;
@@ -244,14 +263,13 @@ export
                     mGeometry.push_back(position);
                     idx++;
                 }
-
             }
 
-            if (mGeometry.size() % controlPointsNumber != 0)
+            if (mGeometry.size() % deBoorNumber != 0)
             {
                 const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
 
-                while (mGeometry.size() % controlPointsNumber != 0)
+                while (mGeometry.size() % deBoorNumber != 0)
                 {
                     mGeometry.push_back(previousPoint);
                 }
@@ -261,14 +279,21 @@ export
 
     class BezierC2 final : public IBezier
     {
-        inline static unsigned counter = 1;
+        COUNTER();
 
         const IRenderer* mpRenderer;
 
     public:
-        BezierC2(const std::unordered_set<IRenderable::Id>& selectedRenderableIds, const IRenderer* pRenderer)
-            : IBezier{selectedRenderableIds, std::format("BezierC2 {}", counter++).c_str()}, mpRenderer{pRenderer}
+        BezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = Colors::defaultColor)
+            : IBezier{selectedRenderableIds, std::format("BezierC2 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
         {
+        }
+
+        void regenerateData()
+        {
+            IRenderable::regenerateData();
+
+            generateBernsteinPoints();
         }
 
         void generateGeometry() override
@@ -277,19 +302,21 @@ export
 
             unsigned idx = 0;
 
-            for (const auto mId : mControlPointRenderableIds)
+            for (const auto id : mDeBoorIds)
             {
-                if ((idx != 0) && (idx % controlPointsNumber == 0))
+                if ((idx != 0) && (idx % deBoorNumber == 0))
                 {
-                    const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
-                    mGeometry.push_back(previousPoint);
-                    idx++;
+                    const XMFLOAT3& previousPoint3 = mGeometry.at(mGeometry.size() - 3);
+                    const XMFLOAT3& previousPoint2 = mGeometry.at(mGeometry.size() - 2);
+                    const XMFLOAT3& previousPoint1 = mGeometry.at(mGeometry.size() - 1);
+                    mGeometry.insert(mGeometry.end(), {previousPoint3, previousPoint2, previousPoint1});
+                    idx += 3;
                 }
 
-                auto pRenderable = mpRenderer->getRenderable(mId);
+                auto pRenderable = mpRenderer->getRenderable(id);
                 if (pRenderable)
                 {
-                    const XMVECTOR positionVec = pRenderable->mWorldPos;
+                    const XMVECTOR positionVec = pRenderable->getGlobalPos();
                     XMFLOAT3 position;
                     XMStoreFloat3(&position, positionVec);
                     mGeometry.push_back(position);
@@ -297,15 +324,54 @@ export
                 }
             }
 
-            if (mGeometry.size() % controlPointsNumber != 0)
+            if (mGeometry.size() % deBoorNumber != 0)
             {
                 const XMFLOAT3 previousPoint = mGeometry.at(mGeometry.size() - 1);
 
-                while (mGeometry.size() % controlPointsNumber != 0)
+                while (mGeometry.size() % deBoorNumber != 0)
                 {
                     mGeometry.push_back(previousPoint);
                 }
             }
         }
+
+        std::vector<XMFLOAT3>& getBernsteinPositions()
+        {
+            return mGeometry;
+        }
+
+    private:
+        void generateBernsteinPoints()
+        {
+            static const XMMATRIX bSplineToBernstein
+            {
+                1.0f / 6, 2.0f / 3, 1.0f / 6, 0.0f,
+                0.0f,     2.0f / 3, 1.0f / 3, 0.0f,
+                0.0f,     1.0f / 3, 2.0f / 3, 0.0f,
+                0.0f,     1.0f / 6, 2.0f / 3, 1.0f / 6
+            };
+
+            for (size_t i = 0; i < mGeometry.size(); i += 4)
+            {
+                XMVECTOR pos1 = XMLoadFloat3(&mGeometry[i]);
+                XMVECTOR pos2 = XMLoadFloat3(&mGeometry[i + 1]);
+                XMVECTOR pos3 = XMLoadFloat3(&mGeometry[i + 2]);
+                XMVECTOR pos4 = XMLoadFloat3(&mGeometry[i + 3]);
+
+                XMMATRIX pointsMat = XMMATRIX(pos1, pos2, pos3, pos4);
+
+                XMMATRIX pointsInBspline = XMMatrixMultiply(bSplineToBernstein, pointsMat);
+
+                XMStoreFloat3(&mGeometry[i],     pointsInBspline.r[0]);
+                XMStoreFloat3(&mGeometry[i + 1], pointsInBspline.r[1]);
+                XMStoreFloat3(&mGeometry[i + 2], pointsInBspline.r[2]);
+                XMStoreFloat3(&mGeometry[i + 3], pointsInBspline.r[3]);
+            }
+        }
     };
+
+    inline void reloadCounters()
+    {
+        Point::counter = Torus::counter = BezierC0::counter = BezierC2::counter = 1;
+    }
 }

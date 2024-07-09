@@ -58,4 +58,6 @@ module :private;
 IDemo::~IDemo()
 {
     mCtx.selectedRenderableIds.clear();
+    mCtx.lastXMousePosition = -1;
+    mCtx.lastYMousePosition = -1;
 }
