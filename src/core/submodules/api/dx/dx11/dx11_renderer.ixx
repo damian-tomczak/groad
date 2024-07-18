@@ -32,7 +32,7 @@ export struct GlobalCB : public ICB
     XMMATRIX invProj;
     XMMATRIX texMtx;
     XMVECTOR cameraPos;
-    XMFLOAT4 color;
+    Color color;
     int flags;
     int screenWidth;
     int screenHeight;
@@ -387,7 +387,12 @@ void DX11Renderer::buildGeometryBuffers()
 {
     for (unsigned i{}; i < mRenderables.size(); ++i)
     {
+        if (!mRenderables[i]->mShouldRebuildBuffers)
+        {
+            continue;
+        }
         auto& pRenderable = mRenderables[i];
+        // TODO: not yet implemented
         //if (mRenderables[i] == nullptr)
         //{
         //    continue;
@@ -434,6 +439,8 @@ void DX11Renderer::buildGeometryBuffers()
             .pSysMem = topology.data(),
         };
         HR(mpDevice->CreateBuffer(&ibd, &initData, &mIndexBuffers[i]));
+
+        mRenderables[i]->mShouldRebuildBuffers = false;
     }
 
     //mRebuildBuffers = false;
@@ -470,6 +477,11 @@ void DX11Renderer::createShaders()
 
         const fs::path fullShaderPath = SHADERS_PATH / shaderPath;
 
+        if (!fs::exists(fullShaderPath))
+        {
+            ERR(("Shaders compiler error: following path doesn't exist " + fullShaderPath.string()).c_str());
+        }
+
         ComPtr<ID3D10Blob> compilationMsgs;
         DWORD shaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
 #ifndef NDEBUG
@@ -480,21 +492,26 @@ void DX11Renderer::createShaders()
             D3DCompileFromFile(fullShaderPath.c_str(), nullptr, nullptr, shaderEntryPoint.data(), shaderModel.data(),
                                shaderFlags, 0, shaderBlob.GetAddressOf(), compilationMsgs.GetAddressOf());
 
-        const bool containMessage = compilationMsgs != nullptr;
+        const bool isContainingMessage = compilationMsgs != nullptr;
 
-        if (FAILED(hr) || containMessage)
+        if (FAILED(hr))
         {
-            bool isWarning{};
+            bool isWarning = false;
+            std::string message;
 
-            std::string message{reinterpret_cast<char*>(compilationMsgs->GetBufferPointer())};
-            if (message.contains(": warning"))
+            if (isContainingMessage)
             {
-                isWarning = true;
+                message = reinterpret_cast<char*>(compilationMsgs->GetBufferPointer());
+                if (message.contains(": warning"))
+                {
+                    isWarning = true;
+                }
             }
 
             std::ostringstream errorMessage;
             errorMessage << "Shader compilation " << (isWarning ? "warning" : "error") << ": "
-                         << std::system_category().message(hr) << ")[" << hr << "] " << message;
+                         << std::system_category().message(hr) << ")[" << hr << "] "
+                         << (isContainingMessage ? message : "ERROR DIDN'T PROVIDE EXPLANATION");
 
             if (firstCall && !isWarning)
             {

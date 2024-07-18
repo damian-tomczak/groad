@@ -38,14 +38,14 @@ public:
             int height;
         };
     };
-    // clang-format off
     using EventData = std::variant<
+    // clang-format off
         Event::Empty,
         Event::MousePosition,
         Event::MouseWheel,
         Event::WindowSize
-    >;
     // clang-format on
+    >;
 
     IWindow(int width, int height) : mWidth{width}, mHeight{height}
     {

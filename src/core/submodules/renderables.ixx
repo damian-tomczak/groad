@@ -73,7 +73,7 @@ export
             const XMMATRIX translationMat = XMMatrixTranslationFromVector(pos);
             cb.modelMtx = translationMat;
 
-            cb.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
+            //cb.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
             pDX11Renderer->updateCB(cb);
 
             UINT vStride = sizeof(XMFLOAT3), offset = 0;
@@ -141,11 +141,15 @@ export
 
         void generateGeometry() override
         {
+            IRenderable::generateGeometry();
+
             mGeometry = produceGeometry(mRadius, mSegments);
         }
 
         void generateTopology() override
         {
+            IRenderable::generateTopology();
+
             mTopology = produceTopology(mSegments);
         }
     };
@@ -169,7 +173,8 @@ export
 
         void generateGeometry() override
         {
-            mGeometry.clear();
+            IRenderable::generateGeometry();
+
             for (int i = 0; i <= mMajorSegments; ++i)
             {
                 float theta = (i / static_cast<float>(mMajorSegments)) * 2 * std::numbers::pi_v<float>;
@@ -186,7 +191,8 @@ export
 
         void generateTopology() override
         {
-            mTopology.clear();
+            IRenderable::generateTopology();
+
             for (int i = 0; i < mMajorSegments; ++i)
             {
                 for (int j = 0; j < mMinorSegments; ++j)
@@ -234,14 +240,14 @@ export
         const IRenderer* mpRenderer;
 
     public:
-        BezierC0(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = Colors::defaultColor)
+        BezierC0(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
             : IBezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
         {
         }
 
         void generateGeometry() override
         {
-            mGeometry.clear();
+            IRenderable::generateGeometry();
 
             unsigned idx = 0;
 
@@ -284,12 +290,12 @@ export
         const IRenderer* mpRenderer;
 
     public:
-        BezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = Colors::defaultColor)
+        BezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
             : IBezier{selectedRenderableIds, std::format("BezierC2 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
         {
         }
 
-        void regenerateData()
+        void regenerateData() override
         {
             IRenderable::regenerateData();
 
@@ -298,7 +304,7 @@ export
 
         void generateGeometry() override
         {
-            mGeometry.clear();
+            IRenderable::generateGeometry();
 
             unsigned idx = 0;
 
@@ -370,8 +376,232 @@ export
         }
     };
 
+    class InterpolatedBezierC2 final : public IBezier
+    {
+        COUNTER();
+
+        const IRenderer* mpRenderer;
+
+    public:
+        InterpolatedBezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
+            : IBezier{selectedRenderableIds, std::format("InterpolatedBezierC2 {}", counter++).c_str(), color},
+              mpRenderer{pRenderer}
+        {
+        }
+
+        void generateGeometry() override
+        {
+            IRenderable::generateGeometry();
+
+            std::vector<XMVECTOR> deBoorPositions;
+            deBoorPositions.reserve(mDeBoorIds.size());
+
+            if (mDeBoorIds.size() == 0)
+            {
+                return;
+            }
+
+            auto pFirstRenderable = mpRenderer->getRenderable(*mDeBoorIds.begin());
+            if (pFirstRenderable != nullptr)
+            {
+                deBoorPositions.push_back(pFirstRenderable->getGlobalPos());
+            }
+
+            for (auto it = mDeBoorIds.begin() + 1; it != mDeBoorIds.end();)
+            {
+                if (*(it - 1) == *it)
+                {
+                    it = mDeBoorIds.erase(it);
+                }
+                else
+                {
+                    auto pRenderable = mpRenderer->getRenderable(*it);
+                    if (pRenderable != nullptr)
+                    {
+                        const XMVECTOR posVec = pRenderable->getGlobalPos();
+                        deBoorPositions.push_back(posVec);
+                    }
+
+                    ++it;
+                }
+            }
+
+            auto [alfa, beta, b] = createSystemOfEquations(deBoorPositions);
+            std::vector<XMVECTOR> cs = solveSplineSystem(alfa, beta, b);
+
+            cs.insert(cs.begin(), XMVectorZero());
+            cs.push_back(XMVectorZero());
+
+            for (const XMVECTOR& posVec : getBezierPoints(cs, deBoorPositions))
+            {
+                XMFLOAT3 pos;
+                XMStoreFloat3(&pos, posVec);
+                mGeometry.push_back(pos);
+            }
+        }
+
+    private:
+        std::tuple<std::vector<float>, std::vector<float>, std::vector<XMVECTOR>> createSystemOfEquations(
+            const std::vector<XMVECTOR>& points)
+        {
+            std::vector<float> alfa(points.size() - 2);
+            std::vector<float> beta(points.size() - 2);
+            std::vector<XMVECTOR> b(points.size() - 2);
+            std::vector<float> chord(points.size() - 1);
+
+            // Compute chord lengths directly within the loop
+            for (size_t i = 0; i < points.size() - 1; ++i)
+            {
+                XMVECTOR diff = XMVectorSubtract(points[i + 1], points[i]);
+                XMVECTOR length = XMVector3Length(diff);
+                chord[i] = XMVectorGetX(length);
+            }
+
+            // Compute alfa, beta, and b
+            for (size_t i = 1; i < points.size() - 1; ++i)
+            {
+                float chordSum = chord[i - 1] + chord[i];
+                alfa[i - 1] = chord[i - 1] / chordSum;
+                beta[i - 1] = chord[i] / chordSum;
+
+                XMVECTOR diff1 =
+                    XMVectorScale(XMVectorSubtract(points[i + 1], points[i]), 3.0f / chord[i]);
+                XMVECTOR diff2 =
+                    XMVectorScale(XMVectorSubtract(points[i], points[i - 1]), 3.0f / chord[i - 1]);
+                b[i - 1] = XMVectorDivide(XMVectorSubtract(diff1, diff2),
+                                                   XMVectorReplicate(chordSum));
+            }
+
+            return {alfa, beta, b};
+        }
+
+        std::vector<XMVECTOR> solveSplineSystem(const std::vector<float>& alfa, const std::vector<float>& beta,
+                                                std::vector<XMVECTOR>& R)
+        {
+            if (alfa.size() == 1)
+            {
+                R[0] = XMVectorScale(R[0], 0.5f);
+                return R;
+            }
+
+            if (alfa.size() != beta.size())
+            {
+                return {};
+            }
+
+            const size_t n = alfa.size() - 1;
+
+            float lastBeta = beta[0] / 2.0f;
+            R[0] = XMVectorScale(R[0], 0.5f);
+
+            for (size_t i = 1; i < n; i++)
+            {
+                float denominator = 2.0f - alfa[i] * lastBeta;
+                lastBeta = beta[i] / denominator;
+                R[i] = XMVectorScale(XMVectorSubtract(R[i], XMVectorScale(R[i - 1], alfa[i])), 1.0f / denominator);
+            }
+
+            R[n] = XMVectorScale(XMVectorSubtract(R[n], XMVectorScale(R[n - 1], alfa[n])),
+                                 1.0f / (2.0f - alfa[n] * lastBeta));
+
+            for (size_t i = n; i-- > 0;)
+            {
+                R[i] = XMVectorSubtract(R[i], XMVectorScale(R[i + 1], lastBeta));
+
+                if (i > 0)
+                {
+                    lastBeta = beta[i - 1] / (2.0f - alfa[i] * lastBeta);
+                }
+            }
+
+            return R;
+        }
+
+        std::vector<XMVECTOR> getBezierPoints(const std::vector<XMVECTOR>& cs, const std::vector<XMVECTOR>& points)
+        {
+            const size_t n = points.size() - 1;
+
+            std::vector<XMVECTOR> a(points.size());
+            std::vector<XMVECTOR> b(points.size());
+            std::vector<XMVECTOR> c(points.size());
+            std::vector<XMVECTOR> d(points.size());
+
+            std::vector<float> chord;
+
+            for (size_t i = 0; i < n; ++i)
+            {
+                chord.push_back(XMVectorGetX(XMVector3Length(XMVectorSubtract(points[i + 1], points[i]))));
+            }
+
+            a[0] = points[0];
+            c[0] = cs[0];
+
+            for (size_t i = 1; i <= n; ++i)
+            {
+                a[i] = points[i];
+                c[i] = cs[i];
+
+                auto cDiff = XMVectorSubtract(c[i], c[i - 1]);
+                auto cScaledDivided = XMVectorDivide(cDiff, XMVectorReplicate(6 * chord[i - 1]));
+                d[i - 1] = XMVectorScale(cScaledDivided, 2);
+
+                auto aDiff = XMVectorSubtract(a[i], a[i - 1]);
+                auto cPrevScaled = XMVectorScale(c[i - 1], chord[i - 1] * chord[i - 1]);
+                auto dPrevScaled = XMVectorScale(d[i - 1], chord[i - 1] * chord[i - 1] * chord[i - 1]);
+                auto numerator = XMVectorSubtract(XMVectorSubtract(aDiff, cPrevScaled), dPrevScaled);
+                b[i - 1] = XMVectorDivide(numerator, XMVectorReplicate(chord[i - 1]));
+            }
+
+            for (size_t i = 0; i < n; ++i)
+            {
+                b[i] = XMVectorScale(b[i], chord[i]);
+                c[i] = XMVectorScale(c[i], chord[i] * chord[i]);
+                d[i] = XMVectorScale(d[i], chord[i] * chord[i] * chord[i]);
+            }
+
+            // clang-format off
+            static const XMMATRIX powerToBernstein = XMMatrixTranspose({
+                1.0f, 0.0f,        0.0f,        0.0f,
+                1.0f, 1.0f / 3.0f, 0.0f,        0.0f,
+                1.0f, 2.0f / 3.0f, 1.0f / 3.0f, 0.0f,
+                1.0f, 1.0f,        1.0f,        1.0f,
+            });
+            // clang-format on
+
+            std::vector<XMVECTOR> bezierPoints;
+
+            for (size_t i = 0; i < n; ++i)
+            {
+                XMVECTOR xs = XMVector4Transform(
+                    XMVectorSet(XMVectorGetX(a[i]), XMVectorGetX(b[i]), XMVectorGetX(c[i]), XMVectorGetX(d[i])),
+                    powerToBernstein);
+                XMVECTOR ys = XMVector4Transform(
+                    XMVectorSet(XMVectorGetY(a[i]), XMVectorGetY(b[i]), XMVectorGetY(c[i]), XMVectorGetY(d[i])),
+                    powerToBernstein);
+                XMVECTOR zs = XMVector4Transform(
+                    XMVectorSet(XMVectorGetZ(a[i]), XMVectorGetZ(b[i]), XMVectorGetZ(c[i]), XMVectorGetZ(d[i])),
+                    powerToBernstein);
+
+                bezierPoints.push_back(XMVectorSet(XMVectorGetX(xs), XMVectorGetX(ys), XMVectorGetX(zs), 1.0f));
+                bezierPoints.push_back(XMVectorSet(XMVectorGetY(xs), XMVectorGetY(ys), XMVectorGetY(zs), 1.0f));
+                bezierPoints.push_back(XMVectorSet(XMVectorGetZ(xs), XMVectorGetZ(ys), XMVectorGetZ(zs), 1.0f));
+
+                if (i == n - 1)
+                {
+                    bezierPoints.push_back(points[n]);
+                }
+                else
+                {
+                    bezierPoints.push_back(XMVectorSet(XMVectorGetW(xs), XMVectorGetW(ys), XMVectorGetW(zs), 1.0f));
+                }
+            }
+
+            return bezierPoints;
+        }
+    };
+
     inline void reloadCounters()
     {
-        Point::counter = Torus::counter = BezierC0::counter = BezierC2::counter = 1;
+        Point::counter = Torus::counter = BezierC0::counter = BezierC2::counter = InterpolatedBezierC2::counter = 1;
     }
 }

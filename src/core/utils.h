@@ -6,6 +6,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <DirectXMath.h>
+#include <DirectXColors.h>
 
 using namespace Microsoft::WRL;
 using namespace DirectX;

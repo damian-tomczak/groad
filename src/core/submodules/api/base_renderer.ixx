@@ -1,7 +1,5 @@
 module;
 
-#include <DirectXMath.h>
-
 #include "utils.h"
 
 export module core.renderer;
@@ -11,27 +9,10 @@ import std.core;
 
 export
 {
-    using Color = XMFLOAT4;
+    using Color = XMVECTORF32;
 
-// clang-format off
-    namespace Colors
-    {
-    inline constexpr Color white  {1.0f, 1.0f,  1.0f, 1.0f};
-    inline constexpr Color black  {0.0f, 0.0f,  0.0f, 1.0f};
-    inline constexpr Color red    {1.0f, 0.0f,  0.0f, 1.0f};
-    inline constexpr Color green  {0.0f, 1.0f,  0.0f, 1.0f};
-    inline constexpr Color blue   {0.0f, 0.0f,  1.0f, 1.0f};
-    inline constexpr Color yellow {1.0f, 1.0f,  0.0f, 1.0f};
-    inline constexpr Color cyan   {0.0f, 1.0f,  1.0f, 1.0f};
-    inline constexpr Color magenta{1.0f, 0.0f,  1.0f, 1.0f};
-    inline constexpr Color pink   {1.0f, 0.75f, 0.8f, 1.0f};
-    inline constexpr Color orange {1.0f, 0.5f,  0.0f, 1.0f};
-
-    inline constexpr Color defaultColor = blue;
-    inline constexpr Color defaultSelectionColor = red;
-    }
-// clang-format on
-
+    const Color defaultColor = Colors::Blue;
+    const Color defaultSelectionColor = Colors::Red;
 
     enum class API : uint8_t
     {
@@ -75,8 +56,10 @@ export
 
     class IRenderable : public IIdentifiable
     {
+        friend class DX11Renderer;
+
     public:
-        IRenderable(FXMVECTOR pos, std::string_view tag, Color color = Colors::defaultColor)
+        IRenderable(FXMVECTOR pos, std::string_view tag, Color color = defaultColor)
             : IIdentifiable{counter++}, mTag{tag}, mWorldPos{pos}, mColor{color}
         {
         }
@@ -94,7 +77,7 @@ export
 
         Color mColor;
 
-        const XMVECTOR getGlobalPos()
+        const FXMVECTOR getGlobalPos()
         {
             return mLocalPos + mWorldPos;
         }
@@ -117,10 +100,16 @@ export
 
         virtual void generateGeometry()
         {
+            mGeometry.clear();
+
+            mShouldRebuildBuffers = true;
         }
 
         virtual void generateTopology()
         {
+            mTopology.clear();
+
+            mShouldRebuildBuffers = true;
         }
 
         virtual bool isScalable()
@@ -134,6 +123,7 @@ export
 
     private:
         inline static Id counter = 0;
+        bool mShouldRebuildBuffers{};
     };
 
     class IRenderer : public NonCopyableAndMoveable

@@ -13,7 +13,7 @@ import core.renderables;
 
 export class CADDemo : public IDemo
 {
-    static constexpr float renderablesListHeight = 0.25f;
+    static constexpr float renderablesListHeight = 0.3f;
 
 public:
     CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
@@ -111,13 +111,17 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
     deBoorIds.push_back(pPoint->id);
     mpRenderer->addRenderable(std::move(pPoint));
 
-    auto pBezierC0 = std::make_unique<BezierC0>(deBoorIds, mpRenderer, Colors::pink);
-    pBezierC0->regenerateData();
-    mpRenderer->addRenderable(std::move(pBezierC0));
+    //auto pBezierC0 = std::make_unique<BezierC0>(deBoorIds, mpRenderer, Colors::Pink);
+    //pBezierC0->regenerateData();
+    //mpRenderer->addRenderable(std::move(pBezierC0));
 
-    auto pBezierC2 = std::make_unique<BezierC2>(deBoorIds, mpRenderer, Colors::orange);
-    pBezierC2->regenerateData();
-    mpRenderer->addRenderable(std::move(pBezierC2));
+    //auto pBezierC2 = std::make_unique<BezierC2>(deBoorIds, mpRenderer, Colors::Orange);
+    //pBezierC2->regenerateData();
+    //mpRenderer->addRenderable(std::move(pBezierC2));
+
+    auto pInterpolatedBezierC2 = std::make_unique<InterpolatedBezierC2>(deBoorIds, mpRenderer, Colors::Brown);
+    pInterpolatedBezierC2->regenerateData();
+    mpRenderer->addRenderable(std::move(pInterpolatedBezierC2));
 }
 
 CADDemo::~CADDemo()
@@ -197,7 +201,7 @@ void CADDemo::draw(GlobalCB& cb)
         if (mCtx.selectedRenderableIds.contains(pRenderable->id) ||
             pointIdsPartOfSelectedBeziers.contains(pRenderable->id))
         {
-            cb.color = Colors::defaultSelectionColor;
+            cb.color = defaultSelectionColor;
         }
 
         pDX11Renderer->updateCB(cb);
@@ -259,38 +263,45 @@ void CADDemo::draw(GlobalCB& cb)
         }
         else
         {
-            const auto& controlPoints = pBezier->getGeometry();
-            const auto controlPointsSize = controlPoints.size();
+            const std::vector<XMFLOAT3>& controlPoints = pBezier->getGeometry();
+            const size_t controlPointsSize = controlPoints.size();
             for (unsigned i = 0; i < controlPointsSize + 1; i += IBezier::deBoorNumber)
             {
                 offset = i * sizeof(XMFLOAT3);
                 pDX11Renderer->getContext()->IASetVertexBuffers(
                     0, 1, pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &vStride, &offset);
 
+                pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+                pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(), nullptr, 0);
+                pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(), nullptr, 0);
+                pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+
+
+                if (mCtx.selectedRenderableIds.contains(pRenderable->id) ||
+                    pointIdsPartOfSelectedBeziers.contains(pRenderable->id))
+                {
+                    cb.color = defaultSelectionColor;
+                }
+                else
+                {
+                    cb.color = pRenderable->mColor;
+                }
+                pDX11Renderer->updateCB(cb);
+
                 pDX11Renderer->getContext()->Draw(1, 0);
 
-                if (pBezier->mIsPolygon)
+                if ((dynamic_cast<InterpolatedBezierC2*>(pBezier) == nullptr) && pBezier->mIsPolygon)
                 {
                     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
                     pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
                     pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
                     pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierBorderGS.first.Get(),
                                                              nullptr, 0);
-                    cb.color = Colors::green;
+                    cb.color = Colors::Green;
 
                     pDX11Renderer->updateCB(cb);
 
                     pDX11Renderer->getContext()->Draw(1, 0);
-
-                    pDX11Renderer->getContext()->IASetPrimitiveTopology(
-                        D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-                    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(),
-                                                             nullptr, 0);
-                    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(),
-                                                             nullptr, 0);
-                    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-
-                    pDX11Renderer->updateCB(cb);
                 }
             }
         }
@@ -437,41 +448,111 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                         pSelectedRenderable->mYaw += yawOffset;
                         break;
                     case InteractionType::MOVE: {
+                        // Following code isn't optimized cuz otherwise it is unreadable
+                        auto pSelectedPoint = dynamic_cast<Point*>(pSelectedRenderable);
                         auto pSelectedBezier = dynamic_cast<IBezier*>(pSelectedRenderable);
-                        if (pSelectedBezier == nullptr)
+                        auto pSelectedBezierC2 = dynamic_cast<BezierC2*>(pSelectedRenderable);
+
+                        if ((pSelectedBezier == nullptr) && (pSelectedPoint == nullptr))
                         {
+                            // Selected something different than curve or point
                             pSelectedRenderable->mWorldPos += offsetVec;
                         }
-
-                        for (const auto& pRenderable : mpRenderer->mRenderables)
+                        else if (pSelectedPoint != nullptr)
                         {
-                            auto pBezierC2 = dynamic_cast<BezierC2*>(pRenderable.get());
+                            // Selected point
+                            pSelectedPoint->mWorldPos += offsetVec;
 
-                            if ((pSelectedBezier != nullptr) && (pBezierC2 != nullptr) &&
-                                (mSelectedBernsteinPointIdx == -1))
+                            for (const auto& pRenderable : mpRenderer->mRenderables)
                             {
-                                const auto& deBoorIds = pBezierC2->mDeBoorIds;
-                                for (const Id controlPointRenderableId : deBoorIds)
-                                {
-                                    IRenderable* const pControlPointRenderable =
-                                        mpRenderer->getRenderable(controlPointRenderableId);
+                                auto pRenderableBezierC0 = dynamic_cast<BezierC0*>(pRenderable.get());
+                                auto pRenderableBezierC2 = dynamic_cast<BezierC2*>(pRenderable.get());
+                                auto pRenderableInterpolatedBezierC2 = dynamic_cast<InterpolatedBezierC2*>(pRenderable.get());
 
-                                    pControlPointRenderable->mWorldPos += offsetVec;
+                                if (pRenderableBezierC0 != nullptr)
+                                {
+                                    pRenderableBezierC0->regenerateData();
                                 }
-
-                                for (XMFLOAT3& bernsteinPos : pBezierC2->getBernsteinPositions())
+                                else if (pRenderableBezierC2 != nullptr)
                                 {
-                                    XMVECTOR va = XMLoadFloat3(&bernsteinPos);
-                                    XMVECTOR vc = XMVectorAdd(va, offsetVec);
-
-                                    XMStoreFloat3(&bernsteinPos, vc);
+                                    // TODO: bernsteins are reseted
+                                    pRenderableBezierC2->regenerateData();
+                                }
+                                else if (pRenderableInterpolatedBezierC2 != nullptr)
+                                {
+                                    pRenderableInterpolatedBezierC2->regenerateData();
                                 }
                             }
-
-                            if ((dynamic_cast<IBezier*>(pRenderable.get()) != nullptr) && (pBezierC2 == nullptr))
+                        }
+                        else if (auto pSelectedBezierC0 = dynamic_cast<BezierC0*>(pSelectedRenderable); pSelectedBezierC0 != nullptr)
+                        {
+                            // Selected bezier C0
+                            // TODO: update only beziers containing modified control points
+                            for (const Id controlPointRenderableId : pSelectedBezierC0->mDeBoorIds)
                             {
-                                pRenderable->regenerateData();
+                                IRenderable* const pControlPointRenderable =
+                                    mpRenderer->getRenderable(controlPointRenderableId);
+
+                                pControlPointRenderable->mWorldPos += offsetVec;
                             }
+
+                            for (const auto& pRenderable : mpRenderer->mRenderables)
+                            {
+                                auto pRenderableBezier = dynamic_cast<IBezier*>(pRenderable.get());
+
+                                if (pRenderableBezier != nullptr)
+                                {
+                                    pRenderableBezier->regenerateData();
+                                }
+                            }
+                        }
+                        else if (pSelectedBezierC2 != nullptr)
+                        {
+                            // Selected bezier C2
+                            // TODO: update only beziers containing modified control points
+                            for (const Id controlPointRenderableId : pSelectedBezierC2->mDeBoorIds)
+                            {
+                                IRenderable* const pControlPointRenderable =
+                                    mpRenderer->getRenderable(controlPointRenderableId);
+
+                                pControlPointRenderable->mWorldPos += offsetVec;
+                            }
+
+                            for (const auto& pRenderable : mpRenderer->mRenderables)
+                            {
+                                auto pRenderableBezier = dynamic_cast<IBezier*>(pRenderable.get());
+
+                                if (pRenderableBezier != nullptr)
+                                {
+                                    pRenderableBezier->regenerateData();
+                                }
+                            }
+                        }
+                        else if (auto pSelectedInterpolatedBezierC2 = dynamic_cast<InterpolatedBezierC2*>(pSelectedRenderable); pSelectedInterpolatedBezierC2 != nullptr)
+                        {
+                            // Selected interpolated bezier C2
+                            // TODO: update only beziers containing modified control points
+                            for (const Id controlPointRenderableId : pSelectedInterpolatedBezierC2->mDeBoorIds)
+                            {
+                                IRenderable* const pControlPointRenderable =
+                                    mpRenderer->getRenderable(controlPointRenderableId);
+
+                                pControlPointRenderable->mWorldPos += offsetVec;
+                            }
+
+                            for (const auto& pRenderable : mpRenderer->mRenderables)
+                            {
+                                auto pRenderableBezier = dynamic_cast<IBezier*>(pRenderable.get());
+
+                                if (pRenderableBezier != nullptr)
+                                {
+                                    pRenderableBezier->regenerateData();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            ASSERT(false);
                         }
                     }
                     break;
@@ -756,6 +837,15 @@ void CADDemo::renderUi()
             pSelectedRenderable->mTag = nameBuffer;
         }
 
+        // TODO: add debug window
+#ifndef NDEBUG
+        if (ImGui::TreeNode("DEBUG"))
+        {
+            ImGui::Text("ENTITY ID: %d", pSelectedRenderable->id);
+            ImGui::TreePop();
+        }
+#endif
+
         float localPos[3]{};
         float worldPos[3]{};
         float rotation[3]{};
@@ -863,7 +953,10 @@ void CADDemo::renderUi()
         }
         else if (auto pBezier = dynamic_cast<IBezier*>(pSelectedRenderable); pBezier != nullptr)
         {
-            ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
+            if (dynamic_cast<InterpolatedBezierC2*>(pSelectedRenderable) == nullptr)
+            {
+                ImGui::Checkbox("Toggle Polygon", &pBezier->mIsPolygon);
+            }
 
             ImGui::Text("Control points:");
             if (ImGui::TreeNode("de Boor points"))
@@ -981,7 +1074,7 @@ void CADDemo::renderUi()
         if (deBoorIds.size() >= 3)
         {
             bool isBezierAdded = false;
-            if (ImGui::Button("Add IBezier C0"))
+            if (ImGui::Button("Add Bezier C0"))
             {
                 auto pBezier = std::make_unique<BezierC0>(deBoorIds, mpRenderer);
                 pBezier->regenerateData();
@@ -989,9 +1082,16 @@ void CADDemo::renderUi()
                 isBezierAdded = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Add IBezier C2"))
+            if (ImGui::Button("Add Bezier C2"))
             {
                 auto pBezier = std::make_unique<BezierC2>(deBoorIds, mpRenderer);
+                pBezier->regenerateData();
+                mpRenderer->addRenderable(std::move(pBezier));
+                isBezierAdded = true;
+            }
+            if (ImGui::Button("Add InterpolatedBezier C2")) // TODO: try to keep buttons in the same line
+            {
+                auto pBezier = std::make_unique<InterpolatedBezierC2>(deBoorIds, mpRenderer);
                 pBezier->regenerateData();
                 mpRenderer->addRenderable(std::move(pBezier));
                 isBezierAdded = true;
@@ -1065,11 +1165,11 @@ void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions, Gl
         cb.modelMtx = XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixTranslationFromVector(bernsteinVec);
         if (idx == mSelectedBernsteinPointIdx)
         {
-            cb.color = Colors::defaultSelectionColor;
+            cb.color = defaultSelectionColor;
         }
         else
         {
-            cb.color = Colors::defaultColor;
+            cb.color = defaultColor;
         }
         pDX11Renderer->updateCB(cb);
         pDX11Renderer->getContext()->Draw(6, 0); // TODO: drawInstanced

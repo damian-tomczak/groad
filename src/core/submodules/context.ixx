@@ -20,17 +20,19 @@ import std.core;
 import dx11renderer;
 import window;
 
-export enum class InteractionType
+export
 {
-    ROTATE,
+enum class InteractionType
+{
     MOVE,
+    ROTATE,
     SCALE,
     SELECT,
 };
 
-export inline const char* interationsNames[] = {"ROTATE", "MOVE", "SCALE", "SELECT"};
+inline const char* interationsNames[] = {"MOVE", "ROTATE", "SCALE", "SELECT"};
 
-export struct Context
+struct Context
 {
     std::unordered_set<Id> selectedRenderableIds;
     Id lastSelectedRenderableId = invalidId;
@@ -60,3 +62,4 @@ export struct Context
     int lastXMousePosition = -1;
     int lastYMousePosition = -1;
 };
+}

@@ -33,8 +33,7 @@
 #pragma endregion
 
 
-#pragma region curves
-#pragma region bezier
+#pragma region curve
     COMPILE_VERTEX_SHADER("bezier/bezier_vs.hlsl", mShaders.bezierVS);
     COMPILE_HULL_SHADER("bezier/bezier_hs.hlsl", mShaders.bezierHS);
     COMPILE_DOMAIN_SHADER("bezier/bezier_ds.hlsl", mShaders.bezierDS);

@@ -33,11 +33,13 @@ struct HSConstantDataOutput
 
 #define NUM_CONTROL_POINTS 4
 
-float3 projectToScreen(float3 worldPos)
+static const float adaptabilityFactor = 40.0f;
+
+float3 projectToNDC(float3 worldPos)
 {
     float4 clipSpace = mul(projMtx, float4(worldPos, 1.0));
     float3 ndc = clipSpace.xyz / clipSpace.w;
-    return float3((ndc.x * 0.5 + 0.5) * screenWidth, (ndc.y * -0.5 + 0.5) * screenHeight, ndc.z);
+    return adaptabilityFactor * ndc;
 }
 
 HSConstantDataOutput CalcHSPatchConstants(
@@ -48,10 +50,10 @@ HSConstantDataOutput CalcHSPatchConstants(
 
     float edgeTessFactor = 1.0;
 
-    float3 cp0Screen = projectToScreen(ip[0].controlPoint0);
-    float3 cp1Screen = projectToScreen(ip[0].controlPoint1);
-    float3 cp2Screen = projectToScreen(ip[0].controlPoint2);
-    float3 cp3Screen = projectToScreen(ip[0].controlPoint3);
+    float3 cp0Screen = projectToNDC(ip[0].controlPoint0);
+    float3 cp1Screen = projectToNDC(ip[0].controlPoint1);
+    float3 cp2Screen = projectToNDC(ip[0].controlPoint2);
+    float3 cp3Screen = projectToNDC(ip[0].controlPoint3);
 
     float minX = min(min(cp0Screen.x, cp1Screen.x), min(cp2Screen.x, cp3Screen.x));
     float maxX = max(max(cp0Screen.x, cp1Screen.x), max(cp2Screen.x, cp3Screen.x));
