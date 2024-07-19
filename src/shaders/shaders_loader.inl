@@ -33,13 +33,23 @@
 #pragma endregion
 
 
-#pragma region curve
-    COMPILE_VERTEX_SHADER("bezier/bezier_vs.hlsl", mShaders.bezierVS);
-    COMPILE_HULL_SHADER("bezier/bezier_hs.hlsl", mShaders.bezierHS);
-    COMPILE_DOMAIN_SHADER("bezier/bezier_ds.hlsl", mShaders.bezierDS);
-    COMPILE_GEOMETRY_SHADER("bezier/bezier_border_gs.hlsl", mShaders.bezierBorderGS);
-    COMPILE_PIXEL_SHADER("bezier/bezier_ps.hlsl", mShaders.bezierPS);
-#pragma endregion curves
+#pragma region beziers
+    COMPILE_VERTEX_SHADER("beziers/bezier_curve/bezier_vs.hlsl", mShaders.bezierCurveVS);
+    COMPILE_HULL_SHADER("beziers/bezier_curve/bezier_hs.hlsl", mShaders.bezierCurveHS);
+    COMPILE_DOMAIN_SHADER("beziers/bezier_curve/bezier_ds.hlsl", mShaders.bezierCurveDS);
+    COMPILE_GEOMETRY_SHADER("beziers/bezier_curve/bezier_border_gs.hlsl", mShaders.bezierCurveBorderGS);
+    COMPILE_PIXEL_SHADER("beziers/bezier_curve/bezier_ps.hlsl", mShaders.bezierCurvePS);
+
+    COMPILE_VERTEX_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_vs.hlsl", mShaders.BezierPatchC0VS);
+    COMPILE_HULL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_hs.hlsl", mShaders.BezierPatchC0HS);
+    COMPILE_DOMAIN_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ds.hlsl", mShaders.BezierPatchC0DS);
+    COMPILE_PIXEL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ps.hlsl", mShaders.BezierPatchC0PS);
+
+    COMPILE_VERTEX_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_vs.hlsl", mShaders.bezierPatchC2VS);
+    COMPILE_HULL_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_hs.hlsl", mShaders.bezierPatchC2HS);
+    COMPILE_DOMAIN_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_ds.hlsl", mShaders.bezierPatchC2DS);
+    COMPILE_PIXEL_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_ps.hlsl", mShaders.bezierPatchC2PS);
+#pragma endregion beziers
 
 #pragma region watersurface
     COMPILE_VERTEX_SHADER("surfaces/water_surface/water_surface_vs.hlsl", mShaders.waterSurfaceVS);

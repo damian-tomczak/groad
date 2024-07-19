@@ -5,8 +5,8 @@ module;
 export module core.demo;
 export import core.context;
 export import core.camera;
-import surface;
-import dx11renderer;
+export import core.renderer;
+export import surface;
 import window;
 
 export class IDemo
@@ -22,7 +22,14 @@ public:
         }
     }
 
-    virtual void draw(GlobalCB& cb) = 0;
+    virtual void draw()
+    {
+        if (mpSurface != nullptr)
+        {
+            mpSurface->draw();
+        }
+    }
+
     virtual void processInput(IWindow::Message msg, float dt) = 0;
     virtual void update(float dt)
     {

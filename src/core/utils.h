@@ -31,8 +31,10 @@ namespace fs = std::filesystem;
 
 #ifndef NDEBUG
 #define DEBUG_LOG_INFO std::string("(" __FILE__ ":" STR(__LINE__) " " FUNCTION_SIGNATURE ") ") +
+#define WDEBUG_LOG_INFO std::wstring(L"(" __FILE__ ":" STR(__LINE__) " " FUNCTION_SIGNATURE ") ") +
 #else
 #define DEBUG_LOG_INFO
+#define WDEBUG_LOG_INFO
 #endif
 
 #define STR(x) XSTR(x)
@@ -45,10 +47,10 @@ using namespace std::literals;
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
 #define ERR_NOTERMINATE(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR, false);
 
-#define WLOG(msg) log(DEBUG_LOG_INFO msg, LogLevel::INFO);
-#define WWARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
-#define WERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
-#define WERR_NOTERMINATE(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR, false);
+#define WLOG(msg) log(WDEBUG_LOG_INFO msg, LogLevel::INFO);
+#define WWARN(msg) log(WDEBUG_LOG_INFO msg, LogLevel::WARNING);
+#define WERR(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR);
+#define WERR_NOTERMINATE(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR, false);
 
 // clang-format off
 #define ASSERT(x)                   \

@@ -5,6 +5,7 @@ module;
 
 export module gable_demo;
 export import core.demo;
+import dx11renderer;
 
 export class GableDemo : public IDemo
 {
@@ -13,12 +14,12 @@ public:
 
     void init() override;
     void update(float dt) override;
-    void draw(GlobalCB& cb) override;
+    void draw() override;
     void processInput(IWindow::Message msg, float dt) override;
     void renderUi() override;
 
 private:
-    struct TesselationFactors : public ICB
+    struct TesselationFactors : public CB<ID3D11Buffer>
     {
         float inside = 6.f;
         float outside = 6.f;
@@ -44,7 +45,7 @@ void GableDemo::init()
 {
     IDemo::init();
 
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
 	float gap = 1.f;
     float x = -1.5f * gap;
@@ -139,9 +140,11 @@ void GableDemo::init()
     pDX11Renderer->createCB(mTesselationFactors);
 }
 
-void GableDemo::draw(GlobalCB& cb)
+void GableDemo::draw()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    IDemo::draw();
+
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     // Border
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gableBorderVS.first.Get(), nullptr, 0);
@@ -197,7 +200,7 @@ void GableDemo::processInput(IWindow::Message msg, float dt)
 
 void GableDemo::renderUi()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     ImGui::Begin("Control Panel");
 

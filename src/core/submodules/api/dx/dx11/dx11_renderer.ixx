@@ -17,33 +17,10 @@ import std.filesystem;
 
 import platform;
 
-export struct ICB
-{
-    ComPtr<ID3D11Buffer> buffer;
-    char padding[8];
-};
-
-export struct GlobalCB : public ICB
-{
-    XMMATRIX modelMtx;
-    XMMATRIX view;
-    XMMATRIX invView;
-    XMMATRIX proj;
-    XMMATRIX invProj;
-    XMMATRIX texMtx;
-    XMVECTOR cameraPos;
-    Color color;
-    int flags;
-    int screenWidth;
-    int screenHeight;
-};
-
-export struct LightsCB : public ICB
+export struct LightsCB : public CB<ID3D11Buffer>
 {
     XMVECTOR pos[LIGHTS_NUM];
 };
-
-static_assert(sizeof(GlobalCB) % 16 == 0);
 
 export class DX11Renderer : public DXRenderer
 {
@@ -56,14 +33,11 @@ public:
 
     ~DX11Renderer()
     {
+        mRenderables.clear();
+
         ImGui_ImplDX11_Shutdown();
     }
 
-    void init() override;
-    void onResize() override;
-    void buildGeometryBuffers();
-
-    // TODO: remove p prefix
     struct Shaders
     {
         template <typename ShaderType>
@@ -79,11 +53,21 @@ public:
         Shader<ID3D11GeometryShader> cursorGS;
         Shader<ID3D11PixelShader> cursorPS;
 
-        Shader<ID3D11VertexShader> bezierVS;
-        Shader<ID3D11HullShader> bezierHS;
-        Shader<ID3D11DomainShader> bezierDS;
-        Shader<ID3D11GeometryShader> bezierBorderGS;
-        Shader<ID3D11PixelShader> bezierPS;
+        Shader<ID3D11VertexShader> bezierCurveVS;
+        Shader<ID3D11HullShader> bezierCurveHS;
+        Shader<ID3D11DomainShader> bezierCurveDS;
+        Shader<ID3D11GeometryShader> bezierCurveBorderGS;
+        Shader<ID3D11PixelShader> bezierCurvePS;
+
+        Shader<ID3D11VertexShader> BezierPatchC0VS;
+        Shader<ID3D11HullShader> BezierPatchC0HS;
+        Shader<ID3D11DomainShader> BezierPatchC0DS;
+        Shader<ID3D11PixelShader> BezierPatchC0PS;
+
+        Shader<ID3D11VertexShader> bezierPatchC2VS;
+        Shader<ID3D11HullShader> bezierPatchC2HS;
+        Shader<ID3D11DomainShader> bezierPatchC2DS;
+        Shader<ID3D11PixelShader> bezierPatchC2PS;
 
         Shader<ID3D11VertexShader> waterSurfaceVS;
         Shader<ID3D11PixelShader> waterSurfacePS;
@@ -106,10 +90,35 @@ public:
         Shader<ID3D11PixelShader> billboardPS;
     };
 
-    std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
-    std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+    void init() override;
+    void onResize() override;
+    void buildGeometryBuffers();
 
     ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const;
+
+    void setSolidRaster(bool isCull = false)
+    {
+        if (!isCull)
+        {
+            mpContext->RSSetState(mpFillSolidCullNoneRaster.Get());
+        }
+        else
+        {
+            ASSERT(false);
+        }
+    }
+
+    void setWireframeRaster(bool isCull = false)
+    {
+        if (!isCull)
+        {
+            mpContext->RSSetState(mpFillWireframeCullNoneRaster.Get());
+        }
+        else
+        {
+            ASSERT(false);
+        }
+    }
 
     const Shaders& getShaders() const
     {
@@ -151,18 +160,23 @@ public:
         return mpDefaultInputLayout.Get();
     }
 
-    ID3D11InputLayout* getBezierInputLayout() const
+    ID3D11InputLayout* getBezierCurveInputLayout() const
     {
-        return mpBezierInputLayout.Get();
+        return mpBezierCurveInputLayout.Get();
     }
 
-    template <typename CB>
-    void createCB(CB& cb)
+    ID3D11InputLayout* getBezierPatchInputLayout() const
     {
-        static_assert(std::is_base_of<ICB, CB>::value, "CB must inherit from ICB");
+        return mpBezierPatchInputLayout.Get();
+    }
 
-        const size_t cbSize = sizeof(CB);
-        const size_t iSize = sizeof(ICB);
+    template <typename Buffer>
+    void createCB(Buffer& cb)
+    {
+        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "CB must inherit from ICB");
+
+        const size_t cbSize = sizeof(Buffer);
+        const size_t iSize = sizeof(CB<ID3D11Buffer>);
         const size_t byteWidth = cbSize - iSize;
 
         const D3D11_BUFFER_DESC desc{
@@ -179,15 +193,15 @@ public:
         HR(mpDevice->CreateBuffer(&desc, &initData, cb.buffer.GetAddressOf()));
     }
 
-    template <typename CB>
-    void updateCB(const CB& cb)
+    template <typename Buffer>
+    void updateCB(const Buffer& cb)
     {
-        static_assert(std::is_base_of<ICB, CB>::value, "CB must inherit from ICB");
+        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "Buffer must be DX11");
 
         D3D11_MAPPED_SUBRESOURCE cbData;
         mpContext->Map(cb.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         const char* baseAddress = reinterpret_cast<const char*>(&cb);
-        memcpy(cbData.pData, baseAddress + sizeof(ICB), sizeof(CB) - sizeof(ICB));
+        memcpy(cbData.pData, baseAddress + sizeof(CB<ID3D11Buffer>), sizeof(Buffer) - sizeof(CB<ID3D11Buffer>));
         mpContext->Unmap(cb.buffer.Get(), 0);
     }
     void addRenderable(std::unique_ptr<IRenderable>&& renderable);
@@ -195,9 +209,13 @@ public:
     IRenderable* getRenderable(Id id) const override;
     void createShaders();
 
+    std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
+    std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+
 private:
     void initCore();
     void buildVertexLayout();
+    void createRasterizers();
 
     Shaders mShaders;
 
@@ -209,11 +227,16 @@ private:
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
     ComPtr<ID3D11InputLayout> mpDefaultInputLayout;
-    ComPtr<ID3D11InputLayout> mpBezierInputLayout;
+    ComPtr<ID3D11InputLayout> mpBezierCurveInputLayout;
+    ComPtr<ID3D11InputLayout> mpBezierPatchInputLayout;
 
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
 
+    ComPtr<ID3D11RasterizerState> mpFillSolidCullNoneRaster;
+    ComPtr<ID3D11RasterizerState> mpFillWireframeCullNoneRaster;
+
+    // TODO: bitset
     //bool mRebuildBuffers{};
 };
 
@@ -226,6 +249,7 @@ void DX11Renderer::init()
 
     createShaders();
     buildVertexLayout();
+    createRasterizers();
 
     ImGui_ImplDX11_Init(mpDevice.Get(), mpContext.Get());
 }
@@ -313,21 +337,17 @@ void DX11Renderer::initCore()
         adapters.push_back(pAdapter);
     }
 
-    IDXGIAdapter* selectedAdapter{};
-    if (adapters.size() > 1)
+    if (adapters.size() == 0)
     {
-        selectedAdapter = adapters[1].Get(); // Second device is usually discrete GPU
+        ERR("No capable device detected to render!");
     }
-    else
-    {
-        selectedAdapter = adapters[0].Get();
-    }
+
+    IDXGIAdapter* selectedAdapter = adapters[0].Get();
 
     DXGI_ADAPTER_DESC adapterDesc;
     if (SUCCEEDED(selectedAdapter->GetDesc(&adapterDesc)))
     {
-        auto var = std::format(L"Selected GPU: {}", adapterDesc.Description).data();
-        //WLOG(var);
+        WLOG(std::format(L"Selected GPU: {}", adapterDesc.Description).data());
     }
     else
     {
@@ -577,9 +597,59 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.bezierVS.second->GetBufferPointer(), mShaders.bezierVS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierCurveVS.second->GetBufferPointer(), mShaders.bezierCurveVS.second->GetBufferSize(), &mpBezierCurveInputLayout));
+    }
+
+    {
+        static constexpr size_t sizeOfR32G32B32Format = 3 * sizeof(float);
+
+        std::array desc
+        {
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 0  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 1,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 1  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 2,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 2  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 3,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 3  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 4,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 4  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 5,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 5  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 6,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 6  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 7,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 7  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 8,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 8  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 9,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 9  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 10, DXGI_FORMAT_R32G32B32_FLOAT, 0, 10 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 11, DXGI_FORMAT_R32G32B32_FLOAT, 0, 11 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 12, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 13, DXGI_FORMAT_R32G32B32_FLOAT, 0, 13 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 14, DXGI_FORMAT_R32G32B32_FLOAT, 0, 14 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 15, DXGI_FORMAT_R32G32B32_FLOAT, 0, 15 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+
+        HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
+            mShaders.BezierPatchC0VS.second->GetBufferPointer(), mShaders.BezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
     }
     // clang-format on
+}
+
+void DX11Renderer::createRasterizers()
+{
+    D3D11_RASTERIZER_DESC rasterDesc
+    {
+        .FillMode = D3D11_FILL_SOLID,
+        .CullMode = D3D11_CULL_NONE,
+        .FrontCounterClockwise = false,
+        .DepthBias = 0,
+        .DepthBiasClamp = 0.0f,
+        .SlopeScaledDepthBias = 0.0f,
+        .DepthClipEnable = true,
+        .ScissorEnable = false,
+        .MultisampleEnable = false,
+        .AntialiasedLineEnable = false,
+    };
+
+    HR(mpDevice->CreateRasterizerState(&rasterDesc, mpFillSolidCullNoneRaster.GetAddressOf()));
+
+    rasterDesc.FillMode = D3D11_FILL_WIREFRAME;
+
+    HR(mpDevice->CreateRasterizerState(&rasterDesc, mpFillWireframeCullNoneRaster.GetAddressOf()));
 }
 
 ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs::path& texPath) const
@@ -600,9 +670,9 @@ ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs
     return resourceView;
 }
 
-void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& renderable)
+void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)
 {
-    mRenderables.emplace_back(std::move(renderable));
+    mRenderables.emplace_back(std::move(pRenderable));
     mVertexBuffers.emplace_back();
     mIndexBuffers.emplace_back();
 
