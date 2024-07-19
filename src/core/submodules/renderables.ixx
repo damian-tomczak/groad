@@ -26,7 +26,7 @@ export
 
     public:
         Point(XMVECTOR pos, float radius = defaultRadius, int segments = defaultNumberOfSegments)
-            : IRenderable{pos, std::format("Point {}", counter++).c_str()}, mRadius(radius), mSegments(segments)
+            : IRenderable{std::format("Point {}", counter++).c_str(), pos}, mRadius(radius), mSegments(segments)
         {
         }
 
@@ -161,7 +161,7 @@ export
     public:
         Torus(XMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100,
               int minorSegments = 20)
-            : IRenderable{pos, std::format("Torus {}", counter++).c_str()}, mMajorRadius(majorRadius),
+            : IRenderable{std::format("Torus {}", counter++).c_str(), pos}, mMajorRadius(majorRadius),
               mMinorRadius(minorRadius), mMajorSegments(majorSegments), mMinorSegments(minorSegments)
         {
         }
@@ -212,7 +212,7 @@ export
     {
     public:
         IBezier(const std::vector<Id>& selectedRenderableIds, std::string_view tag, Color color)
-            : IRenderable{XMVectorZero(), tag, color}, mDeBoorIds{selectedRenderableIds}
+            : IRenderable{tag, XMVectorZero(), color}, mDeBoorIds{selectedRenderableIds}
         {
         }
 
@@ -449,7 +449,6 @@ export
             std::vector<XMVECTOR> b(points.size() - 2);
             std::vector<float> chord(points.size() - 1);
 
-            // Compute chord lengths directly within the loop
             for (size_t i = 0; i < points.size() - 1; ++i)
             {
                 XMVECTOR diff = XMVectorSubtract(points[i + 1], points[i]);
@@ -457,7 +456,6 @@ export
                 chord[i] = XMVectorGetX(length);
             }
 
-            // Compute alfa, beta, and b
             for (size_t i = 1; i < points.size() - 1; ++i)
             {
                 float chordSum = chord[i - 1] + chord[i];
@@ -597,6 +595,37 @@ export
             }
 
             return bezierPoints;
+        }
+    };
+
+    struct BezierPatchCreator final
+    {
+        int patchCountWidth = 3;
+        int patchCountLength = 5;
+        float planeWidth = 1.0f;
+        float planeLength = 1.0f;
+        bool isWrapped = false;
+        bool isC2 = false;
+    };
+
+    class BezierPatchC0 final : public IRenderable
+    {
+        COUNTER();
+
+    public:
+        BezierPatchC0(const BezierPatchCreator& bezierPatchCreator, Color color = defaultColor)
+            : IRenderable{std::format("BezierPatchC0 {}", counter++).c_str(), color}
+        {
+        }
+
+        void regenerateData() override
+        {
+            IRenderable::regenerateData();
+        }
+
+        void generateGeometry() override
+        {
+            IRenderable::generateGeometry();
         }
     };
 

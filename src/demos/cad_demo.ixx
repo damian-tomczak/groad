@@ -26,6 +26,8 @@ public:
     void renderUi() override;
 
 private:
+    std::optional<BezierPatchCreator> mBezierPatchCreator;
+
     void drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPoints, GlobalCB& cb);
 
     long long int mSelectedBernsteinPointIdx = -1;
@@ -229,11 +231,11 @@ void CADDemo::draw(GlobalCB& cb)
         else
         {
             pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierInputLayout());
-            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierVS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierCurveVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
             pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierCurvePS.first.Get(), nullptr, 0);
         }
 
         pDX11Renderer->getContext()->IASetVertexBuffers(
@@ -272,8 +274,8 @@ void CADDemo::draw(GlobalCB& cb)
                     0, 1, pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &vStride, &offset);
 
                 pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-                pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierHS.first.Get(), nullptr, 0);
-                pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierDS.first.Get(), nullptr, 0);
+                pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
+                pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
                 pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
 
 
@@ -295,7 +297,7 @@ void CADDemo::draw(GlobalCB& cb)
                     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
                     pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
                     pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-                    pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierBorderGS.first.Get(),
+                    pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierCurveBorderGS.first.Get(),
                                                              nullptr, 0);
                     cb.color = Colors::Green;
 
@@ -650,6 +652,50 @@ void CADDemo::renderUi()
             pBezier->insertDeBoorPointId(pointId);
         }
     }
+
+    if (ImGui::Button("Add Bezier Patch"))
+    {
+        ImGui::OpenPopup("Bezier Patch Creator");
+    }
+
+    if (ImGui::BeginPopup("Bezier Patch Creator"))
+    {
+        if (mBezierPatchCreator == std::nullopt)
+        {
+            mBezierPatchCreator = std::make_optional<BezierPatchCreator>();
+        }
+
+        ImGui::InputInt("Patch count width", &mBezierPatchCreator->patchCountWidth);
+        ImGui::InputInt("Patch count length", &mBezierPatchCreator->patchCountLength);
+
+        ImGui::Checkbox("Wrapped", &mBezierPatchCreator->isWrapped);
+        ImGui::InputFloat("Plane width", &mBezierPatchCreator->planeWidth);
+        ImGui::InputFloat("Plane length", &mBezierPatchCreator->planeLength);
+
+        ImGui::Checkbox("C2", &mBezierPatchCreator->isC2);
+
+        if (ImGui::Button("Create"))
+        {
+            auto pBezierPatchC0 = std::make_unique<BezierPatchC0>(*mBezierPatchCreator);
+            pBezierPatchC0->regenerateData();
+            mpRenderer->addRenderable(std::move(pBezierPatchC0));
+
+            mBezierPatchCreator.reset();
+
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+        {
+            mBezierPatchCreator.reset();
+
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
+    }
+
+    ImGui::Spacing();
 
     if (ImGui::Button("Clear Demo"))
     {

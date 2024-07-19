@@ -59,7 +59,7 @@ export
         friend class DX11Renderer;
 
     public:
-        IRenderable(FXMVECTOR pos, std::string_view tag, Color color = defaultColor)
+        IRenderable(std::string_view tag, FXMVECTOR pos = XMVectorZero(), Color color = defaultColor)
             : IIdentifiable{counter++}, mTag{tag}, mWorldPos{pos}, mColor{color}
         {
         }

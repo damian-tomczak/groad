@@ -79,11 +79,21 @@ public:
         Shader<ID3D11GeometryShader> cursorGS;
         Shader<ID3D11PixelShader> cursorPS;
 
-        Shader<ID3D11VertexShader> bezierVS;
-        Shader<ID3D11HullShader> bezierHS;
-        Shader<ID3D11DomainShader> bezierDS;
-        Shader<ID3D11GeometryShader> bezierBorderGS;
-        Shader<ID3D11PixelShader> bezierPS;
+        Shader<ID3D11VertexShader> bezierCurveVS;
+        Shader<ID3D11HullShader> bezierCurveHS;
+        Shader<ID3D11DomainShader> bezierCurveDS;
+        Shader<ID3D11GeometryShader> bezierCurveBorderGS;
+        Shader<ID3D11PixelShader> bezierCurvePS;
+
+        Shader<ID3D11VertexShader> bezierPatchC0VS;
+        Shader<ID3D11HullShader> bezierPatchC0HS;
+        Shader<ID3D11DomainShader> bezierPatchC0DS;
+        Shader<ID3D11PixelShader> bezierPatchC0PS;
+
+        Shader<ID3D11VertexShader> bezierPatchC2VS;
+        Shader<ID3D11HullShader> bezierPatchC2HS;
+        Shader<ID3D11DomainShader> bezierPatchC2DS;
+        Shader<ID3D11PixelShader> bezierPatchC2PS;
 
         Shader<ID3D11VertexShader> waterSurfaceVS;
         Shader<ID3D11PixelShader> waterSurfacePS;
@@ -577,7 +587,7 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.bezierVS.second->GetBufferPointer(), mShaders.bezierVS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierCurveVS.second->GetBufferPointer(), mShaders.bezierCurveVS.second->GetBufferSize(), &mpBezierInputLayout));
     }
     // clang-format on
 }
