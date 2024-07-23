@@ -14,7 +14,7 @@ public:
 
     }
     virtual void update(float dt) = 0;
-    virtual void draw(GlobalCB& cb) = 0;
+    virtual void draw() = 0;
 
 protected:
     ISurface(IRenderer* pRenderer) : mpRenderer{pRenderer}
@@ -33,7 +33,7 @@ public:
     WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textureSize);
 
     void init() override;
-    void draw(GlobalCB& cb) override;
+    void draw() override;
 
     void update(float dt) override;
 
@@ -119,7 +119,7 @@ WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textu
 
 void WaterSurface::init()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
     const D3D11_RASTERIZER_DESC restarizerDesc{
         .FillMode = D3D11_FILL_SOLID,
@@ -159,25 +159,25 @@ void WaterSurface::init()
 
 void WaterSurface::update(float dt)
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
     updateHeightMap();
     updateWaveTextureMap();
     randomDrop(dt);
 }
 
-void WaterSurface::draw(GlobalCB& cb)
+void WaterSurface::draw()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
     pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
 
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().waterSurfacePS.first.Get(), nullptr, 0);
 
-    cb.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
-    cb.texMtx = mTexMtx;
-    pDX11Renderer->updateCB(cb);
+    pDX11Renderer->mGlobalCB.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
+    pDX11Renderer->mGlobalCB.texMtx = mTexMtx;
+    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
     pDX11Renderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
     pDX11Renderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
@@ -297,7 +297,7 @@ WaterSurface::AbsorptionTexture::AbsorptionTexture(unsigned textureSize_) : text
 
 WaterSurface::WaveTexture::WaveTexture(IRenderer* pRenderer, unsigned textureSize_) : mpRenderer(pRenderer)
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     unsigned texture_bpp = 4u;
     unsigned texture_width = 256u;
@@ -345,7 +345,7 @@ void WaterSurface::WaveTexture::SetValue(int x, int y, XMFLOAT3 value)
 
 void WaterSurface::WaveTexture::Update()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     pDX11Renderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
                                           txture_size);
@@ -353,7 +353,7 @@ void WaterSurface::WaveTexture::Update()
 
 ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
 {
-    DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     ID3D11ShaderResourceView* pTexture;
     HR(pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));

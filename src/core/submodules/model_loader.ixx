@@ -91,7 +91,7 @@ export
 
         void init()
         {
-            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
             const D3D11_BUFFER_DESC vbd{
                 .ByteWidth = static_cast<unsigned>(sizeof(Layout) * mVertices.size()),
@@ -137,7 +137,7 @@ export
 
         void draw()
         {
-            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
 
             pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
 

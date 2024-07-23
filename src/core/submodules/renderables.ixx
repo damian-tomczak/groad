@@ -25,15 +25,34 @@ export
         static constexpr int defaultNumberOfSegments = 50;
 
     public:
-        Point(XMVECTOR pos, float radius = defaultRadius, int segments = defaultNumberOfSegments)
-            : IRenderable{std::format("Point {}", counter++).c_str(), pos}, mRadius(radius), mSegments(segments)
+        Point(FXMVECTOR pos, float radius = defaultRadius, int segments = defaultNumberOfSegments)
+            : IRenderable{"Point " + std::to_string(counter++), pos}, mRadius(radius), mSegments(segments)
         {
         }
 
-        float mRadius;
-        int mSegments;
+        const unsigned int& getStride() const override
+        {
+            static constexpr unsigned int stride = sizeof(XMFLOAT3);
+            return stride;
+        }
 
-        static void drawPrimitive(IRenderer* pRenderer, GlobalCB& cb, XMVECTOR pos, float radius = defaultRadius,
+        void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override
+        {
+            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
+
+            pDX11Renderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
+        }
+
+        static void drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius = defaultRadius,
                                   int segments = defaultNumberOfSegments)
         {
             auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
@@ -71,10 +90,10 @@ export
             HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd, &initData, &pIndexBuffer));
 
             const XMMATRIX translationMat = XMMatrixTranslationFromVector(pos);
-            cb.modelMtx = translationMat;
+            pDX11Renderer->mGlobalCB.modelMtx = translationMat;
 
-            //cb.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
-            pDX11Renderer->updateCB(cb);
+            pDX11Renderer->mGlobalCB.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
+            pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
             UINT vStride = sizeof(XMFLOAT3), offset = 0;
             pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer.GetAddressOf(), &vStride,
@@ -152,6 +171,9 @@ export
 
             mTopology = produceTopology(mSegments);
         }
+
+        float mRadius;
+        int mSegments;
     };
 
     class Torus : public IRenderable
@@ -159,17 +181,32 @@ export
         COUNTER();
 
     public:
-        Torus(XMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100,
+        Torus(FXMVECTOR pos, float majorRadius = 0.7f, float minorRadius = 0.2f, int majorSegments = 100,
               int minorSegments = 20)
-            : IRenderable{std::format("Torus {}", counter++).c_str(), pos}, mMajorRadius(majorRadius),
+            : IRenderable{"Torus " + std::to_string(counter++), pos}, mMajorRadius(majorRadius),
               mMinorRadius(minorRadius), mMajorSegments(majorSegments), mMinorSegments(minorSegments)
         {
         }
 
-        float mMajorRadius;
-        float mMinorRadius;
-        int mMajorSegments;
-        int mMinorSegments;
+        const unsigned int& getStride() const override
+        {
+            static constexpr unsigned int stride = sizeof(XMFLOAT3);
+            return stride;
+        }
+
+        void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override
+        {
+            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
+        }
 
         void generateGeometry() override
         {
@@ -206,24 +243,92 @@ export
                 }
             }
         }
+
+        float mMajorRadius;
+        float mMinorRadius;
+        int mMajorSegments;
+        int mMinorSegments;
     };
 
-    class IBezier : public IRenderable
+    class IControlPointBased
+    {
+    protected:
+        IControlPointBased(const std::vector<Id>& controlPointIds = std::vector<Id>())
+            : mControlPointIds{controlPointIds}
+        {
+
+        };
+
+    public:
+        std::vector<Id> mControlPointIds;
+    };
+
+    class IBezier : public IRenderable, public IControlPointBased
     {
     public:
-        IBezier(const std::vector<Id>& selectedRenderableIds, std::string_view tag, Color color)
-            : IRenderable{tag, XMVectorZero(), color}, mDeBoorIds{selectedRenderableIds}
+        IBezier(const std::vector<Id>& selectedRenderableIds, std::string&& tag, Color color)
+            : IRenderable{std::move(tag)}, IControlPointBased{selectedRenderableIds}
         {
         }
 
         static constexpr unsigned deBoorNumber = 4;
 
-        std::vector<Id> mDeBoorIds;
+        const unsigned int& getStride() const override
+        {
+            static constexpr unsigned int stride = 4 * sizeof(XMFLOAT3);
+            return stride;
+        }
+
+        void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override
+        {
+            auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+
+            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierInputLayout());
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierCurveVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierCurvePS.first.Get(), nullptr, 0);
+
+            for (unsigned int i = 0; i < mGeometry.size() + 1; i += IBezier::deBoorNumber)
+            {
+                unsigned int offset = i * sizeof(XMFLOAT3);
+                pDX11Renderer->getContext()->IASetVertexBuffers(
+                    0, 1, pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &getStride(),
+                    &offset);
+
+                pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+                pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr,
+                                                         0);
+                pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr,
+                                                         0);
+                pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+
+                pDX11Renderer->getContext()->Draw(1, 0);
+
+                if (mIsPolygon)
+                {
+                    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+                    pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+                    pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+                    pDX11Renderer->getContext()->GSSetShader(
+                        pDX11Renderer->getShaders().bezierCurveBorderGS.first.Get(), nullptr, 0);
+                    pDX11Renderer->mGlobalCB.color = Colors::Green;
+
+                    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
+
+                    pDX11Renderer->getContext()->Draw(1, 0);
+                }
+            }
+        }
+
         bool mIsPolygon{};
 
         void insertDeBoorPointId(const Id id)
         {
-            mDeBoorIds.push_back(id);
+            mControlPointIds.push_back(id);
             generateGeometry();
         }
 
@@ -241,7 +346,7 @@ export
 
     public:
         BezierC0(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
-            : IBezier{selectedRenderableIds, std::format("BezierC0 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
+            : IBezier{selectedRenderableIds, "BezierC0 " + std::to_string(counter++), color}, mpRenderer{pRenderer}
         {
         }
 
@@ -251,7 +356,7 @@ export
 
             unsigned idx = 0;
 
-            for (const auto id : mDeBoorIds)
+            for (const auto id : mControlPointIds)
             {
                 if ((idx != 0) && (idx % deBoorNumber == 0))
                 {
@@ -291,7 +396,7 @@ export
 
     public:
         BezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
-            : IBezier{selectedRenderableIds, std::format("BezierC2 {}", counter++).c_str(), color}, mpRenderer{pRenderer}
+            : IBezier{selectedRenderableIds, "BezierC2 " + std::to_string(counter++), color}, mpRenderer{pRenderer}
         {
         }
 
@@ -308,7 +413,7 @@ export
 
             unsigned idx = 0;
 
-            for (const auto id : mDeBoorIds)
+            for (const auto id : mControlPointIds)
             {
                 if ((idx != 0) && (idx % deBoorNumber == 0))
                 {
@@ -384,7 +489,7 @@ export
 
     public:
         InterpolatedBezierC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
-            : IBezier{selectedRenderableIds, std::format("InterpolatedBezierC2 {}", counter++).c_str(), color},
+            : IBezier{selectedRenderableIds, "InterpolatedBezierC2 " + std::to_string(counter++), color},
               mpRenderer{pRenderer}
         {
         }
@@ -394,24 +499,24 @@ export
             IRenderable::generateGeometry();
 
             std::vector<XMVECTOR> deBoorPositions;
-            deBoorPositions.reserve(mDeBoorIds.size());
+            deBoorPositions.reserve(mControlPointIds.size());
 
-            if (mDeBoorIds.size() == 0)
+            if (mControlPointIds.size() == 0)
             {
                 return;
             }
 
-            auto pFirstRenderable = mpRenderer->getRenderable(*mDeBoorIds.begin());
+            auto pFirstRenderable = mpRenderer->getRenderable(*mControlPointIds.begin());
             if (pFirstRenderable != nullptr)
             {
                 deBoorPositions.push_back(pFirstRenderable->getGlobalPos());
             }
 
-            for (auto it = mDeBoorIds.begin() + 1; it != mDeBoorIds.end();)
+            for (auto it = mControlPointIds.begin() + 1; it != mControlPointIds.end();)
             {
                 if (*(it - 1) == *it)
                 {
-                    it = mDeBoorIds.erase(it);
+                    it = mControlPointIds.erase(it);
                 }
                 else
                 {
@@ -600,37 +705,178 @@ export
 
     struct BezierPatchCreator final
     {
-        int patchCountWidth = 3;
-        int patchCountLength = 5;
-        float planeWidth = 1.0f;
-        float planeLength = 1.0f;
+        int u = 1;
+        int v = 1;
         bool isWrapped = false;
         bool isC2 = false;
     };
 
-    class BezierPatchC0 final : public IRenderable
+    class IBezierPatch : public IRenderable, public IControlPointBased
+    {
+    protected:
+        IBezierPatch(std::string&& tag, FXMVECTOR pos, IRenderer* pRenderer, const BezierPatchCreator&& bezierPatchCreator)
+            : IRenderable{std::move(tag), pos}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
+        {
+
+        }
+
+        const unsigned int& getStride() const override
+        {
+            static constexpr unsigned int stride = 16 * sizeof(XMFLOAT3);
+            return stride;
+        }
+
+        void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override
+        {
+
+        }
+
+        IRenderer* const mpRenderer;
+        const BezierPatchCreator mBezierPatchCreator;
+    };
+
+    class BezierPatchC0 final : public IBezierPatch
     {
         COUNTER();
 
     public:
-        BezierPatchC0(const BezierPatchCreator& bezierPatchCreator, Color color = defaultColor)
-            : IRenderable{std::format("BezierPatchC0 {}", counter++).c_str(), color}
+        BezierPatchC0(const BezierPatchCreator&& bezierPatchCreator, FXMVECTOR pos, IRenderer* pRenderer)
+            : IBezierPatch{"BezierPatchC0 " + std::to_string(counter++), pos, pRenderer, std::move(bezierPatchCreator)}
         {
+        }
+
+        ~BezierPatchC0()
+        {
+            for (Id id : mControlPointIds)
+            {
+               auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
+               pPoint->setDeletable(true);
+            }
         }
 
         void regenerateData() override
         {
             IRenderable::regenerateData();
+
+            if (!mBezierPatchCreator.isWrapped)
+            {
+                std::vector<std::unique_ptr<Point>> controlPoints =
+                    createControlPointsForFlatSurface(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
+
+                mControlPointIds.reserve(controlPoints.size());
+
+                for (auto& pControlPoint : controlPoints)
+                {
+                    mControlPointIds.push_back(pControlPoint->id);
+
+                    pControlPoint->setDeletable(false);
+                    pControlPoint->regenerateData();
+
+                    XMFLOAT3 pos;
+                    XMStoreFloat3(&pos, pControlPoint->getGlobalPos());
+                    mGeometry.push_back(pos);
+
+                    mpRenderer->addRenderable(std::move(pControlPoint));
+                }
+            }
+            else
+            {
+                ASSERT(false);
+            }
         }
 
         void generateGeometry() override
         {
             IRenderable::generateGeometry();
         }
+
+    private:
+        std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v)
+        {
+            static constexpr XMVECTOR unitX{1.f, 0.f, 0.f, 0.f};
+            static constexpr XMVECTOR unitZ{0.f, 0.f, 1.f, 0.f};
+
+            std::vector<std::unique_ptr<Point>> controlPoints;
+
+            XMVECTOR startPos = pos_ - u  / 2.f * unitX - v / 2.f * unitZ;
+
+            XMVECTOR pointStepU = 1.f / 3 * unitX;
+            XMVECTOR pointStepV = 1.f / 3 * unitZ;
+
+            unsigned int pointsCountU = u * 3 + 1;
+            unsigned int pointsCountV = v * 3 + 1;
+
+            for (unsigned int i = 0; i < pointsCountV; ++i)
+            {
+                for (unsigned int j = 0; j < pointsCountU; ++j)
+                {
+                    XMVECTOR pos = startPos + static_cast<float>(i) * pointStepV + static_cast<float>(j) * pointStepU;
+                    auto pPoint = std::make_unique<Point>(pos);
+                    controlPoints.push_back(std::move(pPoint));
+                }
+            }
+
+            return controlPoints;
+        }
+
+        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(XMVECTOR pos, unsigned int u, unsigned int v)
+        {
+            std::vector<std::unique_ptr<Point>> controlPoints;
+
+            //float cylinderRadius = u / (2.0f * std::numbers::pi);
+
+            //XMVECTOR cylinderMainAxis = Vector3::UnitZ;
+
+            //float pointStepV = 1.f / 3 * cylinderMainAxis;
+
+            //float patchPivotAngle = 2.0f * std::numbers::pi / u;
+
+            //float ca = cosf(patchPivotAngle), sa = sinf(patchPivotAngle);
+            //auto scaleFactor = 4.0f / 3.0f * tanf(0.25f * patchPivotAngle);
+
+            //auto radiusVector = cylinderRadius * Vector3::UnitY;
+
+            //for (int i = 0; i < 3 * v + 1; i++)
+            //{
+            //    auto startingPosition = pos - 0.5f * v * cylinderMainAxis + i * pointStepV;
+
+            //    for (int j = 0; j < u; j++)
+            //    {
+            //        auto previousRadiusVector = radiusVector;
+            //        auto tangent = previousRadiusVector.Cross(cylinderMainAxis);
+            //        auto tangentNormalized = tangent;
+            //        tangentNormalized.Normalize();
+
+            //        auto nextRadiusVector = ca * previousRadiusVector + sa * tangent;
+            //        auto nextTangent = nextRadiusVector.Cross(cylinderMainAxis);
+            //        nextTangent.Normalize();
+
+            //        auto position0 = startingPosition + previousRadiusVector;
+            //        auto position1 = position0 + scaleFactor * tangentNormalized;
+            //        auto position2 = startingPosition + nextRadiusVector - scaleFactor * nextTangent;
+
+            //        auto point0 = scene.CreatePoint(position0);
+            //        auto point1 = scene.CreatePoint(position1);
+            //        auto point2 = scene.CreatePoint(position2);
+
+            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point0.lock()));
+            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point1.lock()));
+            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point2.lock()));
+
+            //        radiusVector = nextRadiusVector;
+            //    }
+            //}
+
+            return controlPoints;
+        }
     };
 
     inline void reloadCounters()
     {
-        Point::counter = Torus::counter = BezierC0::counter = BezierC2::counter = InterpolatedBezierC2::counter = 1;
+        // clang-format off
+        Point::counter = Torus::counter =
+        BezierC0::counter = BezierC2::counter = InterpolatedBezierC2::counter =
+        BezierPatchC0::counter = 1;
+        // clang-format on
     }
 }

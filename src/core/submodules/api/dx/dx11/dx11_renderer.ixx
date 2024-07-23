@@ -17,33 +17,10 @@ import std.filesystem;
 
 import platform;
 
-export struct ICB
-{
-    ComPtr<ID3D11Buffer> buffer;
-    char padding[8];
-};
-
-export struct GlobalCB : public ICB
-{
-    XMMATRIX modelMtx;
-    XMMATRIX view;
-    XMMATRIX invView;
-    XMMATRIX proj;
-    XMMATRIX invProj;
-    XMMATRIX texMtx;
-    XMVECTOR cameraPos;
-    Color color;
-    int flags;
-    int screenWidth;
-    int screenHeight;
-};
-
-export struct LightsCB : public ICB
+export struct LightsCB : public CB<ID3D11Buffer>
 {
     XMVECTOR pos[LIGHTS_NUM];
 };
-
-static_assert(sizeof(GlobalCB) % 16 == 0);
 
 export class DX11Renderer : public DXRenderer
 {
@@ -59,11 +36,6 @@ public:
         ImGui_ImplDX11_Shutdown();
     }
 
-    void init() override;
-    void onResize() override;
-    void buildGeometryBuffers();
-
-    // TODO: remove p prefix
     struct Shaders
     {
         template <typename ShaderType>
@@ -116,8 +88,9 @@ public:
         Shader<ID3D11PixelShader> billboardPS;
     };
 
-    std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
-    std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+    void init() override;
+    void onResize() override;
+    void buildGeometryBuffers();
 
     ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const;
 
@@ -166,13 +139,13 @@ public:
         return mpBezierInputLayout.Get();
     }
 
-    template <typename CB>
-    void createCB(CB& cb)
+    template <typename Buffer>
+    void createCB(Buffer& cb)
     {
-        static_assert(std::is_base_of<ICB, CB>::value, "CB must inherit from ICB");
+        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "CB must inherit from ICB");
 
-        const size_t cbSize = sizeof(CB);
-        const size_t iSize = sizeof(ICB);
+        const size_t cbSize = sizeof(Buffer);
+        const size_t iSize = sizeof(CB<ID3D11Buffer>);
         const size_t byteWidth = cbSize - iSize;
 
         const D3D11_BUFFER_DESC desc{
@@ -189,21 +162,24 @@ public:
         HR(mpDevice->CreateBuffer(&desc, &initData, cb.buffer.GetAddressOf()));
     }
 
-    template <typename CB>
-    void updateCB(const CB& cb)
+    template <typename Buffer>
+    void updateCB(const Buffer& cb)
     {
-        static_assert(std::is_base_of<ICB, CB>::value, "CB must inherit from ICB");
+        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "Buffer must be DX11");
 
         D3D11_MAPPED_SUBRESOURCE cbData;
         mpContext->Map(cb.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
         const char* baseAddress = reinterpret_cast<const char*>(&cb);
-        memcpy(cbData.pData, baseAddress + sizeof(ICB), sizeof(CB) - sizeof(ICB));
+        memcpy(cbData.pData, baseAddress + sizeof(CB<ID3D11Buffer>), sizeof(Buffer) - sizeof(CB<ID3D11Buffer>));
         mpContext->Unmap(cb.buffer.Get(), 0);
     }
     void addRenderable(std::unique_ptr<IRenderable>&& renderable);
     void removeRenderable(Id id);
     IRenderable* getRenderable(Id id) const override;
     void createShaders();
+
+    std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
+    std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
 private:
     void initCore();
@@ -224,6 +200,7 @@ private:
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
 
+    // TODO: bitset
     //bool mRebuildBuffers{};
 };
 
@@ -589,6 +566,33 @@ void DX11Renderer::buildVertexLayout()
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
             mShaders.bezierCurveVS.second->GetBufferPointer(), mShaders.bezierCurveVS.second->GetBufferSize(), &mpBezierInputLayout));
     }
+
+    {
+        static constexpr size_t sizeOfR32G32B32Format = 3 * sizeof(float);
+
+        std::array desc
+        {
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 0,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 0  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 1,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 1  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 2,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 2  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 3,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 3  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 4,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 4  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 5,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 5  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 6,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 6  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 7,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 7  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 8,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 8  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 9,  DXGI_FORMAT_R32G32B32_FLOAT, 0, 9  * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 10, DXGI_FORMAT_R32G32B32_FLOAT, 0, 10 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 11, DXGI_FORMAT_R32G32B32_FLOAT, 0, 11 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 12, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 13, DXGI_FORMAT_R32G32B32_FLOAT, 0, 13 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 14, DXGI_FORMAT_R32G32B32_FLOAT, 0, 14 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            D3D11_INPUT_ELEMENT_DESC{"CONTROL_POINT", 15, DXGI_FORMAT_R32G32B32_FLOAT, 0, 15 * sizeOfR32G32B32Format, D3D11_INPUT_PER_VERTEX_DATA, 0},
+        };
+
+        HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
+            mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierInputLayout));
+    }
     // clang-format on
 }
 
@@ -610,9 +614,9 @@ ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs
     return resourceView;
 }
 
-void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& renderable)
+void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)
 {
-    mRenderables.emplace_back(std::move(renderable));
+    mRenderables.emplace_back(std::move(pRenderable));
     mVertexBuffers.emplace_back();
     mIndexBuffers.emplace_back();
 

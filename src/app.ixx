@@ -80,7 +80,7 @@ private:
     std::unique_ptr<IDemo> mpDemo;
     Demo mMode{};
 
-    void drawCursor(GlobalCB& cb);
+    void drawCursor(DX11Renderer::GlobalCB& cb);
 
     Context mCtx{};
 
@@ -188,6 +188,8 @@ void App::update(float dt)
 
 void App::draw()
 {
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
     mpRenderer->getContext()->VSSetShader(nullptr, nullptr, 0);
     mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
     mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
@@ -214,7 +216,7 @@ void App::draw()
     XMMATRIX projMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mpDemo->mCamera.getZoom()),
                                                 mpWindow->getAspectRatio(), 0.01f, 100.0f);
 
-    GlobalCB cb
+    DXRenderer::GlobalCB globalCB
     {
         .modelMtx = XMMatrixIdentity(),
         .view = viewMtx,
@@ -226,19 +228,20 @@ void App::draw()
         .screenWidth = mpWindow->getWidth(),
         .screenHeight = mpWindow->getHeight(),
     };
-    mpRenderer->createCB(cb);
+    pDX11Renderer->mGlobalCB = std::move(globalCB);
+    mpRenderer->createCB(pDX11Renderer->mGlobalCB);
 
-    mpRenderer->getContext()->VSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    mpRenderer->getContext()->HSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    mpRenderer->getContext()->DSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    mpRenderer->getContext()->GSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
-    mpRenderer->getContext()->PSSetConstantBuffers(0, 1, cb.buffer.GetAddressOf());
+    mpRenderer->getContext()->VSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    mpRenderer->getContext()->HSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    mpRenderer->getContext()->DSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    mpRenderer->getContext()->GSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    mpRenderer->getContext()->PSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
 
     mpRenderer->getContext()->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
-    mpDemo->draw(cb);
+    mpDemo->draw();
 
-    drawCursor(cb);
+    drawCursor(pDX11Renderer->mGlobalCB);
 
     renderUi();
 
@@ -421,11 +424,11 @@ void App::checkShaders()
     }
 }
 
-void App::drawCursor(GlobalCB& cb)
+void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 {
-    cb.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
+    globalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
-    mpRenderer->updateCB(cb);
+    mpRenderer->updateCB(globalCB);
 
     mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
     mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
@@ -433,6 +436,7 @@ void App::drawCursor(GlobalCB& cb)
     mpRenderer->getContext()->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
     mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
     mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
     mpRenderer->getContext()->Draw(6, 0);
 }
 
