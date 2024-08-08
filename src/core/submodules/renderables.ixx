@@ -739,26 +739,11 @@ export
             pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
             pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC0PS.first.Get(), nullptr, 0);
 
-            D3D11_RASTERIZER_DESC rasterDesc;
-            ZeroMemory(&rasterDesc, sizeof(D3D11_RASTERIZER_DESC));
-
-            rasterDesc.FillMode = D3D11_FILL_WIREFRAME; // Set fill mode to wireframe
-            rasterDesc.CullMode = D3D11_CULL_NONE;      // No culling
-            rasterDesc.FrontCounterClockwise = false;   // Front face is clockwise
-            rasterDesc.DepthBias = 0;
-            rasterDesc.DepthBiasClamp = 0.0f;
-            rasterDesc.SlopeScaledDepthBias = 0.0f;
-            rasterDesc.DepthClipEnable = true;        // Enable depth clipping
-            rasterDesc.ScissorEnable = false;         // Disable scissor test
-            rasterDesc.MultisampleEnable = false;     // Disable multisampling
-            rasterDesc.AntialiasedLineEnable = false; // Disable line anti-aliasing
-
-            ID3D11RasterizerState* pRasterState = nullptr;
-            HR(pDX11Renderer->getDevice()->CreateRasterizerState(&rasterDesc, &pRasterState));
-            pDX11Renderer->getContext()->RSSetState(pRasterState);
-            pRasterState->Release();
+            pDX11Renderer->setWireframeRaster();
 
             pDX11Renderer->getContext()->Draw(1, 0);
+
+            pDX11Renderer->setSolidRaster();
         }
 
         IRenderer* const mpRenderer;

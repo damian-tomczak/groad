@@ -94,6 +94,30 @@ public:
 
     ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const;
 
+    void setSolidRaster(bool isCull = false)
+    {
+        if (!isCull)
+        {
+            mpContext->RSSetState(mpFillSolidCullNoneRaster.Get());
+        }
+        else
+        {
+            ASSERT(false);
+        }
+    }
+
+    void setWireframeRaster(bool isCull = false)
+    {
+        if (!isCull)
+        {
+            mpContext->RSSetState(mpFillWireframeCullNoneRaster.Get());
+        }
+        else
+        {
+            ASSERT(false);
+        }
+    }
+
     const Shaders& getShaders() const
     {
         return mShaders;
@@ -189,6 +213,7 @@ public:
 private:
     void initCore();
     void buildVertexLayout();
+    void createRasterizers();
 
     Shaders mShaders;
 
@@ -206,6 +231,9 @@ private:
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
 
+    ComPtr<ID3D11RasterizerState> mpFillSolidCullNoneRaster;
+    ComPtr<ID3D11RasterizerState> mpFillWireframeCullNoneRaster;
+
     // TODO: bitset
     //bool mRebuildBuffers{};
 };
@@ -219,6 +247,7 @@ void DX11Renderer::init()
 
     createShaders();
     buildVertexLayout();
+    createRasterizers();
 
     ImGui_ImplDX11_Init(mpDevice.Get(), mpContext.Get());
 }
@@ -596,6 +625,29 @@ void DX11Renderer::buildVertexLayout()
             mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
     }
     // clang-format on
+}
+
+void DX11Renderer::createRasterizers()
+{
+    D3D11_RASTERIZER_DESC rasterDesc
+    {
+        .FillMode = D3D11_FILL_SOLID,
+        .CullMode = D3D11_CULL_NONE,
+        .FrontCounterClockwise = false,
+        .DepthBias = 0,
+        .DepthBiasClamp = 0.0f,
+        .SlopeScaledDepthBias = 0.0f,
+        .DepthClipEnable = true,
+        .ScissorEnable = false,
+        .MultisampleEnable = false,
+        .AntialiasedLineEnable = false,
+    };
+
+    HR(mpDevice->CreateRasterizerState(&rasterDesc, mpFillSolidCullNoneRaster.GetAddressOf()));
+
+    rasterDesc.FillMode = D3D11_FILL_WIREFRAME;
+
+    HR(mpDevice->CreateRasterizerState(&rasterDesc, mpFillWireframeCullNoneRaster.GetAddressOf()));
 }
 
 ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs::path& texPath) const

@@ -52,14 +52,13 @@ void CalcHSPatchConstants(
     const uint patchID : SV_PrimitiveID,
     out HSConstantDataOutput Output)
 {
-    // Initialize tessellation factors
-    Output.edges[0] = 1.0; // example tessellation factor for edge 0
-    Output.edges[1] = 1.0; // example tessellation factor for edge 1
-    Output.edges[2] = 1.0; // example tessellation factor for edge 2
-    Output.edges[3] = 1.0; // example tessellation factor for edge 3
+    Output.edges[0] = 1.0;
+    Output.edges[1] = 1.0;
+    Output.edges[2] = 1.0;
+    Output.edges[3] = 1.0;
 
-    Output.inside[0] = 1.0; // example tessellation factor for inside 0
-    Output.inside[1] = 1.0; // example tessellation factor for inside 1
+    Output.inside[0] = 1.0;
+    Output.inside[1] = 1.0;
 }
 
 [domain("quad")]
