@@ -785,7 +785,12 @@ export
 
         void regenerateData() override
         {
-            IRenderable::regenerateData();
+            IBezierPatch::regenerateData();
+
+            if (!mControlPointIds.empty())
+            {
+                return;
+            }
 
             if (!mBezierPatchCreator.isWrapped)
             {

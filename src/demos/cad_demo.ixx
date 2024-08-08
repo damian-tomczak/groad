@@ -167,8 +167,7 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
     mpRenderer->addRenderable(std::move(pInterpolatedBezierC2));
 
     BezierPatchCreator bezierPatchCreator{};
-    //pos = XMVECTOR{2.0f, 3.0f, 0.0f};
-    pos = XMVECTOR{};
+    pos = XMVECTOR{2.0f, 3.0f, 0.0f};
     auto pBezierPatchC0 = std::make_unique<BezierPatchC0>(std::move(bezierPatchCreator), pos, mpRenderer);
     pBezierPatchC0->regenerateData();
     mpRenderer->addRenderable(std::move(pBezierPatchC0));
