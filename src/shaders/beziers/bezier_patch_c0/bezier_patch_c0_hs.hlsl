@@ -46,20 +46,33 @@ struct HSConstantDataOutput
 
 #define NUM_CONTROL_POINTS 1
 
-[patchconstantfunc("CalcHSPatchConstants")]
-void CalcHSPatchConstants(
-    InputPatch<VSOutput, NUM_CONTROL_POINTS> ip, 
-    const uint patchID : SV_PrimitiveID,
-    out HSConstantDataOutput Output)
+HSConstantDataOutput CalcHSPatchConstants(
+    InputPatch<VSOutput, NUM_CONTROL_POINTS> ip,
+    uint PatchID : SV_PrimitiveID)
 {
-    Output.edges[0] = 1.0;
-    Output.edges[1] = 1.0;
-    Output.edges[2] = 1.0;
-    Output.edges[3] = 1.0;
+    HSConstantDataOutput Output;
 
-    Output.inside[0] = 1.0;
-    Output.inside[1] = 1.0;
+    float3 midPoints[4] =
+    {
+        -0.5f * (ip[0].controlPoint0 + ip[0].controlPoint12),
+        -0.5f * (ip[0].controlPoint0 + ip[0].controlPoint3),
+        -0.5f * (ip[0].controlPoint3 + ip[0].controlPoint15),
+        -0.5f * (ip[0].controlPoint12 + ip[0].controlPoint15)
+    };
+
+    [unroll]
+    for (int i = 0; i < 4; i++)
+    {
+        Output.edges[i] = -8 * log10(0.01 * -midPoints[i].z) + 3;
+    }
+
+    float3 mid = -0.5f * (ip[0].controlPoint5 + ip[0].controlPoint10);
+    
+    Output.inside[0] = Output.inside[1] = -8 * log10(0.01 * -mid.z) + 3;
+
+    return Output;
 }
+
 
 [domain("quad")]
 [partitioning("fractional_odd")]
