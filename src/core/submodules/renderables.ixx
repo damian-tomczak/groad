@@ -789,6 +789,8 @@ export
 
             if (!mControlPointIds.empty())
             {
+                updateControlPoints();
+
                 return;
             }
 

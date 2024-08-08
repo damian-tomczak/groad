@@ -359,7 +359,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
         mCtx.lastXMousePosition = eventData.x;
         mCtx.lastYMousePosition = eventData.y;
 
-        if (mCtx.isLeftMouseClicked && (!mCtx.isUiClicked) && !(mCtx.selectedRenderableIds.empty()))
+        if (mCtx.isLeftMouseClicked && (!mCtx.isUiClicked) && (!mCtx.selectedRenderableIds.empty()))
         {
             const float pitchOffset = yOffset * 0.2f;
             const float yawOffset = xOffset * 0.2f;
@@ -407,38 +407,18 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                         pSelectedRenderable->mPitch += pitchOffset;
                         pSelectedRenderable->mYaw += yawOffset;
                         break;
-                    case InteractionType::MOVE: {
-                        // TODO: Following code isn't optimized cuz otherwise it is unreadable
-
+                    case InteractionType::MOVE:
+                    {
                         if (auto pSelectedPoint = dynamic_cast<Point*>(pSelectedRenderable); pSelectedPoint != nullptr)
                         {
-                            // Selected point
                             pSelectedPoint->mWorldPos += offsetVec;
 
-                            // Beziers affected
                             for (const auto& pRenderable : mpRenderer->mRenderables)
                             {
-                                if (!dynamic_cast<IBezier*>(pRenderable.get()))
+                                if (auto pControlPointBased = dynamic_cast<IControlPointBased*>(pRenderable.get());
+                                    pControlPointBased != nullptr)
                                 {
-                                    continue;
-                                }
-
-                                auto pRenderableBezierC0 = dynamic_cast<BezierC0*>(pRenderable.get());
-                                auto pRenderableBezierC2 = dynamic_cast<BezierC2*>(pRenderable.get());
-                                auto pRenderableInterpolatedBezierC2 = dynamic_cast<InterpolatedBezierC2*>(pRenderable.get());
-
-                                if (pRenderableBezierC0 != nullptr)
-                                {
-                                    pRenderableBezierC0->regenerateData();
-                                }
-                                else if (pRenderableBezierC2 != nullptr)
-                                {
-                                    // TODO: bernsteins are reseted
-                                    pRenderableBezierC2->regenerateData();
-                                }
-                                else if (pRenderableInterpolatedBezierC2 != nullptr)
-                                {
-                                    pRenderableInterpolatedBezierC2->regenerateData();
+                                    pRenderable->regenerateData();
                                 }
                             }
                         }
@@ -518,7 +498,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                                 pControlPointRenderable->mWorldPos += offsetVec;
                             }
 
-                            pSelectedBezierPatchC0->updateControlPoints();
+                            pSelectedBezierPatchC0->regenerateData();
                         }
                         else
                         {
