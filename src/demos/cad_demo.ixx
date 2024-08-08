@@ -165,6 +165,13 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
     auto pInterpolatedBezierC2 = std::make_unique<InterpolatedBezierC2>(deBoorIds, mpRenderer, Colors::Brown);
     pInterpolatedBezierC2->regenerateData();
     mpRenderer->addRenderable(std::move(pInterpolatedBezierC2));
+
+    BezierPatchCreator bezierPatchCreator{};
+    //pos = XMVECTOR{2.0f, 3.0f, 0.0f};
+    pos = XMVECTOR{};
+    auto pBezierPatchC0 = std::make_unique<BezierPatchC0>(std::move(bezierPatchCreator), pos, mpRenderer);
+    pBezierPatchC0->regenerateData();
+    mpRenderer->addRenderable(std::move(pBezierPatchC0));
 }
 
 CADDemo::~CADDemo()
@@ -511,6 +518,8 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
                                 pControlPointRenderable->mWorldPos += offsetVec;
                             }
+
+                            pSelectedBezierPatchC0->updateControlPoints();
                         }
                         else
                         {

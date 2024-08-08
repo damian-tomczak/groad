@@ -134,9 +134,14 @@ public:
         return mpDefaultInputLayout.Get();
     }
 
-    ID3D11InputLayout* getBezierInputLayout() const
+    ID3D11InputLayout* getBezierCurveInputLayout() const
     {
-        return mpBezierInputLayout.Get();
+        return mpBezierCurveInputLayout.Get();
+    }
+
+    ID3D11InputLayout* getBezierPatchInputLayout() const
+    {
+        return mpBezierPatchInputLayout.Get();
     }
 
     template <typename Buffer>
@@ -195,7 +200,8 @@ private:
     ComPtr<ID3D11DepthStencilView> mpDepthStencilView;
 
     ComPtr<ID3D11InputLayout> mpDefaultInputLayout;
-    ComPtr<ID3D11InputLayout> mpBezierInputLayout;
+    ComPtr<ID3D11InputLayout> mpBezierCurveInputLayout;
+    ComPtr<ID3D11InputLayout> mpBezierPatchInputLayout;
 
     D3D11_VIEWPORT mScreenViewport{};
     UINT m4xMsaaQuality{};
@@ -300,21 +306,17 @@ void DX11Renderer::initCore()
         adapters.push_back(pAdapter);
     }
 
-    IDXGIAdapter* selectedAdapter{};
-    if (adapters.size() > 1)
+    if (adapters.size() == 0)
     {
-        selectedAdapter = adapters[1].Get(); // Second device is usually discrete GPU
+        ERR("No capable device detected to render!");
     }
-    else
-    {
-        selectedAdapter = adapters[0].Get();
-    }
+
+    IDXGIAdapter* selectedAdapter = adapters[0].Get();
 
     DXGI_ADAPTER_DESC adapterDesc;
     if (SUCCEEDED(selectedAdapter->GetDesc(&adapterDesc)))
     {
-        auto var = std::format(L"Selected GPU: {}", adapterDesc.Description).data();
-        //WLOG(var);
+        WLOG(std::format(L"Selected GPU: {}", adapterDesc.Description).data());
     }
     else
     {
@@ -564,7 +566,7 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.bezierCurveVS.second->GetBufferPointer(), mShaders.bezierCurveVS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierCurveVS.second->GetBufferPointer(), mShaders.bezierCurveVS.second->GetBufferSize(), &mpBezierCurveInputLayout));
     }
 
     {
@@ -591,7 +593,7 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierInputLayout));
+            mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
     }
     // clang-format on
 }

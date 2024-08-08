@@ -285,7 +285,7 @@ export
 
             pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 
-            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierInputLayout());
+            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierCurveInputLayout());
             pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierCurveVS.first.Get(), nullptr, 0);
             pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
             pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
@@ -728,7 +728,37 @@ export
 
         void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override
         {
+            DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+
+            pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierPatchInputLayout());
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierPatchC0HS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierPatchC0DS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC0PS.first.Get(), nullptr, 0);
+
+            D3D11_RASTERIZER_DESC rasterDesc;
+            ZeroMemory(&rasterDesc, sizeof(D3D11_RASTERIZER_DESC));
+
+            rasterDesc.FillMode = D3D11_FILL_WIREFRAME; // Set fill mode to wireframe
+            rasterDesc.CullMode = D3D11_CULL_NONE;      // No culling
+            rasterDesc.FrontCounterClockwise = false;   // Front face is clockwise
+            rasterDesc.DepthBias = 0;
+            rasterDesc.DepthBiasClamp = 0.0f;
+            rasterDesc.SlopeScaledDepthBias = 0.0f;
+            rasterDesc.DepthClipEnable = true;        // Enable depth clipping
+            rasterDesc.ScissorEnable = false;         // Disable scissor test
+            rasterDesc.MultisampleEnable = false;     // Disable multisampling
+            rasterDesc.AntialiasedLineEnable = false; // Disable line anti-aliasing
+
+            ID3D11RasterizerState* pRasterState = nullptr;
+            HR(pDX11Renderer->getDevice()->CreateRasterizerState(&rasterDesc, &pRasterState));
+            pDX11Renderer->getContext()->RSSetState(pRasterState);
+            pRasterState->Release();
+
+            pDX11Renderer->getContext()->Draw(1, 0);
         }
 
         IRenderer* const mpRenderer;
@@ -751,6 +781,20 @@ export
             {
                auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
                pPoint->setDeletable(true);
+            }
+        }
+
+        void updateControlPoints()
+        {
+            mGeometry.clear();
+
+            for (auto pControlPointId : mControlPointIds)
+            {
+                auto pRenderable = mpRenderer->getRenderable(pControlPointId);
+
+                XMFLOAT3 pos;
+                XMStoreFloat3(&pos, pRenderable->getGlobalPos());
+                mGeometry.push_back(pos);
             }
         }
 
@@ -811,7 +855,7 @@ export
                 for (unsigned int j = 0; j < pointsCountU; ++j)
                 {
                     XMVECTOR pos = startPos + static_cast<float>(i) * pointStepV + static_cast<float>(j) * pointStepU;
-                    auto pPoint = std::make_unique<Point>(pos);
+                    auto pPoint = std::make_unique<Point>(pos, 0.01f);
                     controlPoints.push_back(std::move(pPoint));
                 }
             }

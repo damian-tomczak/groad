@@ -54,16 +54,16 @@ VSOutput main(VSInput i)
 {
     VSOutput o;
 
-    o.controlPoint0 = mul(viewMtx, float4(i.controlPoint0, 1.0)).xyz;
-    o.controlPoint1 = mul(viewMtx, float4(i.controlPoint1, 1.0)).xyz;
-    o.controlPoint2 = mul(viewMtx, float4(i.controlPoint2, 1.0)).xyz;
-    o.controlPoint3 = mul(viewMtx, float4(i.controlPoint3, 1.0)).xyz;
-    o.controlPoint4 = mul(viewMtx, float4(i.controlPoint4, 1.0)).xyz;
-    o.controlPoint5 = mul(viewMtx, float4(i.controlPoint5, 1.0)).xyz;
-    o.controlPoint6 = mul(viewMtx, float4(i.controlPoint6, 1.0)).xyz;
-    o.controlPoint7 = mul(viewMtx, float4(i.controlPoint7, 1.0)).xyz;
-    o.controlPoint8 = mul(viewMtx, float4(i.controlPoint8, 1.0)).xyz;
-    o.controlPoint9 = mul(viewMtx, float4(i.controlPoint9, 1.0)).xyz;
+    o.controlPoint0 =  mul(viewMtx, float4(i.controlPoint0,  1.0)).xyz;
+    o.controlPoint1 =  mul(viewMtx, float4(i.controlPoint1,  1.0)).xyz;
+    o.controlPoint2 =  mul(viewMtx, float4(i.controlPoint2,  1.0)).xyz;
+    o.controlPoint3 =  mul(viewMtx, float4(i.controlPoint3,  1.0)).xyz;
+    o.controlPoint4 =  mul(viewMtx, float4(i.controlPoint4,  1.0)).xyz;
+    o.controlPoint5 =  mul(viewMtx, float4(i.controlPoint5,  1.0)).xyz;
+    o.controlPoint6 =  mul(viewMtx, float4(i.controlPoint6,  1.0)).xyz;
+    o.controlPoint7 =  mul(viewMtx, float4(i.controlPoint7,  1.0)).xyz;
+    o.controlPoint8 =  mul(viewMtx, float4(i.controlPoint8,  1.0)).xyz;
+    o.controlPoint9 =  mul(viewMtx, float4(i.controlPoint9,  1.0)).xyz;
     o.controlPoint10 = mul(viewMtx, float4(i.controlPoint10, 1.0)).xyz;
     o.controlPoint11 = mul(viewMtx, float4(i.controlPoint11, 1.0)).xyz;
     o.controlPoint12 = mul(viewMtx, float4(i.controlPoint12, 1.0)).xyz;
