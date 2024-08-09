@@ -68,6 +68,8 @@ export
         {
         }
 
+        virtual ~IRenderable() = default;
+
         std::string mTag;
         bool isVisible = true;
 

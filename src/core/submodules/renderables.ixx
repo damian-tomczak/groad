@@ -711,18 +711,29 @@ export
         bool isC2 = false;
     };
 
-    class IBezierPatch : public IRenderable, public IControlPointBased
+    class IBezierSurface : public IRenderable, public IControlPointBased
     {
+        static constexpr unsigned int numberOfControlPoints = 16;
+
     protected:
-        IBezierPatch(std::string&& tag, FXMVECTOR pos, IRenderer* pRenderer, const BezierPatchCreator&& bezierPatchCreator)
+        IBezierSurface(std::string&& tag, FXMVECTOR pos, IRenderer* pRenderer, const BezierPatchCreator&& bezierPatchCreator)
             : IRenderable{std::move(tag), pos}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
         {
 
         }
 
+        ~IBezierSurface()
+        {
+            for (Id id : mControlPointIds)
+            {
+                auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
+                pPoint->setDeletable(true);
+            }
+        }
+
         const unsigned int& getStride() const override
         {
-            static constexpr unsigned int stride = 16 * sizeof(XMFLOAT3);
+            static constexpr unsigned int stride = numberOfControlPoints * sizeof(XMFLOAT3);
             return stride;
         }
 
@@ -733,15 +744,18 @@ export
             pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 
             pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierPatchInputLayout());
-            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierPatchC0HS.first.Get(), nullptr, 0);
-            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierPatchC0DS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().BezierPatchC0VS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().BezierPatchC0HS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().BezierPatchC0DS.first.Get(), nullptr, 0);
             pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC0PS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().BezierPatchC0PS.first.Get(), nullptr, 0);
 
             pDX11Renderer->setWireframeRaster();
-
-            pDX11Renderer->getContext()->Draw(1, 0);
+            
+            for (unsigned int i = 0; i < mGeometry.size() / numberOfControlPoints; i++)
+            {
+                pDX11Renderer->getContext()->Draw(1, i * numberOfControlPoints);
+            }
 
             pDX11Renderer->setSolidRaster();
         }
@@ -750,25 +764,16 @@ export
         const BezierPatchCreator mBezierPatchCreator;
     };
 
-    class BezierPatchC0 final : public IBezierPatch
+    class BezierSurfaceC0 final : public IBezierSurface
     {
         COUNTER();
 
         static constexpr float controlPointSize = 0.01f;
 
     public:
-        BezierPatchC0(const BezierPatchCreator&& bezierPatchCreator, FXMVECTOR pos, IRenderer* pRenderer)
-            : IBezierPatch{"BezierPatchC0 " + std::to_string(counter++), pos, pRenderer, std::move(bezierPatchCreator)}
+        BezierSurfaceC0(const BezierPatchCreator&& bezierPatchCreator, FXMVECTOR pos, IRenderer* pRenderer)
+            : IBezierSurface{"BezierSurfaceC0 " + std::to_string(counter++), pos, pRenderer, std::move(bezierPatchCreator)}
         {
-        }
-
-        ~BezierPatchC0()
-        {
-            for (Id id : mControlPointIds)
-            {
-               auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
-               pPoint->setDeletable(true);
-            }
         }
 
         void updateControlPoints()
@@ -787,7 +792,7 @@ export
 
         void regenerateData() override
         {
-            IBezierPatch::regenerateData();
+            IBezierSurface::regenerateData();
 
             if (!mControlPointIds.empty())
             {
@@ -848,7 +853,7 @@ export
                 //        auto rangeV =
                 //            dxm::Vector2{static_cast<float>(i) / m_SizeV, static_cast<float>(i + 1) / m_SizeV};
 
-                //        auto patch = std::make_shared<BezierPatchC0>(scene.m_Scene, patchControlPoints, rangeU,
+                //        auto patch = std::make_shared<BezierSurfaceC0>(scene.m_Scene, patchControlPoints, rangeU,
                 //        rangeV);
 
                 //        for (auto& point : patchControlPoints)
@@ -956,7 +961,7 @@ export
         // clang-format off
         Point::counter = Torus::counter =
         BezierC0::counter = BezierC2::counter = InterpolatedBezierC2::counter =
-        BezierPatchC0::counter = 1;
+        BezierSurfaceC0::counter = 1;
         // clang-format on
     }
 }

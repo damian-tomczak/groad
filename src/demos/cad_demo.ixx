@@ -166,11 +166,11 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
     pInterpolatedBezierC2->regenerateData();
     mpRenderer->addRenderable(std::move(pInterpolatedBezierC2));
 
-    BezierPatchCreator bezierPatchCreator{};
-    pos = XMVECTOR{2.0f, 3.0f, 0.0f};
-    auto pBezierPatchC0 = std::make_unique<BezierPatchC0>(std::move(bezierPatchCreator), pos, mpRenderer);
-    pBezierPatchC0->regenerateData();
-    mpRenderer->addRenderable(std::move(pBezierPatchC0));
+    //BezierPatchCreator bezierPatchCreator{};
+    //pos = XMVECTOR{2.0f, 3.0f, 0.0f};
+    //auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(std::move(bezierPatchCreator), pos, mpRenderer);
+    //pBezierSurfaceC0->regenerateData();
+    //mpRenderer->addRenderable(std::move(pBezierSurfaceC0));
 }
 
 CADDemo::~CADDemo()
@@ -488,9 +488,9 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                                 }
                             }
                         }
-                        else if (auto pSelectedBezierPatchC0 = dynamic_cast<BezierPatchC0*>(pSelectedRenderable); pSelectedBezierPatchC0 != nullptr)
+                        else if (auto pSelectedBezierSurfaceC0 = dynamic_cast<BezierSurfaceC0*>(pSelectedRenderable); pSelectedBezierSurfaceC0 != nullptr)
                         {
-                            for (const Id controlPointId : pSelectedBezierPatchC0->mControlPointIds)
+                            for (const Id controlPointId : pSelectedBezierSurfaceC0->mControlPointIds)
                             {
                                 IRenderable* const pControlPointRenderable =
                                     mpRenderer->getRenderable(controlPointId);
@@ -498,7 +498,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                                 pControlPointRenderable->mWorldPos += offsetVec;
                             }
 
-                            pSelectedBezierPatchC0->regenerateData();
+                            pSelectedBezierSurfaceC0->regenerateData();
                         }
                         else
                         {
@@ -634,25 +634,34 @@ void CADDemo::renderUi()
             mBezierPatchCreator = std::make_optional<BezierPatchCreator>();
         }
 
+        if (ImGui::RadioButton("Flat", !mBezierPatchCreator->isWrapped))
+        {
+            mBezierPatchCreator->isWrapped = false;
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Wrapped", mBezierPatchCreator->isWrapped))
+        {
+            mBezierPatchCreator->isWrapped = true;
+        }
+
         ImGui::InputInt("U patches", &mBezierPatchCreator->u);
-        if (mBezierPatchCreator->u < 2)
+        if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->u < 2))
         {
             mBezierPatchCreator->u = 2;
         }
         ImGui::InputInt("V patches", &mBezierPatchCreator->v);
-        if (mBezierPatchCreator->v < 2)
+        if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->v < 2))
         {
             mBezierPatchCreator->v = 2;
         }
 
-        ImGui::Checkbox("Wrapped", &mBezierPatchCreator->isWrapped);
         ImGui::Checkbox("C2", &mBezierPatchCreator->isC2);
 
         if (ImGui::Button("Create"))
         {
-            auto pBezierPatchC0 = std::make_unique<BezierPatchC0>(std::move(*mBezierPatchCreator), mCtx.cursorPos, mpRenderer);
-            pBezierPatchC0->regenerateData();
-            mpRenderer->addRenderable(std::move(pBezierPatchC0));
+            auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(std::move(*mBezierPatchCreator), mCtx.cursorPos, mpRenderer);
+            pBezierSurfaceC0->regenerateData();
+            mpRenderer->addRenderable(std::move(pBezierSurfaceC0));
 
             mBezierPatchCreator.reset();
 
