@@ -644,13 +644,22 @@ void CADDemo::renderUi()
             mBezierPatchCreator->isWrapped = true;
         }
 
-        ImGui::InputInt("U patches", &mBezierPatchCreator->u);
-        if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->u < 2))
+        ImGui::InputInt("U patches", reinterpret_cast<int*>(&mBezierPatchCreator->u));
+        if ((!mBezierPatchCreator->isWrapped) && (mBezierPatchCreator->u < 1))
+        {
+            mBezierPatchCreator->u = 1;
+        }
+        else if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->u < 2))
         {
             mBezierPatchCreator->u = 2;
         }
-        ImGui::InputInt("V patches", &mBezierPatchCreator->v);
-        if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->v < 2))
+
+        ImGui::InputInt("V patches", reinterpret_cast<int*>(&mBezierPatchCreator->v));
+        if ((!mBezierPatchCreator->isWrapped) && (mBezierPatchCreator->v < 1))
+        {
+            mBezierPatchCreator->v = 1;
+        }
+        else if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->v < 2))
         {
             mBezierPatchCreator->v = 2;
         }

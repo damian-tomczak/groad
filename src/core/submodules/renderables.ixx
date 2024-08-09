@@ -705,17 +705,17 @@ export
 
     struct BezierPatchCreator final
     {
-        int u = 1;
-        int v = 1;
+        unsigned int u = 1;
+        unsigned int v = 1;
         bool isWrapped = false;
         bool isC2 = false;
     };
 
     class IBezierSurface : public IRenderable, public IControlPointBased
     {
+    protected:
         static constexpr unsigned int numberOfControlPoints = 16;
 
-    protected:
         IBezierSurface(std::string&& tag, FXMVECTOR pos, IRenderer* pRenderer, const BezierPatchCreator&& bezierPatchCreator)
             : IRenderable{std::move(tag), pos}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
         {
@@ -730,6 +730,11 @@ export
                 pPoint->setDeletable(true);
             }
         }
+        
+        struct BezierPatch
+        {
+            std::vector<Id> mControlPointIds;
+        };
 
         const unsigned int& getStride() const override
         {
@@ -762,6 +767,7 @@ export
 
         IRenderer* const mpRenderer;
         const BezierPatchCreator mBezierPatchCreator;
+        std::vector<BezierPatch> mBezierPatches;
     };
 
     class BezierSurfaceC0 final : public IBezierSurface
@@ -780,13 +786,16 @@ export
         {
             mGeometry.clear();
 
-            for (auto pControlPointId : mControlPointIds)
+            for (auto& bezierPatch : mBezierPatches)
             {
-                auto pRenderable = mpRenderer->getRenderable(pControlPointId);
+                for (auto pControlPointId : bezierPatch.mControlPointIds)
+                {
+                    auto pRenderable = mpRenderer->getRenderable(pControlPointId);
 
-                XMFLOAT3 pos;
-                XMStoreFloat3(&pos, pRenderable->getGlobalPos());
-                mGeometry.push_back(pos);
+                    XMFLOAT3 pos;
+                    XMStoreFloat3(&pos, pRenderable->getGlobalPos());
+                    mGeometry.push_back(pos);
+                }
             }
         }
 
@@ -794,39 +803,67 @@ export
         {
             IBezierSurface::regenerateData();
 
-            if (!mControlPointIds.empty())
+            if (!mBezierPatches.empty())
             {
                 updateControlPoints();
 
                 return;
             }
 
+            std::vector<std::unique_ptr<Point>> controlPoints;
+            std::vector<Id> controlPointIds;
             if (!mBezierPatchCreator.isWrapped)
             {
-                std::vector<std::unique_ptr<Point>> patchControlPoints =
-                    createControlPointsForFlatSurface(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
-
-                mControlPointIds.reserve(patchControlPoints.size());
-
-                for (auto& pControlPoint : patchControlPoints)
-                {
-                    mControlPointIds.push_back(pControlPoint->id);
-
-                    pControlPoint->setDeletable(false);
-                    pControlPoint->regenerateData();
-
-                    XMFLOAT3 pos;
-                    XMStoreFloat3(&pos, pControlPoint->getGlobalPos());
-                    mGeometry.push_back(pos);
-
-                    mpRenderer->addRenderable(std::move(pControlPoint));
-                }
+                controlPoints = createControlPointsForFlatSurface(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
             }
             else
             {
-                std::vector<std::unique_ptr<Point>> patchControlPoints =
-                    createControlPointsForCylinder(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
-            
+                controlPoints = createControlPointsForCylinder(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
+            }
+
+            controlPointIds.reserve(controlPoints.size());
+
+            for (auto& pControlPoint : controlPoints)
+            {
+                pControlPoint->setDeletable(false);
+                pControlPoint->regenerateData();
+                controlPointIds.push_back(pControlPoint->id);
+
+                mpRenderer->addRenderable(std::move(pControlPoint));
+            }
+
+            if (!mBezierPatchCreator.isWrapped)
+            {
+                unsigned int pointsCountU = mBezierPatchCreator.u * 3 + 1;
+
+                for (unsigned int i = 0; i < mBezierPatchCreator.v; i++)
+                {
+                    for (unsigned int j = 0; j < mBezierPatchCreator.u; j++)
+                    {
+                        std::vector<Id> patchControlPoints(numberOfControlPoints);
+
+                        unsigned int startPointU = j * 3;
+                        unsigned int startPointV = i * 3;
+
+                        for (unsigned int point = 0; point < 16; point++)
+                        {
+                            unsigned int pointU = startPointU + point % 4;
+                            unsigned int pointV = startPointV + point / 4;
+
+                            unsigned int pointIndex = pointV * pointsCountU + pointU;
+
+                            auto pRenderable = mpRenderer->getRenderable(controlPointIds.at(pointIndex));
+                            ASSERT(pRenderable != nullptr);
+
+                            patchControlPoints[point] = pRenderable->id;
+                        }
+
+                        mBezierPatches.emplace_back(patchControlPoints);
+                    }
+                }
+            }
+            else
+            {            
                 // unsigned int pointsCountU = mBezierPatchCreator.u * 3;
 
                 // for (int i = 0; i < mBezierPatchCreator.v; i++)
@@ -866,6 +903,8 @@ export
                 //    }
                 //}
             }
+
+            updateControlPoints();
         }
 
         void generateGeometry() override
