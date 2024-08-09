@@ -63,20 +63,20 @@ DSOutput main(
     DSOutput o;
 
     float u = domain.x, v = domain.y;
-	
-	float3 uControlPoints0[4] = { patch[0].controlPoint0, patch[0].controlPoint1, patch[0].controlPoint2, patch[0].controlPoint3 };
-	float3 uControlPoints1[4] = { patch[0].controlPoint4, patch[0].controlPoint5, patch[0].controlPoint6, patch[0].controlPoint7 };
-	float3 uControlPoints2[4] = { patch[0].controlPoint8, patch[0].controlPoint9, patch[0].controlPoint10, patch[0].controlPoint11 };
+    
+    float3 uControlPoints0[4] = { patch[0].controlPoint0, patch[0].controlPoint1, patch[0].controlPoint2, patch[0].controlPoint3 };
+    float3 uControlPoints1[4] = { patch[0].controlPoint4, patch[0].controlPoint5, patch[0].controlPoint6, patch[0].controlPoint7 };
+    float3 uControlPoints2[4] = { patch[0].controlPoint8, patch[0].controlPoint9, patch[0].controlPoint10, patch[0].controlPoint11 };
     float3 uControlPoints3[4] = { patch[0].controlPoint12, patch[0].controlPoint13, patch[0].controlPoint14, patch[0].controlPoint15 };
 
     float3 vControlPoints0[4] = { patch[0].controlPoint0, patch[0].controlPoint4, patch[0].controlPoint8, patch[0].controlPoint12 };
     float3 vControlPoints1[4] = { patch[0].controlPoint1, patch[0].controlPoint5, patch[0].controlPoint9, patch[0].controlPoint13 };
     float3 vControlPoints2[4] = { patch[0].controlPoint2, patch[0].controlPoint6, patch[0].controlPoint10, patch[0].controlPoint14 };
     float3 vControlPoints3[4] = { patch[0].controlPoint3, patch[0].controlPoint7, patch[0].controlPoint11, patch[0].controlPoint15 };
-	
+    
     float3 vControlPoints[4] = { deCastiljeau3(uControlPoints0, u), deCastiljeau3(uControlPoints1, u), deCastiljeau3(uControlPoints2, u), deCastiljeau3(uControlPoints3, u) };
     float3 uControlPoints[4] = { deCastiljeau3(vControlPoints0, v), deCastiljeau3(vControlPoints1, v), deCastiljeau3(vControlPoints2, v), deCastiljeau3(vControlPoints3, v) };
-	
+    
     float3 worldPos = deCastiljeau3(vControlPoints, v);
     o.position = mul(projMtx, float4(worldPos, 1.0));
 

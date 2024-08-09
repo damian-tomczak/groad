@@ -63,20 +63,19 @@ HSConstantDataOutput CalcHSPatchConstants(
     [unroll]
     for (int i = 0; i < 4; i++)
     {
-        Output.edges[i] = -8 * log10(0.01 * -midPoints[i].z) + 3;
+        Output.edges[i] = -8 * log10(0.01 * -midPoints[i].z);
     }
 
     float3 mid = -0.5f * (ip[0].controlPoint5 + ip[0].controlPoint10);
     
-    Output.inside[0] = Output.inside[1] = -8 * log10(0.01 * -mid.z) + 3;
+    Output.inside[0] = Output.inside[1] = -8 * log10(0.01 * -mid.z);
 
     return Output;
 }
 
-
 [domain("quad")]
 [partitioning("fractional_odd")]
-[outputtopology("triangle_ccw")]
+[outputtopology("triangle_cw")]
 [outputcontrolpoints(NUM_CONTROL_POINTS)]
 [patchconstantfunc("CalcHSPatchConstants")]
 HSOutput main(

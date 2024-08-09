@@ -254,9 +254,9 @@ void CADDemo::draw()
 
         pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
-        pDX11Renderer->getContext()->IASetVertexBuffers(0, 1,
-                                                        pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf(),
-                                                        &pRenderable->getStride(), &pRenderable->getOffset());
+        ID3D11Buffer* const* const pVertexBuffer = pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf();
+        //ASSERT(*pVertexBuffer != nullptr);
+        pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer, &pRenderable->getStride(), &pRenderable->getOffset());
 
         const ComPtr<ID3D11Buffer> indexBuffer = pDX11Renderer->mIndexBuffers.at(renderableIdx);
         if (indexBuffer != nullptr)
@@ -426,6 +426,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                         {
                             // Selected bezier C0
                             // TODO: update only beziers containing modified control points
+                            // TODO: refactor for ControlPointBased
                             for (const Id controlPointRenderableId : pSelectedBezierC0->mControlPointIds)
                             {
                                 IRenderable* const pControlPointRenderable =
@@ -499,6 +500,17 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                             }
 
                             pSelectedBezierSurfaceC0->regenerateData();
+                        }
+                        else if (auto pSelectedBezierSurfaceC2 = dynamic_cast<BezierSurfaceC2*>(pSelectedRenderable); pSelectedBezierSurfaceC2 != nullptr)
+                        {
+                            for (const Id controlPointId : pSelectedBezierSurfaceC2->mControlPointIds)
+                            {
+                                IRenderable* const pControlPointRenderable = mpRenderer->getRenderable(controlPointId);
+
+                                pControlPointRenderable->mWorldPos += offsetVec;
+                            }
+
+                            pSelectedBezierSurfaceC2->regenerateData();
                         }
                         else
                         {
@@ -644,10 +656,16 @@ void CADDemo::renderUi()
             mBezierPatchCreator->isWrapped = true;
         }
 
+        ImGui::Checkbox("C2", &mBezierPatchCreator->isC2);
+
         ImGui::InputInt("U patches", reinterpret_cast<int*>(&mBezierPatchCreator->u));
         if ((!mBezierPatchCreator->isWrapped) && (mBezierPatchCreator->u < 1))
         {
             mBezierPatchCreator->u = 1;
+        }
+        else if (mBezierPatchCreator->isWrapped && mBezierPatchCreator->isC2 && (mBezierPatchCreator->u < 3))
+        {
+            mBezierPatchCreator->u = 3;
         }
         else if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->u < 2))
         {
@@ -659,18 +677,29 @@ void CADDemo::renderUi()
         {
             mBezierPatchCreator->v = 1;
         }
+        else if (mBezierPatchCreator->isWrapped && mBezierPatchCreator->isC2 && (mBezierPatchCreator->v < 3))
+        {
+            mBezierPatchCreator->v = 3;
+        }
         else if (mBezierPatchCreator->isWrapped && (mBezierPatchCreator->v < 2))
         {
             mBezierPatchCreator->v = 2;
         }
 
-        ImGui::Checkbox("C2", &mBezierPatchCreator->isC2);
-
         if (ImGui::Button("Create"))
         {
-            auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(std::move(*mBezierPatchCreator), mCtx.cursorPos, mpRenderer);
-            pBezierSurfaceC0->regenerateData();
-            mpRenderer->addRenderable(std::move(pBezierSurfaceC0));
+            std::unique_ptr<IRenderable> pRenderable;
+            if (!mBezierPatchCreator->isC2)
+            {
+                pRenderable = std::make_unique<BezierSurfaceC0>(std::move(*mBezierPatchCreator), mCtx.cursorPos, mpRenderer);
+            }
+            else
+            {
+                pRenderable = std::make_unique<BezierSurfaceC2>(std::move(*mBezierPatchCreator), mCtx.cursorPos, mpRenderer);
+            }
+
+            pRenderable->regenerateData();
+            mpRenderer->addRenderable(std::move(pRenderable));
 
             mBezierPatchCreator.reset();
 

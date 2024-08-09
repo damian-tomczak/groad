@@ -59,10 +59,10 @@ public:
         Shader<ID3D11GeometryShader> bezierCurveBorderGS;
         Shader<ID3D11PixelShader> bezierCurvePS;
 
-        Shader<ID3D11VertexShader> BezierPatchC0VS;
-        Shader<ID3D11HullShader> BezierPatchC0HS;
-        Shader<ID3D11DomainShader> BezierPatchC0DS;
-        Shader<ID3D11PixelShader> BezierPatchC0PS;
+        Shader<ID3D11VertexShader> bezierPatchC0VS;
+        Shader<ID3D11HullShader> bezierPatchC0HS;
+        Shader<ID3D11DomainShader> bezierPatchC0DS;
+        Shader<ID3D11PixelShader> bezierPatchC0PS;
 
         Shader<ID3D11VertexShader> bezierPatchC2VS;
         Shader<ID3D11HullShader> bezierPatchC2HS;
@@ -624,7 +624,7 @@ void DX11Renderer::buildVertexLayout()
         };
 
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
-            mShaders.BezierPatchC0VS.second->GetBufferPointer(), mShaders.BezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
+            mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
     }
     // clang-format on
 }

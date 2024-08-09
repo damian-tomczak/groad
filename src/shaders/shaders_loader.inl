@@ -40,10 +40,10 @@
     COMPILE_GEOMETRY_SHADER("beziers/bezier_curve/bezier_border_gs.hlsl", mShaders.bezierCurveBorderGS);
     COMPILE_PIXEL_SHADER("beziers/bezier_curve/bezier_ps.hlsl", mShaders.bezierCurvePS);
 
-    COMPILE_VERTEX_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_vs.hlsl", mShaders.BezierPatchC0VS);
-    COMPILE_HULL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_hs.hlsl", mShaders.BezierPatchC0HS);
-    COMPILE_DOMAIN_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ds.hlsl", mShaders.BezierPatchC0DS);
-    COMPILE_PIXEL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ps.hlsl", mShaders.BezierPatchC0PS);
+    COMPILE_VERTEX_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_vs.hlsl", mShaders.bezierPatchC0VS);
+    COMPILE_HULL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_hs.hlsl", mShaders.bezierPatchC0HS);
+    COMPILE_DOMAIN_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ds.hlsl", mShaders.bezierPatchC0DS);
+    COMPILE_PIXEL_SHADER("beziers/bezier_patch_c0/bezier_patch_c0_ps.hlsl", mShaders.bezierPatchC0PS);
 
     COMPILE_VERTEX_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_vs.hlsl", mShaders.bezierPatchC2VS);
     COMPILE_HULL_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_hs.hlsl", mShaders.bezierPatchC2HS);
