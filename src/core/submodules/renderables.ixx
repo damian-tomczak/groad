@@ -724,16 +724,19 @@ export
 
         ~IBezierSurface()
         {
-            for (Id id : mControlPointIds)
+            for (auto& bezierPatch : mBezierPatches)
             {
-                auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
-                pPoint->setDeletable(true);
+                for (auto pControlPointId : bezierPatch.controlPointIds)
+                {
+                    auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(id));
+                    pPoint->setDeletable(false);
+                }
             }
         }
         
         struct BezierPatch
         {
-            std::vector<Id> mControlPointIds;
+            std::vector<Id> controlPointIds;
         };
 
         const unsigned int& getStride() const override
@@ -757,12 +760,33 @@ export
 
             pDX11Renderer->setWireframeRaster();
             
-            for (unsigned int i = 0; i < mGeometry.size() / numberOfControlPoints; i++)
+            for (unsigned int i = 0; i < mBezierPatchCreator.u * mBezierPatchCreator.v; i++)
             {
-                pDX11Renderer->getContext()->Draw(1, i * numberOfControlPoints);
+                unsigned int offset = sizeof(XMFLOAT3) * i * numberOfControlPoints;
+
+                pDX11Renderer->getContext()->IASetVertexBuffers(
+                    0, 1, pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf(), &getStride(), &offset);
+                pDX11Renderer->getContext()->Draw(1, 0);
             }
 
             pDX11Renderer->setSolidRaster();
+        }
+
+        void updateControlPoints()
+        {
+            mGeometry.clear();
+
+            for (auto& bezierPatch : mBezierPatches)
+            {
+                for (auto pControlPointId : bezierPatch.controlPointIds)
+                {
+                    auto pRenderable = mpRenderer->getRenderable(pControlPointId);
+
+                    XMFLOAT3 pos;
+                    XMStoreFloat3(&pos, pRenderable->getGlobalPos());
+                    mGeometry.push_back(pos);
+                }
+            }
         }
 
         IRenderer* const mpRenderer;
@@ -780,23 +804,6 @@ export
         BezierSurfaceC0(const BezierPatchCreator&& bezierPatchCreator, FXMVECTOR pos, IRenderer* pRenderer)
             : IBezierSurface{"BezierSurfaceC0 " + std::to_string(counter++), pos, pRenderer, std::move(bezierPatchCreator)}
         {
-        }
-
-        void updateControlPoints()
-        {
-            mGeometry.clear();
-
-            for (auto& bezierPatch : mBezierPatches)
-            {
-                for (auto pControlPointId : bezierPatch.mControlPointIds)
-                {
-                    auto pRenderable = mpRenderer->getRenderable(pControlPointId);
-
-                    XMFLOAT3 pos;
-                    XMStoreFloat3(&pos, pRenderable->getGlobalPos());
-                    mGeometry.push_back(pos);
-                }
-            }
         }
 
         void regenerateData() override
@@ -905,6 +912,14 @@ export
             }
 
             updateControlPoints();
+
+            mControlPointIds.reserve(mBezierPatches.size() * numberOfControlPoints);
+
+            for (auto& bezierPatch : mBezierPatches)
+            {
+                mControlPointIds.insert(mControlPointIds.end(), bezierPatch.controlPointIds.begin(),
+                                        bezierPatch.controlPointIds.end());
+            }
         }
 
         void generateGeometry() override
