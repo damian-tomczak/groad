@@ -754,6 +754,8 @@ export
     {
         COUNTER();
 
+        static constexpr float controlPointSize = 0.01f;
+
     public:
         BezierPatchC0(const BezierPatchCreator&& bezierPatchCreator, FXMVECTOR pos, IRenderer* pRenderer)
             : IBezierPatch{"BezierPatchC0 " + std::to_string(counter++), pos, pRenderer, std::move(bezierPatchCreator)}
@@ -796,12 +798,12 @@ export
 
             if (!mBezierPatchCreator.isWrapped)
             {
-                std::vector<std::unique_ptr<Point>> controlPoints =
+                std::vector<std::unique_ptr<Point>> patchControlPoints =
                     createControlPointsForFlatSurface(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
 
-                mControlPointIds.reserve(controlPoints.size());
+                mControlPointIds.reserve(patchControlPoints.size());
 
-                for (auto& pControlPoint : controlPoints)
+                for (auto& pControlPoint : patchControlPoints)
                 {
                     mControlPointIds.push_back(pControlPoint->id);
 
@@ -817,7 +819,47 @@ export
             }
             else
             {
-                ASSERT(false);
+                std::vector<std::unique_ptr<Point>> patchControlPoints =
+                    createControlPointsForCylinder(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
+            
+                // unsigned int pointsCountU = mBezierPatchCreator.u * 3;
+
+                // for (int i = 0; i < mBezierPatchCreator.v; i++)
+                //{
+                //     for (int j = 0; j < mBezierPatchCreator.u; j++)
+                //     {
+                //         std::vector<std::weak_ptr<Point>> patchControlPoints(16);
+
+                //        auto startPointU = j * 3;
+                //        auto startPointV = i * 3;
+
+                //        for (int point = 0; point < 16; point++)
+                //        {
+                //            auto pointU = (startPointU + point % 4) % pointsCountU;
+                //            auto pointV = startPointV + point / 4;
+
+                //            auto pointIndex = pointV * pointsCountU + pointU;
+
+                //            patchControlPoints[point] = controlPoints[pointIndex];
+                //        }
+
+                //        auto rangeU =
+                //            dxm::Vector2{static_cast<float>(j) / m_SizeU, static_cast<float>(j + 1) / m_SizeU};
+                //        auto rangeV =
+                //            dxm::Vector2{static_cast<float>(i) / m_SizeV, static_cast<float>(i + 1) / m_SizeV};
+
+                //        auto patch = std::make_shared<BezierPatchC0>(scene.m_Scene, patchControlPoints, rangeU,
+                //        rangeV);
+
+                //        for (auto& point : patchControlPoints)
+                //        {
+                //            auto pointShared = point.lock();
+                //            pointShared->m_PointBasedObjects.push_back(patch);
+                //        }
+
+                //        m_BezierPatches.push_back(patch);
+                //    }
+                //}
             }
         }
 
@@ -829,8 +871,8 @@ export
     private:
         std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v)
         {
-            static constexpr XMVECTOR unitX{1.f, 0.f, 0.f, 0.f};
-            static constexpr XMVECTOR unitZ{0.f, 0.f, 1.f, 0.f};
+            static constexpr XMVECTOR unitX{1.f, 0.f, 0.f, 1.f};
+            static constexpr XMVECTOR unitZ{0.f, 0.f, 1.f, 1.f};
 
             std::vector<std::unique_ptr<Point>> controlPoints;
 
@@ -847,7 +889,7 @@ export
                 for (unsigned int j = 0; j < pointsCountU; ++j)
                 {
                     XMVECTOR pos = startPos + static_cast<float>(i) * pointStepV + static_cast<float>(j) * pointStepU;
-                    auto pPoint = std::make_unique<Point>(pos, 0.01f);
+                    auto pPoint = std::make_unique<Point>(pos, controlPointSize);
                     controlPoints.push_back(std::move(pPoint));
                 }
             }
@@ -855,53 +897,55 @@ export
             return controlPoints;
         }
 
-        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(XMVECTOR pos, unsigned int u, unsigned int v)
+        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v)
         {
+            static constexpr XMVECTOR unitX{1.f, 0.f, 0.f, 1.f};
+            static constexpr XMVECTOR unitY{0.f, 1.f, 0.f, 1.f};
+            static constexpr XMVECTOR unitZ{0.f, 0.f, 1.f, 1.f};
+
             std::vector<std::unique_ptr<Point>> controlPoints;
 
-            //float cylinderRadius = u / (2.0f * std::numbers::pi);
+            float cylinderRadius = u / (2.0f * std::numbers::pi_v<float>);
 
-            //XMVECTOR cylinderMainAxis = Vector3::UnitZ;
+            XMVECTOR cylinderMainAxis = unitZ;
 
-            //float pointStepV = 1.f / 3 * cylinderMainAxis;
+            XMVECTOR pointStepV = 1.f / 3 * cylinderMainAxis;
 
-            //float patchPivotAngle = 2.0f * std::numbers::pi / u;
+            float patchPivotAngle = 2.0f * std::numbers::pi_v<float> / u;
 
-            //float ca = cosf(patchPivotAngle), sa = sinf(patchPivotAngle);
-            //auto scaleFactor = 4.0f / 3.0f * tanf(0.25f * patchPivotAngle);
+            float ca = cosf(patchPivotAngle), sa = sinf(patchPivotAngle);
+            float scaleFactor = 4.0f / 3.0f * tanf(0.25f * patchPivotAngle);
 
-            //auto radiusVector = cylinderRadius * Vector3::UnitY;
+            XMVECTOR radiusVector = cylinderRadius * unitY;
 
-            //for (int i = 0; i < 3 * v + 1; i++)
-            //{
-            //    auto startingPosition = pos - 0.5f * v * cylinderMainAxis + i * pointStepV;
+            for (unsigned int i = 0; i < 3 * v + 1; i++)
+            {
+                XMVECTOR startingPosition = pos - 0.5f * v * cylinderMainAxis + static_cast<float>(i) * pointStepV;
 
-            //    for (int j = 0; j < u; j++)
-            //    {
-            //        auto previousRadiusVector = radiusVector;
-            //        auto tangent = previousRadiusVector.Cross(cylinderMainAxis);
-            //        auto tangentNormalized = tangent;
-            //        tangentNormalized.Normalize();
+                for (unsigned int j = 0; j < u; j++)
+                {
+                    XMVECTOR previousRadiusVector = radiusVector;
+                    XMVECTOR tangent = XMVector3Cross(previousRadiusVector, cylinderMainAxis);
+                    XMVECTOR normalizedTangent = XMVector3Normalize(tangent);
 
-            //        auto nextRadiusVector = ca * previousRadiusVector + sa * tangent;
-            //        auto nextTangent = nextRadiusVector.Cross(cylinderMainAxis);
-            //        nextTangent.Normalize();
+                    XMVECTOR nextRadiusVector = ca * previousRadiusVector + sa * tangent;
+                    XMVECTOR nextTangent = XMVector3Normalize(XMVector3Cross(nextRadiusVector, cylinderMainAxis));
 
-            //        auto position0 = startingPosition + previousRadiusVector;
-            //        auto position1 = position0 + scaleFactor * tangentNormalized;
-            //        auto position2 = startingPosition + nextRadiusVector - scaleFactor * nextTangent;
+                    XMVECTOR position1 = startingPosition + previousRadiusVector;
+                    XMVECTOR position2 = position1 + scaleFactor * normalizedTangent;
+                    XMVECTOR position3 = startingPosition + nextRadiusVector - scaleFactor * nextTangent;
 
-            //        auto point0 = scene.CreatePoint(position0);
-            //        auto point1 = scene.CreatePoint(position1);
-            //        auto point2 = scene.CreatePoint(position2);
+                    auto pPoint1 = std::make_unique<Point>(position1, controlPointSize);
+                    auto pPoint2 = std::make_unique<Point>(position2, controlPointSize);
+                    auto pPoint3 = std::make_unique<Point>(position3, controlPointSize);
 
-            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point0.lock()));
-            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point1.lock()));
-            //        controlPoints.push_back(std::dynamic_pointer_cast<Point>(point2.lock()));
+                    controlPoints.emplace_back(std::move(pPoint1));
+                    controlPoints.emplace_back(std::move(pPoint2));
+                    controlPoints.emplace_back(std::move(pPoint3));
 
-            //        radiusVector = nextRadiusVector;
-            //    }
-            //}
+                    radiusVector = nextRadiusVector;
+                }
+            }
 
             return controlPoints;
         }

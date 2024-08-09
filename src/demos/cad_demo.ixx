@@ -635,7 +635,15 @@ void CADDemo::renderUi()
         }
 
         ImGui::InputInt("U patches", &mBezierPatchCreator->u);
+        if (mBezierPatchCreator->u < 2)
+        {
+            mBezierPatchCreator->u = 2;
+        }
         ImGui::InputInt("V patches", &mBezierPatchCreator->v);
+        if (mBezierPatchCreator->v < 2)
+        {
+            mBezierPatchCreator->v = 2;
+        }
 
         ImGui::Checkbox("Wrapped", &mBezierPatchCreator->isWrapped);
         ImGui::Checkbox("C2", &mBezierPatchCreator->isC2);
