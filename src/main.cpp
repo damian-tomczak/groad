@@ -11,13 +11,11 @@ enum ParseResult
     STOP_PROGRAM
 };
 
-// clang-format off
 constexpr const char* helpMessage{
     PROJECT_NAME " [--graphics|-g <Graphics API>]: \n"
     "Graphics APIs:            "
     "DX11, D3D12"
 };
-// clang-format on
 
 ParseResult updateOptions(Options& options, int argc, const char** argv)
 {

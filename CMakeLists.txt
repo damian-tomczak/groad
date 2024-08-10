@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.30)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Do not build in-source. Please remove CMakeCache.txt and the CMakeFiles/ directory. Then build out-of-source.")
@@ -21,10 +21,11 @@ if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "19.35.32216.1")
     )
 endif()
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+if (${CMAKE_VS_PLATFORM_TOOLSET_VERSION} VERSION_LESS "14.41.17.11")
+    message(WARNING "The toolset version does not support C++20 Modules")
+endif()
 
-set(CMAKE_PATH cmake)
-get_filename_component(CMAKE_PATH ${CMAKE_PATH} ABSOLUTE)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo;Release" CACHE STRING "Available configs" FORCE)
 
@@ -46,7 +47,8 @@ add_subdirectory(src)
 
 set_property(DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
 
-set_property(TARGET imgui PROPERTY FOLDER "ThirdPartyLibraries")
+set_property(TARGET ImGui PROPERTY FOLDER "ThirdPartyLibraries")
+
 set_property(TARGET DirectXTK PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET Continuous PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET Experimental PROPERTY FOLDER "ThirdPartyLibraries")
@@ -54,4 +56,7 @@ set_property(TARGET Nightly PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET NightlyMemoryCheck PROPERTY FOLDER "ThirdPartyLibraries")
 set_property(TARGET xwbtool PROPERTY FOLDER "ThirdPartyLibraries")
 
-set_property(TARGET copy_assets PROPERTY FOLDER "tools")
+set_property(TARGET MGSandbox PROPERTY FOLDER "University")
+set_property(TARGET MGSerializer PROPERTY FOLDER "University")
+
+set_property(TARGET copy_assets PROPERTY FOLDER "Tools")

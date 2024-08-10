@@ -1,3 +1,6 @@
 [submodule "external/DirectXTK"]
 	path = external/directxtk
 	url = https://github.com/microsoft/DirectXTK
+[submodule "external/Scene-Serializer"]
+	path = external/Scene-Serializer
+	url = https://github.com/damian-tomczak/Scene-Serializer.git

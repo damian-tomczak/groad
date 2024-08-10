@@ -44,6 +44,8 @@ public:
 
     }
 
+    std::function<void()> mpMenuBarCallback;
+
     const char* mpDemoName;
     Camera mCamera{0.0f, 0.5f, -10.0f};
 

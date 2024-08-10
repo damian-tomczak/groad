@@ -123,7 +123,7 @@ IWindow::Message Win32Window::getMessage()
         DispatchMessage(&winMsg);
 
         auto potentialMsg = static_cast<Message>(winMsg.message);
-        if (potentialMsg > Message::EMPTY && potentialMsg < Message::COUNT)
+        if ((potentialMsg > Message::EMPTY) && (potentialMsg < Message::COUNT))
         {
             msg = static_cast<Message>(winMsg.message);
         }
@@ -138,6 +138,12 @@ IWindow::Message Win32Window::getMessage()
 
 bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    if (!mIsProcessing)
+    {
+        return false;
+    }
+    
+    // TODO: consider GetAsyncKeyState for checking pressed buttons
     switch (msg)
     {
     case WM_DESTROY:

@@ -14,6 +14,7 @@ namespace std::filesystem
 {
 }
 namespace fs = std::filesystem;
+using namespace std::string_literals;
 
 #ifdef ERROR
 #undef ERROR
@@ -52,12 +53,17 @@ using namespace std::literals;
 #define WERR(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR);
 #define WERR_NOTERMINATE(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR, false);
 
-// clang-format off
-#define ASSERT(x)                   \
-    if (!(x))                       \
-    {                               \
-        ERR("Assert occured: " #x); \
+// TODO: assert with msg
+
+#ifndef NDEBUG
+#define ASSERT(x)                                \
+    if (!(x))                                    \
+    {                                            \
+        ERR_NOTERMINATE("Assert occured: " #x);  \
     }
+#else
+#define ASSERT
+#endif
 
 #define HR(x)                                                                   \
     if (const auto hr = x; FAILED(hr))                                          \
@@ -65,12 +71,10 @@ using namespace std::literals;
         ERR(std::format(#x " {}({})", std::system_category().message(hr), hr)); \
     }
 
-
 #define SINGLETON_BODY(ClassName)   \
     NOT_COPYABLE(ClassName);        \
     private: ClassName() = default; \
     friend Singleton<ClassName>;
-// clang-format on
 
 #ifdef WIN32
 #elif __GNUC__

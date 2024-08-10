@@ -39,12 +39,10 @@ public:
         };
     };
     using EventData = std::variant<
-    // clang-format off
         Event::Empty,
         Event::MousePosition,
         Event::MouseWheel,
         Event::WindowSize
-    // clang-format on
     >;
 
     IWindow(int width, int height) : mWidth{width}, mHeight{height}
@@ -107,11 +105,7 @@ public:
     virtual void init() = 0;
     virtual void show() = 0;
     virtual Message getMessage();
-    virtual void putMessage(Message msg)
-    {
-        mMessages.push(msg);
-    }
-    virtual void putMessage(Message msg, EventData data)
+    virtual void putMessage(Message msg, EventData data = Event::Empty{})
     {
         mMessages.push(msg);
         mEventData.push(data);
@@ -140,8 +134,17 @@ public:
     template <typename EventType>
     [[nodiscard]] EventType getEventData()
     {
-        const EventData data = mEventData.front();
-        ASSERT(std::holds_alternative<EventType>(data));
+        /*const */EventData data = mEventData.front();
+        //ASSERT(std::holds_alternative<EventType>(data));
+
+        // TODO: further investigate it
+        while (!std::holds_alternative<EventType>(data))
+        {
+            WARN("TODO: stop/start processing mechanism seems to doesn't work properly");
+            mEventData.pop();
+            data = mEventData.front();
+        }
+
         return std::get<EventType>(data);
     }
 
@@ -153,6 +156,16 @@ public:
         }
     }
 
+    void resumeProcessing()
+    {
+        mIsProcessing = true;
+    }
+
+    void stopProcessing()
+    {
+        mIsProcessing = false;
+    }
+
     static IWindow* createWindow(uint32_t width = 1280, uint32_t height = 720);
 
 protected:
@@ -160,6 +173,8 @@ protected:
     std::queue<Message> mMessages;
     int mWidth;
     int mHeight;
+
+    bool mIsProcessing = true;
 };
 
 module :private;

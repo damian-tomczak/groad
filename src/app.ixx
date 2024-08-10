@@ -75,7 +75,10 @@ private:
     std::optional<int> mLastXMousePosition;
     std::optional<int> mLastYMousePosition;
 
-    bool mIsCameraInMovement{};
+    bool mIsWPressed{};
+    bool mIsAPressed{};
+    bool mIsSPressed{};
+    bool mIsDPressed{};
 
     std::unique_ptr<IDemo> mpDemo;
     Demo mMode{};
@@ -178,9 +181,21 @@ void App::run()
 
 void App::update(float dt)
 {
-    if (mIsCameraInMovement)
+    if (mIsWPressed)
     {
         mpDemo->mCamera.moveCamera(Camera::FORWARD, dt);
+    }
+    else if (mIsAPressed)
+    {
+        mpDemo->mCamera.moveCamera(Camera::LEFT, dt);
+    }
+    else if (mIsSPressed)
+    {
+        mpDemo->mCamera.moveCamera(Camera::BACKWARD, dt);
+    }
+    else if (mIsDPressed)
+    {
+        mpDemo->mCamera.moveCamera(Camera::RIGHT, dt);
     }
 
     mpDemo->update(dt);
@@ -277,31 +292,49 @@ void App::processInput(const IWindow::Message msg, float dt)
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
         {
-            mIsCameraInMovement = true;
+            mIsWPressed = true;
         }
         break;
     case IWindow::Message::KEY_W_UP:
         if (!mCtx.isUiClicked)
         {
-            mIsCameraInMovement = false;
+            mIsWPressed = false;
         }
         break;
     case IWindow::Message::KEY_S_DOWN:
         if (!mCtx.isUiClicked)
         {
-            mpDemo->mCamera.moveCamera(Camera::BACKWARD, dt);
+            mIsSPressed = true;
+        }
+        break;
+    case IWindow::Message::KEY_S_UP:
+        if (!mCtx.isUiClicked)
+        {
+            mIsSPressed = false;
         }
         break;
     case IWindow::Message::KEY_A_DOWN:
         if (!mCtx.isUiClicked)
         {
-            mpDemo->mCamera.moveCamera(Camera::LEFT, dt);
+            mIsAPressed = true;
+        }
+        break;
+    case IWindow::Message::KEY_A_UP:
+        if (!mCtx.isUiClicked)
+        {
+            mIsAPressed = false;
         }
         break;
     case IWindow::Message::KEY_D_DOWN:
         if (!mCtx.isUiClicked)
         {
-            mpDemo->mCamera.moveCamera(Camera::RIGHT, dt);
+            mIsDPressed = true;
+        }
+        break;
+    case IWindow::Message::KEY_D_UP:
+        if (!mCtx.isUiClicked)
+        {
+            mIsDPressed = false;
         }
         break;
     case IWindow::Message::KEY_CTRL_DOWN:
@@ -340,7 +373,7 @@ void App::processInput(const IWindow::Message msg, float dt)
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
         mCtx.cursorPos = mpDemo->mCamera.getPos() + mpDemo->mCamera.getFront() * 4.0f;
 
-        for (auto& pRenderable : mpRenderer->mRenderables)
+        for (auto& pRenderable : mpRenderer->getRenderables())
         {
             pRenderable->mLocalPos = pRenderable->mWorldPos - mCtx.cursorPos;
         }
@@ -377,7 +410,7 @@ void App::loadDemo(App::Demo mode)
 {
     mMode = mode;
 
-    mpRenderer->mRenderables.clear();
+    mpRenderer->clearRenderables();
 
     switch (mMode)
     {
@@ -440,7 +473,7 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
     mpRenderer->getContext()->Draw(6, 0);
 }
 
-std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName, float& menuBarHeight)
+std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
 {
     std::optional<App::Demo> result{};
 
@@ -477,7 +510,12 @@ std::optional<App::Demo> showMenu(App::Settings& settings, const char* demoName,
             ImGui::EndMenu();
         }
 
-        ImGui::Text("| Current demo: %s", demoName);
+        ImGui::Text("| Current demo: %s |", demoName);
+
+        if (pMenuBarCallback != nullptr)
+        {
+            pMenuBarCallback();
+        }
 
         ImGui::EndMainMenuBar();
     }
@@ -491,7 +529,7 @@ void App::renderUi()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpDemoName, mCtx.menuBarHeight);
+    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
     if (selectedMode != std::nullopt)
     {
         loadDemo(*selectedMode);

@@ -1,6 +1,7 @@
 module;
 
 #include "utils.h"
+#include "mg.hpp"
 
 export module core.renderer;
 
@@ -45,17 +46,39 @@ export
         }
     }
 
-    using Id = int;
+    using Id = long long int;
     inline constexpr Id invalidId = -1;
 
-    struct IIdentifiable : public NonCopyable
+    class IIdentifiable : public NonCopyable
     {
-        IIdentifiable(Id id) : id{id}
+        inline static Id counter = 0;
+
+    public:
+        inline static std::queue<Id> mFreeIds;
+
+        IIdentifiable() : mId{counter++}
         {
 
         }
 
-        Id id;
+        Id getId() const
+        {
+            return mId;
+        }
+
+    protected:
+        void setId(Id id)
+        {
+            mId = id;
+
+            if (id > counter)
+            {
+                counter = id + 1;
+            }
+        }
+
+    private:
+        Id mId;
     };
 
     class IRenderable : public IIdentifiable
@@ -64,7 +87,7 @@ export
 
     public:
         IRenderable(std::string&& tag, FXMVECTOR pos = XMVectorZero(), Color color = defaultColor)
-            : IIdentifiable{counter++}, mTag{std::move(tag)}, mWorldPos{pos}, mColor{color}
+            : mTag{std::move(tag)}, mWorldPos{pos}, mColor{color}
         {
         }
 
@@ -74,12 +97,12 @@ export
         bool isVisible = true;
 
         XMVECTOR mLocalPos{};
-        XMVECTOR mWorldPos{};
+        XMVECTOR mWorldPos;
 
         float mPitch{};
         float mYaw{};
         float mRoll{};
-        float mScale = 1.f;
+        XMVECTOR mScale = XMVECTOR{1.f, 1.f, 1.f, 1.f};
 
         Color mColor;
 
@@ -141,12 +164,17 @@ export
             mIsDeletable = deletability;
         }
 
+        virtual void applySerializerData(const MG1::SceneObject& serializerObj)
+        {
+            setId(serializerObj.GetId());
+            mTag = serializerObj.name;
+        }
+
     protected:
         std::vector<XMFLOAT3> mGeometry;
         std::vector<unsigned> mTopology;
 
     private:
-        inline static Id counter = 0;
         bool mShouldRebuildBuffers = false;
         bool mIsDeletable = true;
     };
@@ -169,13 +197,43 @@ export
         virtual void onResize() = 0;
 
         static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
-        virtual class IRenderable* getRenderable(Id id) const = 0;
 
         virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
+        virtual void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) = 0;
+        virtual void removeRenderable(Id id) = 0;
+        virtual void removeRenderable(std::vector<Id> ids) = 0;
+        virtual class IRenderable* getRenderable(Id id) const = 0;
+        void clearRenderables()
+        {
+            for (int i = 0; i < mRenderablePtrs.size(); ++i)
+            {
+                auto& pRenderable = mRenderablePtrs[i];
 
-        std::vector<std::unique_ptr<IRenderable>> mRenderables;
+                if (pRenderable == nullptr)
+                {
+                    continue;
+                }
+
+                if (pRenderable->isDeletable())
+                {
+                    pRenderable.reset();
+                }
+            }
+
+            for (int i = 0; i < mRenderablePtrs.size(); ++i)
+            {
+                mRenderablePtrs[i].reset();
+            }
+        }
+
+        // TODO: getter
+        const std::vector<std::unique_ptr<IRenderable>>& getRenderables() const
+        {
+            return mRenderablePtrs;
+        }
 
     protected:
+        std::vector<std::unique_ptr<IRenderable>> mRenderablePtrs;
         std::weak_ptr<IWindow> mpWindow;
     };
 }

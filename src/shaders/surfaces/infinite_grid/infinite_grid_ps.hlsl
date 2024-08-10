@@ -10,6 +10,9 @@ int flags;
 int screenWidth;
 int screenHeight;
 
+#define EPSILON 0.5f
+#define INFINITY 100.0f
+
 struct VertexOutput {
     float4 position : SV_POSITION;
     float3 nearPoint : TEXCOORD0;
@@ -49,11 +52,16 @@ float computeDepth(float3 pos)
     return clipSpacePos.z / clipSpacePos.w;
 }
 
-PSOutput main(VertexOutput input) {
+PSOutput main(VertexOutput input)
+{
     PSOutput output;
+
     float t = -input.nearPoint.y / (input.farPoint.y - input.nearPoint.y);
     float3 fragPos3D = input.nearPoint + t * (input.farPoint - input.nearPoint);
+
     output.depth = computeDepth(fragPos3D);
     output.color = grid(fragPos3D, 10.0) * (t > 0 ? 1.0 : 0.0);
+    output.depth = ((abs(output.color.a - 1.0) < EPSILON) && (t > 0)) ? computeDepth(fragPos3D) : INFINITY;
+
     return output;
 }

@@ -33,7 +33,7 @@ public:
 
     ~DX11Renderer()
     {
-        mRenderables.clear();
+        clearRenderables();
 
         ImGui_ImplDX11_Shutdown();
     }
@@ -204,9 +204,21 @@ public:
         memcpy(cbData.pData, baseAddress + sizeof(CB<ID3D11Buffer>), sizeof(Buffer) - sizeof(CB<ID3D11Buffer>));
         mpContext->Unmap(cb.buffer.Get(), 0);
     }
-    void addRenderable(std::unique_ptr<IRenderable>&& renderable);
-    void removeRenderable(Id id);
+
+    void addRenderable(std::unique_ptr<IRenderable>&& renderable) override;
+    void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) override
+    {
+        // TODO: implement
+        ASSERT(false);
+    }
+    void removeRenderable(Id id) override;
+    void removeRenderable(std::vector<Id> ids) override
+    {
+        // TODO: implement
+        ASSERT(false);
+    }
     IRenderable* getRenderable(Id id) const override;
+
     void createShaders();
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
@@ -260,6 +272,7 @@ void DX11Renderer::onResize()
     ASSERT(mpDevice);
     ASSERT(mpSwapChain);
 
+    mpRenderTargetView.Reset();
     mpRenderTargetView.Reset();
     mpDepthStencilView.Reset();
     mpDepthStencilBuffer.Reset();
@@ -405,24 +418,27 @@ void DX11Renderer::initCore()
 
 void DX11Renderer::buildGeometryBuffers()
 {
-    for (unsigned i{}; i < mRenderables.size(); ++i)
+    for (unsigned i = 0; i < mRenderablePtrs.size(); ++i)
     {
-        if (!mRenderables[i]->mShouldRebuildBuffers)
+        auto& pRenderable = mRenderablePtrs[i];
+
+        if (pRenderable == nullptr)
         {
             continue;
         }
-        auto& pRenderable = mRenderables[i];
-        // TODO: not yet implemented
-        //if (mRenderables[i] == nullptr)
-        //{
-        //    continue;
-        //}
+
+        if (!pRenderable->mShouldRebuildBuffers)
+        {
+            continue;
+        }
 
         const std::vector<XMFLOAT3>& geometry = pRenderable->getGeometry();
         const std::vector<unsigned>& topology = pRenderable->getTopology();
 
         if (geometry.size() == 0)
         {
+            // So far there shouldn't be such case
+            ASSERT(false);
             continue;
         }
 
@@ -460,10 +476,8 @@ void DX11Renderer::buildGeometryBuffers()
         };
         HR(mpDevice->CreateBuffer(&ibd, &initData, &mIndexBuffers[i]));
 
-        mRenderables[i]->mShouldRebuildBuffers = false;
+        pRenderable->mShouldRebuildBuffers = false;
     }
-
-    //mRebuildBuffers = false;
 }
 
 void DX11Renderer::createShaders()
@@ -576,7 +590,6 @@ void DX11Renderer::createShaders()
 
 void DX11Renderer::buildVertexLayout()
 {
-    // clang-format off
     {
         std::array desc
         {
@@ -626,7 +639,6 @@ void DX11Renderer::buildVertexLayout()
         HR(mpDevice->CreateInputLayout(desc.data(), static_cast<UINT>(desc.size()),
             mShaders.bezierPatchC0VS.second->GetBufferPointer(), mShaders.bezierPatchC0VS.second->GetBufferSize(), &mpBezierPatchInputLayout));
     }
-    // clang-format on
 }
 
 void DX11Renderer::createRasterizers()
@@ -672,35 +684,54 @@ ComPtr<ID3D11ShaderResourceView> DX11Renderer::createShaderResourceView(const fs
 
 void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)
 {
-    mRenderables.emplace_back(std::move(pRenderable));
-    mVertexBuffers.emplace_back();
-    mIndexBuffers.emplace_back();
+    const Id renderableId = pRenderable->getId();
+    ASSERT((pRenderable != nullptr) && (renderableId != invalidId));
 
-    // mRebuildBuffers = true;
+    if (static_cast<size_t>(renderableId) <= mRenderablePtrs.size())
+    {
+        mRenderablePtrs.emplace_back(std::move(pRenderable));
+        mVertexBuffers.emplace_back();
+        mIndexBuffers.emplace_back();
+    }
+    else
+    {
+        // Expected only while loading scene from serializer.
+        static constexpr size_t reasonablyEmptyAmountPredecessors = 500;
+        ASSERT(!((renderableId - mRenderablePtrs.size()) > reasonablyEmptyAmountPredecessors));
+
+        mRenderablePtrs.resize(renderableId + 1);
+        mRenderablePtrs[renderableId] = std::move(pRenderable);
+        mVertexBuffers.resize(renderableId + 1, nullptr);
+        mIndexBuffers.resize(renderableId + 1, nullptr);
+    }
+
+    mRenderablePtrs[renderableId]->regenerateData();
 }
 
 void DX11Renderer::removeRenderable(Id id)
 {
-    for (int i{}; i < mRenderables.size(); ++i)
+    if (id == invalidId)
     {
-        if (mRenderables.at(i)->id == id)
-        {
-            mRenderables.erase(mRenderables.begin() + i);
-            mVertexBuffers.erase(mVertexBuffers.begin() + i);
-            mIndexBuffers.erase(mIndexBuffers.begin() + i);
-        }
+        ASSERT(false);
+        return;
     }
+
+    ASSERT(mRenderablePtrs.size() > static_cast<size_t>(id));
+
+    (mRenderablePtrs.begin() + id)->reset();
+    (mVertexBuffers.begin() + id)->Reset();
+    (mIndexBuffers.begin() + id)->Reset();
+
+    IIdentifiable::mFreeIds.push(id);
 }
 
 IRenderable* DX11Renderer::getRenderable(Id id) const
 {
-    auto it =
-        std::find_if(mRenderables.begin(), mRenderables.end(), [id](const auto& item) { return item->id == id; });
-
-    if (it != mRenderables.end())
+    if ((id == invalidId) || (static_cast<size_t>(id) > mRenderablePtrs.size()))
     {
-        return it->get();
+        ASSERT(false);
+        return nullptr;
     }
 
-    return nullptr;
+    return mRenderablePtrs[id].get();
 }

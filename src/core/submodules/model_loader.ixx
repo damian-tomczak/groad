@@ -25,7 +25,6 @@ export
         float z;
     };
 
-    // clang-format off
     template<typename T>
     concept IsLayout = requires (T a) {
         { a.data };
@@ -33,7 +32,6 @@ export
         { a.stride } -> std::convertible_to<unsigned>;
         { a.offset } -> std::convertible_to<unsigned>;
     };
-    // clang-format on
 
     struct PositionNormalLayout
     {
@@ -186,8 +184,6 @@ export
                                                            std::vector<Vector>& normals, std::vector<UV>& uvs, std::vector<short>& indices);
     };
 
-    // clang-format off
-
     std::vector<PositionNormalLayout> boxVertices(float width, float height, float depth)
     {
         return
@@ -242,8 +238,6 @@ export
             20,22,21, 20,23,22,
         };
     }
-
-    // clang-format on
 };
 
 template <typename Layout>

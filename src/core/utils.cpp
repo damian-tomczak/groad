@@ -99,13 +99,11 @@ void log(std::string_view msg, const LogLevel level, bool shouldTerminate)
     const auto secondRemainder = now - std::chrono::system_clock::from_time_t(nowTime);
     const int64_t milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(secondRemainder).count();
 
-    // clang-format off
     std::ostringstream out;
     out.fill('0');
     out << logLevelToColor(level) << "[" << std::setw(2) << nowTm.tm_hour << ":" << std::setw(2) << nowTm.tm_min << ":"
         << std::setw(2) << nowTm.tm_sec << "." << std::setw(3) << milliseconds << "]"
         << "[" << logLevelToStr(level) << "] " << msg << colorEnd << std::endl;
-    // clang-format on
 
     std::lock_guard lock{ioMutex};
     if (level == LogLevel::ERROR)
@@ -146,13 +144,11 @@ void log(const std::wstring_view msg, const LogLevel level, bool shouldTerminate
     const auto secondRemainder = now - std::chrono::system_clock::from_time_t(nowTime);
     const int64_t milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(secondRemainder).count();
 
-    // clang-format off
     std::wostringstream out;
     out.fill('0');
     out << logLevelToColor(level) << "[" << std::setw(2) << nowTm.tm_hour << ":" << std::setw(2) << nowTm.tm_min << ":"
         << std::setw(2) << nowTm.tm_sec << "." << std::setw(3) << milliseconds << "]"
         << "[" << logLevelToWStr(level) << "] " << msg << colorEnd << std::endl;
-    // clang-format on
 
     std::lock_guard lock{ioMutex};
     if (level == LogLevel::ERROR)

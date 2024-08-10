@@ -1,11 +1,26 @@
-project(imgui)
+project(ImGui)
 
-file(GLOB_RECURSE SRC_FILES
-    *.cpp
+add_subdirectory(modules)
+
+set(SRC_FILES
+    src/backend/imgui_impl_dx11.cpp
+    src/backend/imgui_impl_win32.cpp
+    src/imgui_demo.cpp
+    src/imgui_draw.cpp
+    src/imgui_tables.cpp
+    src/imgui_widgets.cpp
+    src/imgui.cpp
 )
 
-file(GLOB_RECURSE H_FILES
-    *.h
+set(H_FILES
+    include/imconfig.h
+    include/imgui_impl_dx11.h
+    include/imgui_impl_win32.h
+    include/imgui_internal.h
+    include/imgui.h
+    include/imstb_textedit.h
+    src/imstb_rectpack.h
+    src/imstb_truetype.h
 )
 
 add_library(${PROJECT_NAME} STATIC

@@ -6,6 +6,8 @@
 #include <tuple>
 #include <numbers>
 
+#include "Serializer.h"
+
 //#define CUSTOM_MATH
 
 #ifdef CUSTOM_MATH
@@ -23,8 +25,6 @@ using DirectX::XMVectorSubtract;
 #else
 using namespace DirectX;
 #endif
-
-// clang-format off
 
 namespace mg
 {
@@ -258,4 +258,3 @@ inline XMVECTOR XMVector3Cross(FXMVECTOR v1, FXMVECTOR v2)
     return {cx, cy, cz, 0};
 }
 #endif
-// clang-format on

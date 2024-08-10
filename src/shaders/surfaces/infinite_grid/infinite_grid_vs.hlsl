@@ -38,5 +38,6 @@ VertexOutput main(VertexInput input) {
     output.nearPoint = UnprojectPoint(p.x, p.y, 0.0, view, proj);
     output.farPoint = UnprojectPoint(p.x, p.y, 1.0, view, proj);
     output.position = float4(p, 1.0);
+
     return output;
 }
