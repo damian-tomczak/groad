@@ -495,10 +495,13 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
             it = mCtx.selectedRenderableIds.begin();
         }
 
-        // TODO: investigate it
+        // TODO: perf bottleneck
         for (auto& pRenderable : pDX11Renderer->getRenderables())
         {
-            pRenderable->regenerateData();
+            if (pRenderable != nullptr)
+            {
+                pRenderable->regenerateData();
+            }
         }
         break;
     }

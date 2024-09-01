@@ -33,7 +33,8 @@ bool rayIntersectsSphere(FXMVECTOR rayOrigin, FXMVECTOR rayDir, FXMVECTOR sphere
 std::tuple<float, float, float> getPitchYawRollFromRotationMat(XMMATRIX _rotationMat);
 
 XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float nearZ, float farZ);
-XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePosition, FXMVECTOR focusPosition, FXMVECTOR upDirection);
+XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePos, FXMVECTOR focusPos, FXMVECTOR upDir);
+XMMATRIX XMMatrixLookAtRH(FXMVECTOR eyePos, FXMVECTOR focusPos, FXMVECTOR upDir);
 XMMATRIX XMMatrixScaling(float sx, float sy, float sz);
 XMMATRIX XMMatrixRotationX(float angleRadians);
 XMMATRIX XMMatrixRotationY(float angleRadians);
@@ -47,6 +48,7 @@ XMVECTOR XMVector3Cross(FXMVECTOR v1, FXMVECTOR v2);
 #ifdef CUSTOM_MATH
 #define XMMatrixPerspectiveFovLH mg::XMMatrixPerspectiveFovLH
 #define XMMatrixLookAtLH         mg::XMMatrixLookAtLH
+#define XMMatrixLookAtRH         mg::XMMatrixLookAtRH
 #define XMMatrixScaling          mg::XMMatrixScaling
 #define XMMatrixRotationX        mg::XMMatrixRotationX
 #define XMMatrixRotationY        mg::XMMatrixRotationY
@@ -58,6 +60,7 @@ XMVECTOR XMVector3Cross(FXMVECTOR v1, FXMVECTOR v2);
 #else
 #define XMMatrixPerspectiveFovLH DirectX::XMMatrixPerspectiveFovLH
 #define XMMatrixLookAtLH         DirectX::XMMatrixLookAtLH
+#define XMMatrixLookAtRH         DirectX::XMMatrixLookAtRH
 #define XMMatrixScaling          DirectX::XMMatrixScaling
 #define XMMatrixRotationX        DirectX::XMMatrixRotationX
 #define XMMatrixRotationY        DirectX::XMMatrixRotationY
@@ -139,15 +142,34 @@ inline XMMATRIX XMMatrixPerspectiveFovLH(float fovY, float aspectRatio, float ne
     };
 }
 
-inline XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePosition, FXMVECTOR focusPosition, FXMVECTOR upDirection)
+inline XMMATRIX XMMatrixLookAtLH(FXMVECTOR eyePos, FXMVECTOR focusPos, FXMVECTOR upDir)
 {
-    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(focusPosition, eyePosition));
-    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(upDirection, zAxis));
+    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(focusPos, eyePos));
+    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(upDir, zAxis));
     XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
 
-    float tx = -XMVectorGetX(XMVector3Dot(xAxis, eyePosition));
-    float ty = -XMVectorGetY(XMVector3Dot(yAxis, eyePosition));
-    float tz = -XMVectorGetZ(XMVector3Dot(zAxis, eyePosition));
+    float tx = -XMVectorGetX(XMVector3Dot(xAxis, eyePos));
+    float ty = -XMVectorGetY(XMVector3Dot(yAxis, eyePos));
+    float tz = -XMVectorGetZ(XMVector3Dot(zAxis, eyePos));
+
+    return
+    {
+        XMVectorSet(XMVectorGetX(xAxis), XMVectorGetX(yAxis), XMVectorGetX(zAxis), 0.0f),
+        XMVectorSet(XMVectorGetY(xAxis), XMVectorGetY(yAxis), XMVectorGetY(zAxis), 0.0f),
+        XMVectorSet(XMVectorGetZ(xAxis), XMVectorGetZ(yAxis), XMVectorGetZ(zAxis), 0.0f),
+        XMVectorSet(tx,                  ty,                  tz,                  1.0f)
+    };
+}
+
+inline XMMATRIX XMMatrixLookAtRH(FXMVECTOR eyePos, FXMVECTOR focusPos, FXMVECTOR upDir)
+{
+    XMVECTOR zAxis = XMVector3Normalize(XMVectorSubtract(eyePos, focusPos));
+    XMVECTOR xAxis = XMVector3Normalize(XMVector3Cross(upDir, zAxis));
+    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
+
+    float tx = -XMVectorGetX(XMVector3Dot(xAxis, eyePos));
+    float ty = -XMVectorGetY(XMVector3Dot(yAxis, eyePos));
+    float tz = -XMVectorGetZ(XMVector3Dot(zAxis, eyePos));
 
     return
     {

@@ -13,7 +13,7 @@ export class Camera : public NonCopyableAndMoveable
     inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     inline static XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 
-    XMVECTOR mPosition;
+    XMVECTOR mPos;
     XMVECTOR mFront;
 
     float mYaw{};
@@ -31,8 +31,8 @@ public:
         RIGHT
     };
 
-    Camera(XMVECTOR mPosition, float yaw, float pitch)
-        : mPosition{mPosition}, mYaw{yaw}, mPitch{pitch}
+    Camera(XMVECTOR mPos, float yaw, float pitch)
+        : mPos{mPos}, mYaw{yaw}, mPitch{pitch}
     {
         updateCameraVectors();
     }
@@ -44,26 +44,26 @@ public:
 
     XMMATRIX getViewMatrix() const
     {
-        return XMMatrixLookAtLH(mPosition, XMVectorAdd(mPosition, mFront), mUp);
+        return XMMatrixLookAtRH(mPos, XMVectorAdd(mPos, mFront), mUp);
     }
 
-    void moveCamera(const CameraMovement direction, float dt)
+    void moveCamera(const CameraMovement dir, float dt)
     {
         const float velocity = mMovementSpeed * dt;
 
-        switch (direction)
+        switch (dir)
         {
         case FORWARD:
-            mPosition += XMVectorScale(mFront, velocity);
+            mPos -= XMVectorScale(mFront, velocity);
             break;
         case BACKWARD:
-            mPosition -= XMVectorScale(mFront, velocity);
+            mPos += XMVectorScale(mFront, velocity);
             break;
         case LEFT:
-            mPosition -= XMVectorScale(mRight, velocity);
+            mPos -= XMVectorScale(mRight, velocity);
             break;
         case RIGHT:
-            mPosition += XMVectorScale(mRight, velocity);
+            mPos += XMVectorScale(mRight, velocity);
             break;
         default:
             ASSERT(false);
@@ -108,7 +108,7 @@ public:
 
     [[nodiscard]] XMVECTOR getPos() const
     {
-        return mPosition;
+        return mPos;
     }
 
     XMMATRIX mViewMtx = XMMatrixIdentity();

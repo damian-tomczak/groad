@@ -47,7 +47,7 @@ public:
     std::function<void()> mpMenuBarCallback;
 
     const char* mpDemoName;
-    Camera mCamera{0.0f, 0.5f, -10.0f};
+    Camera mCamera{0.0f, 0.5f, 10.0f};
 
 protected:
     IDemo(Context& ctx, const char* demoName, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow, std::unique_ptr<ISurface> pSurface = nullptr)
