@@ -67,6 +67,7 @@ public:
         Shader<ID3D11VertexShader> bezierPatchC2VS;
         Shader<ID3D11HullShader> bezierPatchC2HS;
         Shader<ID3D11DomainShader> bezierPatchC2DS;
+        Shader<ID3D11GeometryShader> bezierPatchC2GS;
         Shader<ID3D11PixelShader> bezierPatchC2PS;
 
         Shader<ID3D11VertexShader> waterSurfaceVS;
@@ -88,6 +89,9 @@ public:
 
         Shader<ID3D11VertexShader> billboardVS;
         Shader<ID3D11PixelShader> billboardPS;
+
+        Shader<ID3D11VertexShader> blendVS;
+        Shader<ID3D11PixelShader> blendPS;
     };
 
     void init() override;
@@ -168,6 +172,11 @@ public:
     ID3D11InputLayout* getBezierPatchInputLayout() const
     {
         return mpBezierPatchInputLayout.Get();
+    }
+
+    const D3D11_VIEWPORT* getAddressOfScreenViewport() const
+    {
+        return &mScreenViewport;
     }
 
     template <typename Buffer>
@@ -509,6 +518,7 @@ void DX11Renderer::createShaders()
 
         static constexpr std::string_view shaderEntryPoint{"main"};
 
+        // TODO: fix it
         const fs::path fullShaderPath = SHADERS_PATH / shaderPath;
 
         if (!fs::exists(fullShaderPath))

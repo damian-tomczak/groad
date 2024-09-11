@@ -1,3 +1,16 @@
+matrix modelMtx;
+matrix viewMtx;
+matrix invViewMtx;
+matrix projMtx;
+matrix invProj;
+matrix texMtx;
+float4 cameraPos;
+float4 color;
+int flags;
+int screenWidth;
+int screenHeight;
+int tesFactor;
+
 struct VSOutput
 {
     float3 controlPoint0  : CONTROL_POINT0;
@@ -52,23 +65,13 @@ HSConstantDataOutput CalcHSPatchConstants(
 {
     HSConstantDataOutput Output;
 
-    float3 midPoints[4] =
-    {
-        -0.5f * (ip[0].controlPoint0 + ip[0].controlPoint12),
-        -0.5f * (ip[0].controlPoint0 + ip[0].controlPoint3),
-        -0.5f * (ip[0].controlPoint3 + ip[0].controlPoint15),
-        -0.5f * (ip[0].controlPoint12 + ip[0].controlPoint15)
-    };
-
     [unroll]
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 4; ++i)
     {
-        Output.edges[i] = -8 * log10(0.01 * -midPoints[i].z) + 3;
+        Output.edges[i] = tesFactor;
     }
-
-    float3 mid = -0.5f * (ip[0].controlPoint5 + ip[0].controlPoint10);
     
-    Output.inside[0] = Output.inside[1] = -8 * log10(0.01 * -mid.z) + 3;
+    Output.inside[0] = Output.inside[1] = tesFactor;
 
     return Output;
 }

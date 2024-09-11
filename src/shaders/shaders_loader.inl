@@ -48,6 +48,7 @@
     COMPILE_VERTEX_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_vs.hlsl", mShaders.bezierPatchC2VS);
     COMPILE_HULL_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_hs.hlsl", mShaders.bezierPatchC2HS);
     COMPILE_DOMAIN_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_ds.hlsl", mShaders.bezierPatchC2DS);
+    COMPILE_GEOMETRY_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_border_gs.hlsl", mShaders.bezierPatchC2GS);
     COMPILE_PIXEL_SHADER("beziers/bezier_patch_c2/bezier_patch_c2_ps.hlsl", mShaders.bezierPatchC2PS);
 #pragma endregion beziers
 
@@ -78,4 +79,9 @@
     COMPILE_VERTEX_SHADER("billboard/billboard_vs.hlsl", mShaders.billboardVS);
     COMPILE_PIXEL_SHADER("billboard/billboard_ps.hlsl", mShaders.billboardPS);
 #pragma endregion watersurface
+
+#pragma region blend
+    COMPILE_VERTEX_SHADER("blend/blend_vs.hlsl", mShaders.blendVS);
+    COMPILE_PIXEL_SHADER("blend/blend_ps.hlsl", mShaders.blendPS);
+#pragma endregion blend
 #pragma endregion

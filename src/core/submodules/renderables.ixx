@@ -182,6 +182,74 @@ export
 
         std::vector<XMFLOAT3>& getBernsteinPositions() { return mGeometry; }
 
+        void updateBernstein(int bernsteinIdx, XMVECTOR delta)
+        {
+            const int bSplineId = (bernsteinIdx + 4 + 2) / 4;
+            
+            const Id bSplinePointId = mControlPointIds.at(bSplineId);
+            IRenderable* bSplinePoint = mpRenderer->getRenderable(bSplinePointId);
+
+            XMVECTOR farPoint;
+            switch (bernsteinIdx % 4)
+            {
+            case 0:
+            {
+                const Id bSplineBeforePointId = mControlPointIds.at(bSplineId - 1);
+                const Id bSplineNextPointId = mControlPointIds.at(bSplineId + 1);
+                const IRenderable* bSplineBeforePoint = mpRenderer->getRenderable(bSplineBeforePointId);
+                const IRenderable* bSplineNextPoint = mpRenderer->getRenderable(bSplineNextPointId);
+                farPoint = (bSplineBeforePoint->mWorldPos + bSplineNextPoint->mWorldPos) / 2.f;
+                break;
+            }
+            case 1:
+            {
+                const Id bSplineNextPointId = mControlPointIds.at(bSplineId + 1);
+                const IRenderable* bSplineNextPoint = mpRenderer->getRenderable(bSplineNextPointId);
+                farPoint = bSplineNextPoint->mWorldPos;
+                break;
+            }
+            case 2:
+            {
+                const Id bSplineBeforePointId = mControlPointIds.at(bSplineId - 1);
+                const IRenderable* bSplineBeforePoint = mpRenderer->getRenderable(bSplineBeforePointId);
+                farPoint = bSplineBeforePoint->mWorldPos;
+                break;
+            }
+            case 3:
+            {
+                const Id bSplineBeforePointId = mControlPointIds.at(bSplineId - 1);
+                const Id bSplineNextPointId = mControlPointIds.at(bSplineId + 1);
+                const IRenderable* bSplineBeforePoint = mpRenderer->getRenderable(bSplineBeforePointId);
+                const IRenderable* bSplineNextPoint = mpRenderer->getRenderable(bSplineNextPointId);
+                farPoint = (bSplineBeforePoint->mWorldPos + bSplineNextPoint->mWorldPos) / 2.f;
+                break;
+            }
+            // TODO: investigate it
+            //case 3:
+            //{
+            //    const Id bSplineNextPointId = mControlPointIds.at(bSplineId + 1);
+            //    const Id bSplineNextNextPointId = mControlPointIds.at(bSplineId + 2);
+            //    const IRenderable* bSplineNextPoint = mpRenderer->getRenderable(bSplineNextPointId);
+            //    const IRenderable* bSplineNextNextPoint = mpRenderer->getRenderable(bSplineNextNextPointId);
+            //    farPoint = (bSplineNextPoint->getGlobalPos() + bSplineNextNextPoint->getGlobalPos()) / 2.f;
+            //    break;
+            //}
+            }
+
+            // TODO: WO
+            XMVECTOR bernsteinPos = XMLoadFloat3(&mGeometry.at(bernsteinIdx));
+            auto var1 = XMVector3Length(bSplinePoint->mWorldPos - farPoint);
+            float var1length;
+            XMStoreFloat(&var1length, var1);
+            auto var2 = XMVector3Length(bernsteinPos - delta - farPoint);
+            XMVECTOR length = (var1length == 0.f ? XMVECTOR{0.001f, 0.001f, 0.001f, 0.001f} : var1) / var2;
+            float ratio;
+            XMStoreFloat(&ratio, length);
+
+            XMVECTOR d = delta * ratio;
+            bSplinePoint->mWorldPos += d;
+        }
+
     private:
         void generateBernsteinPoints();
     };
@@ -212,16 +280,95 @@ export
         unsigned int v = 1;
         bool isWrapped = false;
         bool isC2 = false;
+        float patchSizeU = 1.f, patchSizeV = 1.f;
     };
 
     class IBezierSurface : public IRenderable, public IControlPointBased
     {
+    public:
+        void rotateControlPoints(float pitchoff, float yawoff, float rolloff, float scaleoff)
+        {
+            int count = 0;
+            XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+            for (auto& bezierPatch : mBezierPatches)
+            {
+                for (auto selectedRenderableId : bezierPatch.controlPointIds)
+                {
+                    const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
+                    sum = XMVectorAdd(sum, pRenderable->getGlobalPos());
+                    count++;
+                }
+            }
+
+            float numPositions = static_cast<float>(count);
+            XMVECTOR pivotPos = XMVectorScale(sum, 1.0f / numPositions);
+
+            for (auto& bezierPatch : mBezierPatches)
+            {
+                for (auto renderableSelectedId : bezierPatch.controlPointIds)
+                {
+                    IRenderable* const pRenderable = mpRenderer->getRenderable(renderableSelectedId);
+
+                    XMMATRIX model = XMMatrixIdentity();
+
+                    XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+                    XMMATRIX pivotScaleMat = XMMatrixIdentity();
+
+                    XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+                    XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+                    XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
+
+                    XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+                    XMMATRIX pivotRotationMat = XMMatrixIdentity();
+
+                    XMMATRIX translationToOrigin = XMMatrixIdentity();
+                    XMMATRIX translationBack = XMMatrixIdentity();
+
+                    //if (mCtx.selectedRenderableIds.contains(pRenderable->getId()))
+                    //{
+                        XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(pitchoff);
+                        XMMATRIX pivotYawRotationMat = XMMatrixRotationY(yawoff);
+                        XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(rolloff);
+
+                        pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+
+                        pivotScaleMat = XMMatrixScaling(scaleoff, scaleoff, scaleoff);
+
+                        translationToOrigin = XMMatrixTranslationFromVector(-(pivotPos - pRenderable->mWorldPos));
+                        translationBack = XMMatrixTranslationFromVector((pivotPos - pRenderable->mWorldPos));
+                    //}
+
+                    XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+
+                    model = localScaleMat * localRotationMat *
+                        translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
+                        worldTranslation;
+
+
+                    pRenderable->mWorldPos = model.r[3];
+
+                    const XMMATRIX scaleMat = localScaleMat * pivotScaleMat;
+                    pRenderable->mScale = XMVECTOR{ XMVectorGetX(scaleMat.r[0]), XMVectorGetY(scaleMat.r[1]), XMVectorGetZ(scaleMat.r[2]), 1.f };
+
+                    const XMMATRIX rotationMat =
+                        localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
+                    const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
+
+                    pRenderable->mPitch = pitch;
+                    pRenderable->mYaw = yaw;
+                    pRenderable->mRoll = roll;
+                }
+            }
+
+            updateControlPoints();
+        }
+
     protected:
         static constexpr float controlPointSize = 0.01f;
         static constexpr unsigned int numberOfControlPoints = 16;
 
-        IBezierSurface(std::string&& tag, IRenderer* pRenderer, const BezierSurfaceCreator&& bezierPatchCreator)
-            : IRenderable{std::move(tag)}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
+        IBezierSurface(FXMVECTOR pos, std::string&& tag, IRenderer* pRenderer, const BezierSurfaceCreator&& bezierPatchCreator)
+            : IRenderable{std::move(tag), pos}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
         {}
         ~IBezierSurface();
         
@@ -236,8 +383,8 @@ export
         void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override;
         void updateControlPoints();
 
-        virtual std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v) = 0;
-        virtual std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos_, unsigned int u, unsigned int v) = 0;
+        virtual std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV) = 0;
+        virtual std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV) = 0;
 
         IRenderer* const mpRenderer;
         const BezierSurfaceCreator mBezierPatchCreator;
@@ -249,16 +396,16 @@ export
         COUNTER();
 
     public:
-        BezierSurfaceC0(const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
-            : IBezierSurface{"BezierSurfaceC0 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
+        BezierSurfaceC0(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
+            : IBezierSurface{pos, "BezierSurfaceC0 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
         {}
 
         void regenerateData() override;
 
         void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override;
 
-        std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v);
-        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v);
+        std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
+        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
 
         void applySerializerData(const MG1::BezierSurfaceC0& serialBezierSurface)
         {
@@ -271,21 +418,23 @@ export
         COUNTER();
 
     public:
-        BezierSurfaceC2(const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
-            : IBezierSurface{"BezierSurfaceC2 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
+        BezierSurfaceC2(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
+            : IBezierSurface{pos, "BezierSurfaceC2 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
         {}
 
         void regenerateData() override;
 
         void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) override;
 
-        std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v);
-        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v);
+        std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
+        std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
 
         void applySerializerData(const MG1::BezierSurfaceC2& serialBezierSurface)
         {
             IRenderable::applySerializerData(serialBezierSurface);
         }
+
+        bool mIsPolygon{};
     };
 
     inline void reloadCounters()
@@ -491,6 +640,8 @@ void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int rende
 {
     auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
+    auto defaultColor = pDX11Renderer->mGlobalCB.color;
+
     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 
     pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierCurveInputLayout());
@@ -513,6 +664,8 @@ void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int rende
         pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr,
             0);
         pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->mGlobalCB.color = defaultColor;
+        pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
         pDX11Renderer->getContext()->Draw(1, 0);
 
@@ -522,9 +675,8 @@ void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int rende
             pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
             pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
             pDX11Renderer->getContext()->GSSetShader(
-                pDX11Renderer->getShaders().bezierCurveBorderGS.first.Get(), nullptr, 0);
+            pDX11Renderer->getShaders().bezierCurveBorderGS.first.Get(), nullptr, 0);
             pDX11Renderer->mGlobalCB.color = Colors::Green;
-
             pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
             pDX11Renderer->getContext()->Draw(1, 0);
@@ -589,7 +741,7 @@ void BezierCurveC2::generateGeometry()
         auto pRenderable = mpRenderer->getRenderable(id);
         if (pRenderable)
         {
-            const XMVECTOR positionVec = pRenderable->getGlobalPos();
+            const XMVECTOR positionVec = pRenderable->mWorldPos;
             XMFLOAT3 position;
             XMStoreFloat3(&position, positionVec);
             mGeometry.push_back(position);
@@ -629,7 +781,7 @@ void BezierCurveC2::generateBernsteinPoints()
 
         XMMATRIX pointsInBspline = XMMatrixMultiply(bSplineToBernstein, pointsMat);
 
-        XMStoreFloat3(&mGeometry[i], pointsInBspline.r[0]);
+        XMStoreFloat3(&mGeometry[i],     pointsInBspline.r[0]);
         XMStoreFloat3(&mGeometry[i + 1], pointsInBspline.r[1]);
         XMStoreFloat3(&mGeometry[i + 2], pointsInBspline.r[2]);
         XMStoreFloat3(&mGeometry[i + 3], pointsInBspline.r[3]);
@@ -651,21 +803,39 @@ void InterpolatedBezierCurveC2::generateGeometry()
     auto pFirstRenderable = mpRenderer->getRenderable(*mControlPointIds.begin());
     if (pFirstRenderable != nullptr)
     {
-        deBoorPositions.push_back(pFirstRenderable->getGlobalPos());
+        deBoorPositions.push_back(pFirstRenderable->mWorldPos);
     }
 
+    constexpr float proximityThreshold = 0.01f;
+    // TODO: refactor
     for (auto it = mControlPointIds.begin() + 1; it != mControlPointIds.end();)
     {
-        if (*(it - 1) == *it)
+        auto previousId = it - 1;
+        auto currentId = it;
+        if (*previousId == *currentId)
         {
-            it = mControlPointIds.erase(it);
+            ++it;
         }
         else
         {
-            auto pRenderable = mpRenderer->getRenderable(*it);
-            if (pRenderable != nullptr)
+            auto pRenderableCurrent = mpRenderer->getRenderable(*currentId);
+            auto pRenderablePrevious = mpRenderer->getRenderable(*previousId);
+
+            if (pRenderableCurrent != nullptr && pRenderablePrevious != nullptr)
             {
-                const XMVECTOR posVec = pRenderable->getGlobalPos();
+                const XMVECTOR posCurrent = pRenderableCurrent->mWorldPos;
+                const XMVECTOR posPrevious = pRenderablePrevious->mWorldPos;
+
+                XMVECTOR diff = DirectX::XMVectorSubtract(posCurrent, posPrevious);
+                if (DirectX::XMVectorGetX(DirectX::XMVector3LengthSq(diff)) <= proximityThreshold * proximityThreshold)
+                {
+                    ++it;
+                }
+            }
+
+            if (pRenderableCurrent != nullptr)
+            {
+                const XMVECTOR posVec = pRenderableCurrent->mWorldPos;
                 deBoorPositions.push_back(posVec);
             }
 
@@ -869,12 +1039,12 @@ void IBezierSurface::regenerateData()
     if (!mBezierPatchCreator.isWrapped)
     {
         controlPoints =
-            createControlPointsForFlatSurface(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
+            createControlPointsForFlatSurface(mWorldPos, mBezierPatchCreator.u, mBezierPatchCreator.v, mBezierPatchCreator.patchSizeU, mBezierPatchCreator.patchSizeV);
     }
     else
     {
         controlPoints =
-            createControlPointsForCylinder(getGlobalPos(), mBezierPatchCreator.u, mBezierPatchCreator.v);
+            createControlPointsForCylinder(mWorldPos, mBezierPatchCreator.u, mBezierPatchCreator.v, mBezierPatchCreator.patchSizeU, mBezierPatchCreator.patchSizeV);
     }
 
     mControlPointIds.reserve(controlPoints.size());
@@ -921,7 +1091,7 @@ void IBezierSurface::updateControlPoints()
             auto pRenderable = mpRenderer->getRenderable(controlPointId);
 
             XMFLOAT3 pos;
-            XMStoreFloat3(&pos, pRenderable->getGlobalPos());
+            XMStoreFloat3(&pos, pRenderable->mWorldPos);
             mGeometry.push_back(pos);
         }
     }
@@ -930,6 +1100,11 @@ void IBezierSurface::updateControlPoints()
 void BezierSurfaceC0::regenerateData()
 {
     IBezierSurface::regenerateData();
+
+    if (!mBezierPatches.empty())
+    {
+        return;
+    }
 
     if (!mBezierPatchCreator.isWrapped)
     {
@@ -1008,15 +1183,15 @@ void BezierSurfaceC0::draw(class IRenderer* pRenderer, unsigned long long int re
     IBezierSurface::draw(pRenderer, renderableIdx);
 }
 
-std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v)
+std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV)
 {
     std::vector<std::unique_ptr<Point>> controlPoints;
 
     XMVECTOR startPos =
-        pos_ - static_cast<float>(u) / 2 * uAxis - static_cast<float>(v) / 2 * vAxis;
+        pos_ - static_cast<float>(u) * patchSizeU / 2 * uAxis - static_cast<float>(v) * patchSizeV / 2 * vAxis;
 
-    static const XMVECTOR pointStepU = 1.f / 3 * unitX;
-    static const XMVECTOR pointStepV = 1.f / 3 * unitZ;
+    const XMVECTOR pointStepU = patchSizeU / 3 * unitX;
+    const XMVECTOR pointStepV = patchSizeV / 3 * unitZ;
 
     unsigned int pointsCountU = u * 3 + 1;
     unsigned int pointsCountV = v * 3 + 1;
@@ -1035,15 +1210,15 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForFlatS
     return controlPoints;
 }
 
-std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v)
+std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV)
 {
     std::vector<std::unique_ptr<Point>> controlPoints;
 
-    float cylinderRadius = u / (2.0f * std::numbers::pi_v<float>);
+    float cylinderRadius = u * patchSizeU / (2.0f * std::numbers::pi_v<float>);
 
     XMVECTOR cylinderMainAxis = unitZ;
 
-    XMVECTOR pointStepV = 1.f / 3 * cylinderMainAxis;
+    XMVECTOR pointStepV = patchSizeV / 3 * cylinderMainAxis;
 
     float patchPivotAngle = 2.0f * std::numbers::pi_v<float> / u;
 
@@ -1157,23 +1332,39 @@ void BezierSurfaceC2::draw(class IRenderer* pRenderer, unsigned long long int re
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC2VS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC2PS.first.Get(), nullptr, 0);
+
+    if (mIsPolygon)
+    {
+        pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierPatchC2GS.first.Get(), nullptr, 0);
+
+        pDX11Renderer->mGlobalCB.color = Colors::Green;
+        pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
+
+        IBezierSurface::draw(pRenderer, renderableIdx);
+    }
+
     pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierPatchC2HS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierPatchC2DS.first.Get(), nullptr, 0);
     pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC2PS.first.Get(), nullptr, 0);
+
+    pDX11Renderer->mGlobalCB.color = Colors::White;
+    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
     IBezierSurface::draw(pRenderer, renderableIdx);
 }
 
-std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v)
+std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV)
 {
     std::vector<std::unique_ptr<Point>> controlPoints;
 
     XMVECTOR startPos =
-        pos_ - (static_cast<float>(u) + 2) / 2 * uAxis - (static_cast<float>(v) + 2) / 2 * vAxis;
+        pos_ - (static_cast<float>(u) + 2) * patchSizeU / 2 * uAxis - (static_cast<float>(v) + 2) * patchSizeV / 2 * vAxis;
 
-    static constexpr XMVECTOR pointStepU = uAxis;
-    static constexpr XMVECTOR pointStepV = vAxis;
+    XMVECTOR pointStepU = patchSizeU * uAxis;
+    XMVECTOR pointStepV = patchSizeV * vAxis;
 
     unsigned int pointsCountU = u + 3;
     unsigned int pointsCountV = v + 3;
@@ -1191,15 +1382,15 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForFlatS
     return controlPoints;
 }
 
-std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v)
+std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV)
 {
     std::vector<std::unique_ptr<Point>> controlPoints;
 
-    float cylinderRadius = u / (2.0f * std::numbers::pi_v<float>);
+    float cylinderRadius = u * patchSizeU / (2.0f * std::numbers::pi_v<float>);
 
     XMVECTOR cylinderMainAxis = unitZ;
 
-    XMVECTOR pointStepV = cylinderMainAxis;
+    XMVECTOR pointStepV = patchSizeV * cylinderMainAxis;
 
     float patchPivotAngle = 2.0f * std::numbers::pi_v<float> / u;
 

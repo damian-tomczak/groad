@@ -32,7 +32,7 @@ private:
 
     void drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPoints);
 
-    long long int mSelectedBernsteinPointIdx = -1;
+    int mSelectedBernsteinPointIdx = -1;
 
     enum Message
     {
@@ -76,6 +76,147 @@ private:
     void loadScene();
 
     bool mIsFileDialogOpen{};
+
+    void applyRenderableRotations()
+    {
+        for (const auto renderableSelectedId : mCtx.selectedRenderableIds)
+        {
+            IRenderable* const pRenderable = mpRenderer->getRenderable(renderableSelectedId);
+
+            XMMATRIX model = XMMatrixIdentity();
+
+            XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            XMMATRIX pivotScaleMat = XMMatrixIdentity();
+
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
+
+            XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+            XMMATRIX pivotRotationMat = XMMatrixIdentity();
+
+            XMMATRIX translationToOrigin = XMMatrixIdentity();
+            XMMATRIX translationBack = XMMatrixIdentity();
+
+            if (mCtx.selectedRenderableIds.contains(pRenderable->getId()))
+            {
+                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
+                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
+                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mCtx.pivotRoll);
+
+                pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+
+                pivotScaleMat = XMMatrixScaling(mCtx.pivotScale, mCtx.pivotScale, mCtx.pivotScale);
+
+                translationToOrigin = XMMatrixTranslationFromVector(-(mCtx.pivotPos - pRenderable->mWorldPos));
+                translationBack = XMMatrixTranslationFromVector((mCtx.pivotPos - pRenderable->mWorldPos));
+            }
+
+            XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+
+            model = localScaleMat * localRotationMat *
+                translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
+                worldTranslation;
+
+            pRenderable->mWorldPos = model.r[3];
+
+            const XMMATRIX scaleMat = localScaleMat * pivotScaleMat;
+            pRenderable->mScale = XMVECTOR{ XMVectorGetX(scaleMat.r[0]), XMVectorGetY(scaleMat.r[1]), XMVectorGetZ(scaleMat.r[2]), 1.f };
+
+            const XMMATRIX rotationMat =
+                localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
+            const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
+
+            pRenderable->mPitch = pitch;
+            pRenderable->mYaw = yaw;
+            pRenderable->mRoll = roll;
+        }
+
+        mCtx.pivotPitch = 0;
+        mCtx.pivotYaw = 0;
+        mCtx.pivotRoll = 0;
+
+        mCtx.pivotScale = 1;
+    }
+
+    // TODO: refactor it
+    bool mIsStereoscopy{};
+    ComPtr<ID3D11SamplerState> mpBlendSamplerState;
+    struct RenderTarget
+    {
+        RenderTarget(IRenderer* pRenderer, unsigned width, unsigned height)
+        {
+            auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+
+            if (width == 0 || height == 0)
+            {
+                renderTargetView = nullptr;
+                depthStencilView = nullptr;
+
+                return;
+            }
+
+            D3D11_TEXTURE2D_DESC desc
+            {
+                .Width = width,
+                .Height = height,
+                .ArraySize = 1,
+                .Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+                .SampleDesc = 
+                {
+                    .Count = 1,
+                    .Quality = 0,
+                },
+                .Usage = D3D11_USAGE_DEFAULT,
+                .BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
+            };
+
+            HR(pDX11Renderer->getDevice()->CreateTexture2D(&desc, nullptr, targetTexture.GetAddressOf()));
+
+            HR(pDX11Renderer->getDevice()->CreateRenderTargetView(targetTexture.Get(), nullptr, renderTargetView.GetAddressOf()));
+
+            desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_D32_FLOAT;
+            desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+            ComPtr<ID3D11Texture2D> depthStencilTexture;
+            HR(pDX11Renderer->getDevice()->CreateTexture2D(&desc, nullptr, depthStencilTexture.GetAddressOf()));
+
+            ComPtr<ID3D11DepthStencilView> result;
+            HR(pDX11Renderer->getDevice()->CreateDepthStencilView(depthStencilTexture.Get(), nullptr, depthStencilView.GetAddressOf()));
+
+            D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+            srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MostDetailedMip = 0;
+            srvDesc.Texture2D.MipLevels = 1;
+
+            HR(pDX11Renderer->getDevice()->CreateShaderResourceView(targetTexture.Get(), &srvDesc, shaderResourceView.GetAddressOf()));
+        }
+
+        ComPtr<ID3D11Texture2D> targetTexture;
+        ComPtr<ID3D11RenderTargetView> renderTargetView;
+        ComPtr<ID3D11ShaderResourceView> shaderResourceView;
+        ComPtr<ID3D11DepthStencilView> depthStencilView;
+
+        UINT width, height;
+    };
+    enum class Eye : short
+    {
+        INVALID = -1,
+        LEFT = 0,
+        RIGHT = 1,
+    };
+    Eye mEyeForCurrentRendering = Eye::INVALID;
+    unsigned int mPreviousWidth{}, mPreviousHeight{};
+    std::unordered_map<Eye, std::unique_ptr<RenderTarget>> mEyeRenderTargets;
+    std::unordered_map<Eye, XMMATRIX> mProjectionMatricesForEyes;
+    struct StereoscopySettings
+    {
+        float eyeDistance = 0.05f;
+        float focusPlane = 10.0f;
+    } mStereoscopySettings;
+    bool mIsOpenStereoscopyPopup = false;
 };
 
 class GridSurface : public ISurface
@@ -91,6 +232,9 @@ public:
         auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
         pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gridVS.first.Get(), nullptr, 0);
+        pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
         pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().gridPS.first.Get(), nullptr, 0);
         pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         pDX11Renderer->getContext()->Draw(6, 0);
@@ -123,6 +267,22 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
 
             ImGui::EndMenu();
         }
+
+        // TODO: demo's settings
+        ImGui::MenuItem(mIsStereoscopy ? "Stereoscopy ON" : "Stereoscopy OFF", nullptr, &mIsStereoscopy);
+
+        if (mIsStereoscopy && (mpBlendSamplerState == nullptr))
+        {
+            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+            D3D11_SAMPLER_DESC samplerDesc{};
+
+            samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+            HR(pDX11Renderer->getDevice()->CreateSamplerState(&samplerDesc, mpBlendSamplerState.GetAddressOf()));
+        }
+
+        ImGui::MenuItem("Stereoscopy settings", nullptr, &mIsOpenStereoscopyPopup);
     };
 }
 
@@ -133,114 +293,295 @@ CADDemo::~CADDemo()
 void CADDemo::init()
 {
     IDemo::init();
+
+    std::vector<Id> deBoorIds;
+
+    XMVECTOR pos{ -2.f, 3.f, 0 };
+    auto pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ -1.f, 3.f, 0 };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ 0.0f, 3.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ 1.0f, 3.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ -2.0f, 1.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ -1.0f, 1.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ 0.0f, 1.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
+
+    pos = XMVECTOR{ 1.0f, 1.0f, 0.0f };
+    pPoint = std::make_unique<Point>(pos);
+    pPoint->regenerateData();
+    deBoorIds.push_back(pPoint->getId());
+    mpRenderer->addRenderable(std::move(pPoint));
 }
 
 void CADDemo::draw()
 {
-    IDemo::draw();
+    //IDemo::draw();
 
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto drawScene = [this]() {
+        auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
-    std::unordered_set<Id> pointIdsPartOfSelected;
-    for (const auto selectedRenderableId : mCtx.selectedRenderableIds)
-    {
-        auto pSelectedRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
-        if (auto pIControlPointBased = dynamic_cast<IControlPointBased*>(pSelectedRenderable); pIControlPointBased != nullptr)
+        mpSurface->draw();
+
+        std::unordered_set<Id> pointIdsPartOfSelected;
+        for (const auto selectedRenderableId : mCtx.selectedRenderableIds)
         {
-            pointIdsPartOfSelected.insert(pIControlPointBased->mControlPointIds.begin(),
-                                          pIControlPointBased->mControlPointIds.end());
-        }
-    }
-
-    for (const auto [renderableIdx, pRenderable] : std::views::enumerate(pDX11Renderer->getRenderables()))
-    {
-        if (pRenderable == nullptr)
-        {
-            continue;
+            auto pSelectedRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
+            if (auto pIControlPointBased = dynamic_cast<IControlPointBased*>(pSelectedRenderable); pIControlPointBased != nullptr)
+            {
+                pointIdsPartOfSelected.insert(pIControlPointBased->mControlPointIds.begin(),
+                    pIControlPointBased->mControlPointIds.end());
+            }
         }
 
-        pDX11Renderer->mGlobalCB.color = pRenderable->mColor;
-
-        XMMATRIX model = XMMatrixIdentity();
-
-        XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
-        XMMATRIX pivotScaleMat = XMMatrixIdentity();
-
-        XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
-        XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-        XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
-
-        XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
-        XMMATRIX pivotRotationMat = XMMatrixIdentity();
-
-        XMMATRIX translationToOrigin = XMMatrixIdentity();
-        XMMATRIX translationBack = XMMatrixIdentity();
-
-        if (mCtx.selectedRenderableIds.contains(pRenderable->getId()))
+        for (const auto [renderableIdx, pRenderable] : std::views::enumerate(pDX11Renderer->getRenderables()))
         {
-            XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
-            XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
-            XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mCtx.pivotRoll);
+            if (pRenderable == nullptr)
+            {
+                continue;
+            }
 
-            pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+            pDX11Renderer->mGlobalCB.color = pRenderable->mColor;
+            pDX11Renderer->mGlobalCB.tesFactor = pRenderable->mTesFactor;
 
-            pivotScaleMat = XMMatrixScaling(mCtx.pivotScale, mCtx.pivotScale, mCtx.pivotScale);
+            XMMATRIX model = XMMatrixIdentity();
 
-            translationToOrigin = XMMatrixTranslationFromVector(-(mCtx.pivotPos - pRenderable->mWorldPos));
-            translationBack = XMMatrixTranslationFromVector((mCtx.pivotPos - pRenderable->mWorldPos));
-        }
+            XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            XMMATRIX pivotScaleMat = XMMatrixIdentity();
 
-        XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
 
-        model = localScaleMat * localRotationMat *
+            XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+            XMMATRIX pivotRotationMat = XMMatrixIdentity();
+
+            XMMATRIX translationToOrigin = XMMatrixIdentity();
+            XMMATRIX translationBack = XMMatrixIdentity();
+
+            if (mCtx.selectedRenderableIds.contains(pRenderable->getId()))
+            {
+                XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
+                XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
+                XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mCtx.pivotRoll);
+
+                pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
+
+                pivotScaleMat = XMMatrixScaling(mCtx.pivotScale, mCtx.pivotScale, mCtx.pivotScale);
+
+                translationToOrigin = XMMatrixTranslationFromVector(-(mCtx.pivotPos - pRenderable->mWorldPos));
+                translationBack = XMMatrixTranslationFromVector((mCtx.pivotPos - pRenderable->mWorldPos));
+            }
+
+            XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+
+            model = localScaleMat * localRotationMat *
                 translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
                 worldTranslation;
 
-        pDX11Renderer->mGlobalCB.modelMtx = model;
+            pDX11Renderer->mGlobalCB.modelMtx = model;
 
-        if (mCtx.selectedRenderableIds.contains(pRenderable->getId()) ||
-            pointIdsPartOfSelected.contains(pRenderable->getId()))
-        {
-            pDX11Renderer->mGlobalCB.color = defaultSelectionColor;
+            if (mCtx.selectedRenderableIds.contains(pRenderable->getId()) ||
+                pointIdsPartOfSelected.contains(pRenderable->getId()))
+            {
+                pDX11Renderer->mGlobalCB.color = defaultSelectionColor;
+            }
+
+            pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
+
+            ID3D11Buffer* const* const pVertexBuffer = pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf();
+            //ASSERT(*pVertexBuffer != nullptr);
+            pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer, &pRenderable->getStride(), &pRenderable->getOffset());
+
+            const ComPtr<ID3D11Buffer> indexBuffer = pDX11Renderer->mIndexBuffers.at(renderableIdx);
+            if (indexBuffer != nullptr)
+            {
+                pDX11Renderer->getContext()->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+            }
+
+            pRenderable->draw(mpRenderer, renderableIdx);
         }
 
-        pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
-
-        ID3D11Buffer* const* const pVertexBuffer = pDX11Renderer->mVertexBuffers.at(renderableIdx).GetAddressOf();
-        //ASSERT(*pVertexBuffer != nullptr);
-        pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer, &pRenderable->getStride(), &pRenderable->getOffset());
-
-        const ComPtr<ID3D11Buffer> indexBuffer = pDX11Renderer->mIndexBuffers.at(renderableIdx);
-        if (indexBuffer != nullptr)
+        if (mCtx.selectedRenderableIds.size() == 1)
         {
-            pDX11Renderer->getContext()->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+            Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
+            IRenderable* pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
+            if (auto pBezierC2 = dynamic_cast<BezierCurveC2*>(pRenderable); pBezierC2 != nullptr)
+            {
+                drawBernsteins(pBezierC2->getBernsteinPositions());
+            }
+        }
+        else if (mCtx.selectedRenderableIds.size() > 1)
+        {
+            XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+            for (const auto& selectedRenderableId : mCtx.selectedRenderableIds)
+            {
+                const auto pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
+                sum = XMVectorAdd(sum, pRenderable->getGlobalPos());
+            }
+
+            float numPositions = static_cast<float>(mCtx.selectedRenderableIds.size());
+            mCtx.pivotPos = XMVectorScale(sum, 1.0f / numPositions);
+
+            Point::drawPrimitive(mpRenderer, mCtx.pivotPos);
         }
 
-        pRenderable->draw(mpRenderer, renderableIdx);
-    }
 
-    if (mCtx.selectedRenderableIds.size() == 1)
+        // WO: for cad's purpose
+        {
+            pDX11Renderer->mGlobalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
+
+            pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
+
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+            pDX11Renderer->getContext()->Draw(6, 0);
+        }
+    };
+
+    if (!mIsStereoscopy)
     {
-        Id selectedRenderableId = *mCtx.selectedRenderableIds.begin();
-        IRenderable* pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
-        if (auto pBezierC2 = dynamic_cast<BezierCurveC2*>(pRenderable); pBezierC2 != nullptr)
-        {
-            drawBernsteins(pBezierC2->getBernsteinPositions());
-        }
+        drawScene();
     }
-    else if (mCtx.selectedRenderableIds.size() > 1)
+    else
     {
-        XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        for (const auto& selectedRenderableId : mCtx.selectedRenderableIds)
-        {
-            const auto pRenderable = pDX11Renderer->getRenderable(selectedRenderableId);
-            sum = XMVectorAdd(sum, pRenderable->getGlobalPos());
-        }
+        auto updateProjectionMatrices = [this](float aspectRatio, float fov, float nearPlane, float farPlane) -> void {
+            float focusPlane = mStereoscopySettings.focusPlane;
+            float eyeDistance = mStereoscopySettings.eyeDistance;
+            float halfEyeDistance = eyeDistance * 0.5f;
 
-        float numPositions = static_cast<float>(mCtx.selectedRenderableIds.size());
-        mCtx.pivotPos = XMVectorScale(sum, 1.0f / numPositions);
+            float top = focusPlane * tanf(DirectX::XMConvertToRadians(fov * 0.5f));
+            float bottom = focusPlane * tanf(-DirectX::XMConvertToRadians(fov * 0.5f));
 
-        Point::drawPrimitive(mpRenderer, mCtx.pivotPos);
+            float width = (top - bottom) * aspectRatio;
+
+            float L = -0.5f * width;
+            float R = 0.5f * width;
+
+            float leftEyeL = (L + halfEyeDistance) * nearPlane / focusPlane;
+            float leftEyeR = (R + halfEyeDistance) * nearPlane / focusPlane;
+
+            float rightEyeL = (L - halfEyeDistance) * nearPlane / focusPlane;
+            float rightEyeR = (R - halfEyeDistance) * nearPlane / focusPlane;
+
+            top = top * nearPlane / focusPlane;
+            bottom = bottom * nearPlane / focusPlane;
+
+            mProjectionMatricesForEyes[Eye::LEFT] = XMMatrixTranslation(halfEyeDistance, 0.0f, 0.0f)
+                * XMMatrixPerspectiveOffCenterLH(leftEyeL, leftEyeR, bottom, top, nearPlane, farPlane);
+
+            mProjectionMatricesForEyes[Eye::RIGHT] = XMMatrixTranslation(-halfEyeDistance, 0.0f, 0.0f)
+                * XMMatrixPerspectiveOffCenterLH(rightEyeL, rightEyeR, bottom, top, nearPlane, farPlane);
+        };
+
+        auto renderSceneForEye = [this, drawScene](Eye eye) {
+            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+            mEyeForCurrentRendering = eye;
+
+            auto& renderTarget = mEyeRenderTargets[eye];
+
+            ASSERT(renderTarget != nullptr);
+
+            const float clearColor[]{ 0.0f, 0.0f, 0.0f, 0.0f };
+            pDX11Renderer->getContext()->ClearRenderTargetView(renderTarget->renderTargetView.Get(), clearColor);
+            pDX11Renderer->getContext()->ClearDepthStencilView(renderTarget->depthStencilView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+            pDX11Renderer->getContext()->OMSetRenderTargets(1, renderTarget->renderTargetView.GetAddressOf(), renderTarget->depthStencilView.Get());
+
+            pDX11Renderer->mGlobalCB.proj = mProjectionMatricesForEyes[eye];
+
+            drawScene();
+        };
+
+        auto updateEyeRenderTargets = [this](unsigned int width, unsigned int height) {
+            if ((width == mPreviousWidth) && (height == mPreviousHeight))
+            {
+                return;
+            }
+
+            mEyeRenderTargets[Eye::LEFT] = std::make_unique<RenderTarget>(mpRenderer, width, height);
+            mEyeRenderTargets[Eye::RIGHT] = std::make_unique<RenderTarget>(mpRenderer, width, height);
+
+            mPreviousWidth = width;
+            mPreviousHeight = height;
+        };
+
+        auto blendEyesToSingle = [this]() {
+            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            auto& leftEye = mEyeRenderTargets[Eye::LEFT];
+            auto& rightEye = mEyeRenderTargets[Eye::RIGHT];
+
+            if (!leftEye || !rightEye)
+            {
+                return;
+            }
+
+            pDX11Renderer->getContext()->OMSetRenderTargets(1, pDX11Renderer->getAddressOfRenderTargetView(), pDX11Renderer->getDepthStencilView());
+            pDX11Renderer->getContext()->RSSetViewports(1, pDX11Renderer->getAddressOfScreenViewport());
+            pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().blendVS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().blendPS.first.Get(), nullptr, 0);
+            pDX11Renderer->getContext()->RSSetState(nullptr);
+
+            ID3D11ShaderResourceView* eyeSRV[] = { leftEye->shaderResourceView.Get(), rightEye->shaderResourceView.Get() };
+
+            pDX11Renderer->getContext()->PSSetSamplers(0, 1, mpBlendSamplerState.GetAddressOf());
+            pDX11Renderer->getContext()->PSSetShaderResources(0, 2, eyeSRV);
+
+            pDX11Renderer->getContext()->Draw(6, 0);
+        };
+
+        auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+
+        updateProjectionMatrices(mpWindow->getAspectRatio(), mCamera.getZoom(), 0.01f, 100.0f);
+
+        updateEyeRenderTargets(mpWindow->getWidth(), mpWindow->getHeight());
+
+        renderSceneForEye(Eye::LEFT);
+        renderSceneForEye(Eye::RIGHT);
+
+        blendEyesToSingle();
     }
 }
 
@@ -337,7 +678,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
                 if (auto pBezierC2 = dynamic_cast<BezierCurveC2*>(pSelectedRenderable); (pBezierC2 != nullptr) && (mSelectedBernsteinPointIdx != -1))
                 {
-                    long long int idx = 0;
+                    int idx = 0;
                     for (XMFLOAT3& bernsteinPos : pBezierC2->getBernsteinPositions())
                     {
                         if (idx == mSelectedBernsteinPointIdx)
@@ -350,6 +691,9 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                         }
                         idx++;
                     }
+
+                    pBezierC2->regenerateData();
+                    pBezierC2->updateBernstein(mSelectedBernsteinPointIdx, offsetVec);
                 }
                 else
                 {
@@ -358,6 +702,10 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                     case InteractionType::ROTATE:
                         pSelectedRenderable->mPitch += pitchOffset;
                         pSelectedRenderable->mYaw += yawOffset;
+                        if (auto pBezierSurface = dynamic_cast<IBezierSurface*>(pSelectedRenderable))
+                        {
+                            pBezierSurface->rotateControlPoints(pitchOffset, yawOffset, 0.f, 1.f);
+                        }
                         break;
                     case InteractionType::MOVE:
                     {
@@ -473,6 +821,13 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                     case InteractionType::SCALE:
                         const float scaleVal = -yOffset * 0.1f;
                         pSelectedRenderable->mScale += XMVECTOR{scaleVal, scaleVal, scaleVal, 1.f};
+                        if (auto pBezierSurface = dynamic_cast<IBezierSurface*>(pSelectedRenderable))
+                        {
+                            if (scaleVal != 0.f && scaleVal != -0.f)
+                            {
+                                pBezierSurface->rotateControlPoints(0.f, 0.f, 0.f, scaleVal);
+                            }
+                        }
                         break;
                     }
                 }
@@ -584,6 +939,7 @@ void CADDemo::renderUi()
             if ((pBezier != nullptr) && (pBezier->getId() != invalidId))
             {
                 pBezier->insertDeBoorPointId(pointId);
+                pBezier->regenerateData();
             }
         }
 
@@ -640,18 +996,21 @@ void CADDemo::renderUi()
                 mBezierPatchCreator->v = 2;
             }
 
+            ImGui::InputFloat("patch Size U", &mBezierPatchCreator->patchSizeU);
+            ImGui::InputFloat("patch Size V", &mBezierPatchCreator->patchSizeV);
+
             if (ImGui::Button("Create"))
             {
                 std::unique_ptr<IRenderable> pRenderable;
                 if (!mBezierPatchCreator->isC2)
                 {
                     pRenderable =
-                        std::make_unique<BezierSurfaceC0>(std::move(*mBezierPatchCreator), mpRenderer);
+                        std::make_unique<BezierSurfaceC0>(mCtx.cursorPos, std::move(*mBezierPatchCreator), mpRenderer);
                 }
                 else
                 {
                     pRenderable =
-                        std::make_unique<BezierSurfaceC2>(std::move(*mBezierPatchCreator), mpRenderer);
+                        std::make_unique<BezierSurfaceC2>(mCtx.cursorPos, std::move(*mBezierPatchCreator), mpRenderer);
                 }
 
                 mpRenderer->addRenderable(std::move(pRenderable));
@@ -671,6 +1030,25 @@ void CADDemo::renderUi()
             ImGui::EndPopup();
         }
 
+        if (mIsOpenStereoscopyPopup)
+        {
+            ImGui::OpenPopup("Stereoscopy Settings");
+        }
+
+        if (ImGui::BeginPopup("Stereoscopy Settings"))
+        {
+            ImGui::InputFloat("EyeDistance: ", &mStereoscopySettings.eyeDistance);
+            ImGui::InputFloat("FocusPlane: ", &mStereoscopySettings.focusPlane);
+
+            if (ImGui::Button("Enter"))
+            {
+                ImGui::CloseCurrentPopup();
+                mIsOpenStereoscopyPopup = false;
+            }
+
+            ImGui::EndPopup();
+        }
+
         ImGui::Spacing();
 
         if (ImGui::Button("Clear Demo"))
@@ -681,6 +1059,7 @@ void CADDemo::renderUi()
         ImGui::SameLine();
         if (ImGui::Button("Unselect All"))
         {
+            applyRenderableRotations();
             mCtx.selectedRenderableIds.clear();
         }
 
@@ -725,71 +1104,13 @@ void CADDemo::renderUi()
 
         if (newSelectedItemIdx != -1)
         {
-            int i = 0;
-            for (const auto renderableSelectedId : mCtx.selectedRenderableIds)
-            {
-                IRenderable* const pRenderable = mpRenderer->getRenderable(renderableSelectedId);
-
-                XMMATRIX model = XMMatrixIdentity();
-
-                XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
-                XMMATRIX pivotScaleMat = XMMatrixIdentity();
-
-                XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
-                XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
-                XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
-
-                XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
-                XMMATRIX pivotRotationMat = XMMatrixIdentity();
-
-                XMMATRIX translationToOrigin = XMMatrixIdentity();
-                XMMATRIX translationBack = XMMatrixIdentity();
-
-                if (mCtx.selectedRenderableIds.contains(pRenderable->getId()))
-                {
-                    XMMATRIX pivotPitchRotationMat = XMMatrixRotationX(mCtx.pivotPitch);
-                    XMMATRIX pivotYawRotationMat = XMMatrixRotationY(mCtx.pivotYaw);
-                    XMMATRIX pivotRollRotationMat = XMMatrixRotationZ(mCtx.pivotRoll);
-
-                    pivotRotationMat = pivotPitchRotationMat * pivotYawRotationMat * pivotRollRotationMat;
-
-                    pivotScaleMat = XMMatrixScaling(mCtx.pivotScale, mCtx.pivotScale, mCtx.pivotScale);
-
-                    translationToOrigin = XMMatrixTranslationFromVector(-(mCtx.pivotPos - pRenderable->mWorldPos));
-                    translationBack = XMMatrixTranslationFromVector((mCtx.pivotPos - pRenderable->mWorldPos));
-                }
-
-                XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
-
-                model = localScaleMat * localRotationMat *
-                    translationToOrigin * pivotScaleMat * pivotRotationMat * translationBack *
-                    worldTranslation;
-
-                pRenderable->mWorldPos = model.r[3];
-
-                const XMMATRIX scaleMat = localScaleMat * pivotScaleMat;
-                pRenderable->mScale = XMVECTOR{XMVectorGetX(scaleMat.r[0]), XMVectorGetY(scaleMat.r[1]), XMVectorGetZ(scaleMat.r[2]), 1.f};
-
-                const XMMATRIX rotationMat =
-                    localRotationMat * translationToOrigin * pivotRotationMat * translationBack;
-                const auto [pitch, yaw, roll] = mg::getPitchYawRollFromRotationMat(rotationMat);
-
-                pRenderable->mPitch = pitch;
-                pRenderable->mYaw = yaw;
-                pRenderable->mRoll = roll;
-            }
-
-            mCtx.pivotPitch = 0;
-            mCtx.pivotYaw = 0;
-            mCtx.pivotRoll = 0;
-
-            mCtx.pivotScale = 1;
+            applyRenderableRotations();
 
             // TODO: add unselection with shift pressed
             if (mCtx.isShiftPressed && (mCtx.lastSelectedRenderableId != invalidId))
             {
                 auto it = std::ranges::find_if(mpRenderer->getRenderables(), [this](const auto& pRenderable) {
-                    return pRenderable->getId() == mCtx.lastSelectedRenderableId;
+                    return (pRenderable != nullptr) ? (pRenderable->getId() == mCtx.lastSelectedRenderableId) : false;
                 });
 
                 if (it != mpRenderer->getRenderables().end())
@@ -802,9 +1123,12 @@ void CADDemo::renderUi()
 
                     for (size_t idx = minIdx; idx <= maxIdx; ++idx)
                     {
-                        const Id id = mpRenderer->getRenderables().at(idx)->getId();
-                        mCtx.selectedRenderableIds.insert(id);
-                        mSelectedBernsteinPointIdx = -1;
+                        const auto& pRenderable = mpRenderer->getRenderables().at(idx);
+                        if (pRenderable != nullptr)
+                        {
+                            mCtx.selectedRenderableIds.insert(pRenderable->getId());
+                            mSelectedBernsteinPointIdx = -1;
+                        }
                     }
                 }
             }
@@ -1025,8 +1349,7 @@ void CADDemo::renderUi()
                 {
                     if (ImGui::TreeNode("Bernstein points"))
                     {
-                        size_t idx = 0;
-                        for (XMFLOAT3& bernsteinPoint : pBezierC2->getBernsteinPositions())
+                        for (int idx = 0; idx < static_cast<size_t>(pBezierC2->getBernsteinPositions().size()); ++idx)
                         {
                             bool isThisBernsteinPointSelected = mSelectedBernsteinPointIdx == idx;
                             const char* buttonName =
@@ -1068,11 +1391,21 @@ void CADDemo::renderUi()
 
                             ImGui::SameLine();
                             ImGui::Text("- Point %d", idx);
-                            idx++;
                         }
 
                         ImGui::TreePop();
                     }
+                }
+            }
+            else if (auto pBezierSurface = dynamic_cast<IBezierSurface*>(pSelectedRenderable))
+            {
+                ImGui::Text("TesFactor:");
+                dataChanged |= ImGui::SliderInt("##tesFactor", &pSelectedRenderable->mTesFactor, 2, 64);
+                mCtx.isUiClicked |= ImGui::IsItemActive();
+
+                if (auto pBezierSurfaceC2 = dynamic_cast<BezierSurfaceC2*>(pBezierSurface))
+                {
+                    ImGui::Checkbox("Toggle Polygon", &pBezierSurfaceC2->mIsPolygon);
                 }
             }
 
@@ -1108,7 +1441,7 @@ void CADDemo::renderUi()
                     isBezierAdded = true;
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Add Bezier C2"))
+                if ((deBoorIds.size() >= 4) && ImGui::Button("Add Bezier C2"))
                 {
                     auto pBezier = std::make_unique<BezierCurveC2>(deBoorIds, mpRenderer);
                     pBezier->regenerateData();
@@ -1185,13 +1518,14 @@ void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions)
     pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
     pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().billboardPS.first.Get(), nullptr, 0);
 
-    long long int idx = 0;
+    long long int currentBernsteinIdx = 0;
     for (const XMFLOAT3& bernsteinPos : bernsteinPositions)
     {
         const XMVECTOR bernsteinVec = XMLoadFloat3(&bernsteinPos);
         pDX11Renderer->mGlobalCB.modelMtx =
             XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixTranslationFromVector(bernsteinVec);
-        if (idx == mSelectedBernsteinPointIdx)
+        if ((currentBernsteinIdx == mSelectedBernsteinPointIdx) ||
+            ((currentBernsteinIdx == mSelectedBernsteinPointIdx - 1) && (mSelectedBernsteinPointIdx % 4 == 0)))
         {
             pDX11Renderer->mGlobalCB.color = defaultSelectionColor;
         }
@@ -1201,7 +1535,7 @@ void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions)
         }
         pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
         pDX11Renderer->getContext()->Draw(6, 0); // TODO: drawInstanced
-        idx++;
+        currentBernsteinIdx++;
     }
 }
 
@@ -1342,7 +1676,7 @@ void CADDemo::loadScene()
             .isC2 = false,
         };
 
-        auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(std::move(bezierSurfaceCreator), mpRenderer);
+        auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(mCtx.cursorPos, std::move(bezierSurfaceCreator), mpRenderer);
         pBezierSurfaceC0->applySerializerData(serialBezierSurfaceC0);
         mpRenderer->addRenderable(std::move(pBezierSurfaceC0));
     }
@@ -1359,7 +1693,7 @@ void CADDemo::loadScene()
             .isC2 = true,
         };
 
-        auto pBezierSurfaceC2 = std::make_unique<BezierSurfaceC2>(std::move(bezierSurfaceCreator), mpRenderer);
+        auto pBezierSurfaceC2 = std::make_unique<BezierSurfaceC2>(mCtx.cursorPos, std::move(bezierSurfaceCreator), mpRenderer);
         pBezierSurfaceC2->applySerializerData(serialBezierSurfaceC2);
         mpRenderer->addRenderable(std::move(pBezierSurfaceC2));
     }

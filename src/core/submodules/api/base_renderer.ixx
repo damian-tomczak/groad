@@ -106,6 +106,9 @@ export
 
         Color mColor;
 
+        // TODO: refactor
+        int mTesFactor = 4;
+
         virtual void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) = 0;
         virtual const unsigned int& getStride() const = 0;
         virtual const unsigned int& getOffset() const
@@ -114,7 +117,7 @@ export
             return offset;
         }
 
-        const FXMVECTOR getGlobalPos()
+        const FXMVECTOR getGlobalPos() const
         {
             return mLocalPos + mWorldPos;
         }

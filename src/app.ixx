@@ -256,7 +256,7 @@ void App::draw()
 
     mpDemo->draw();
 
-    drawCursor(pDX11Renderer->mGlobalCB);
+    //drawCursor(pDX11Renderer->mGlobalCB);
 
     renderUi();
 
@@ -375,7 +375,10 @@ void App::processInput(const IWindow::Message msg, float dt)
 
         for (auto& pRenderable : mpRenderer->getRenderables())
         {
-            pRenderable->mLocalPos = pRenderable->mWorldPos - mCtx.cursorPos;
+            if (pRenderable != nullptr)
+            {
+                pRenderable->mLocalPos = pRenderable->mWorldPos - mCtx.cursorPos;
+            }
         }
     break;
     case IWindow::Message::MOUSE_MOVE: {

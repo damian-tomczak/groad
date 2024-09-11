@@ -41,5 +41,6 @@ public:
         int flags;
         int screenWidth;
         int screenHeight;
+        int tesFactor;
     } mGlobalCB;
 };
