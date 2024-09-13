@@ -697,7 +697,7 @@ void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)
     const Id renderableId = pRenderable->getId();
     ASSERT((pRenderable != nullptr) && (renderableId != invalidId));
 
-    if (static_cast<size_t>(renderableId) <= mRenderablePtrs.size())
+    if (static_cast<size_t>(renderableId) == mRenderablePtrs.size())
     {
         mRenderablePtrs.emplace_back(std::move(pRenderable));
         mVertexBuffers.emplace_back();
@@ -715,6 +715,7 @@ void DX11Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)
         mIndexBuffers.resize(renderableId + 1, nullptr);
     }
 
+    ASSERT(mRenderablePtrs[renderableId] != nullptr);
     mRenderablePtrs[renderableId]->regenerateData();
 }
 

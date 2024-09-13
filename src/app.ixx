@@ -398,7 +398,7 @@ void App::processInput(const IWindow::Message msg, float dt)
 
         if (mCtx.isRightMouseClicked && (!mCtx.isUiClicked))
         {
-            mpDemo->mCamera.rotateCamera(xOffset, yOffset);
+            mpDemo->mCamera.rotateCamera(xOffset, -yOffset);
         }
     }
     break;

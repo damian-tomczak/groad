@@ -294,55 +294,55 @@ void CADDemo::init()
 {
     IDemo::init();
 
-    std::vector<Id> deBoorIds;
+    //std::vector<Id> deBoorIds;
 
-    XMVECTOR pos{ -2.f, 3.f, 0 };
-    auto pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //XMVECTOR pos{ -2.f, 3.f, 0 };
+    //auto pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ -1.f, 3.f, 0 };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ -1.f, 3.f, 0 };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ 0.0f, 3.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ 0.0f, 3.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ 1.0f, 3.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ 1.0f, 3.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ -2.0f, 1.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ -2.0f, 1.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ -1.0f, 1.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ -1.0f, 1.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ 0.0f, 1.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ 0.0f, 1.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 
-    pos = XMVECTOR{ 1.0f, 1.0f, 0.0f };
-    pPoint = std::make_unique<Point>(pos);
-    pPoint->regenerateData();
-    deBoorIds.push_back(pPoint->getId());
-    mpRenderer->addRenderable(std::move(pPoint));
+    //pos = XMVECTOR{ 1.0f, 1.0f, 0.0f };
+    //pPoint = std::make_unique<Point>(pos);
+    //pPoint->regenerateData();
+    //deBoorIds.push_back(pPoint->getId());
+    //mpRenderer->addRenderable(std::move(pPoint));
 }
 
 void CADDemo::draw()
@@ -1166,6 +1166,7 @@ void CADDemo::renderUi()
 
             bool dataChanged{};
             IRenderable* pSelectedRenderable = mpRenderer->getRenderable(selectedRenderableId);
+            ASSERT(pSelectedRenderable != nullptr);
 
             ImGui::Text("Selected item: %s", pSelectedRenderable->mTag.c_str());
 
@@ -1670,14 +1671,14 @@ void CADDemo::loadScene()
 
         const BezierSurfaceCreator bezierSurfaceCreator
         {
-            .u = serialBezierSurfaceC0.patches[0].samples.x,
-            .v = serialBezierSurfaceC0.patches[0].samples.y,
+            .u = serialBezierSurfaceC0.size.x,
+            .v = serialBezierSurfaceC0.size.y,
             .isWrapped = serialBezierSurfaceC0.uWrapped && serialBezierSurfaceC0.vWrapped,
             .isC2 = false,
         };
 
         auto pBezierSurfaceC0 = std::make_unique<BezierSurfaceC0>(mCtx.cursorPos, std::move(bezierSurfaceCreator), mpRenderer);
-        pBezierSurfaceC0->applySerializerData(serialBezierSurfaceC0);
+        pBezierSurfaceC0->applySerializerData(serialBezierSurfaceC0, serialBezierSurfaceC0.patches);
         mpRenderer->addRenderable(std::move(pBezierSurfaceC0));
     }
 
@@ -1687,14 +1688,14 @@ void CADDemo::loadScene()
 
         const BezierSurfaceCreator bezierSurfaceCreator
         {
-            .u = serialBezierSurfaceC2.patches[0].samples.x,
-            .v = serialBezierSurfaceC2.patches[0].samples.y,
+            .u = serialBezierSurfaceC2.size.x,
+            .v = serialBezierSurfaceC2.size.y,
             .isWrapped = serialBezierSurfaceC2.uWrapped && serialBezierSurfaceC2.vWrapped,
             .isC2 = true,
         };
 
         auto pBezierSurfaceC2 = std::make_unique<BezierSurfaceC2>(mCtx.cursorPos, std::move(bezierSurfaceCreator), mpRenderer);
-        pBezierSurfaceC2->applySerializerData(serialBezierSurfaceC2);
+        pBezierSurfaceC2->applySerializerData(serialBezierSurfaceC2, serialBezierSurfaceC2.patches);
         mpRenderer->addRenderable(std::move(pBezierSurfaceC2));
     }
 }

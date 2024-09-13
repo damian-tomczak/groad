@@ -407,9 +407,22 @@ export
         std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
         std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
 
-        void applySerializerData(const MG1::BezierSurfaceC0& serialBezierSurface)
+        void applySerializerData(const MG1::BezierSurfaceC0& serialBezierSurface, std::vector<MG1::BezierPatchC0> patches)
         {
+            // TODO: optimize it
             IRenderable::applySerializerData(serialBezierSurface);
+
+            mBezierPatches.clear();
+            for (MG1::BezierPatchC0& serializerPatch : patches)
+            {
+                BezierPatch patch;
+                for (auto pointRef : serializerPatch.controlPoints)
+                {
+                    patch.controlPointIds.emplace_back(pointRef.GetId());
+                    mControlPointIds.emplace_back(pointRef.GetId());
+                }
+                mBezierPatches.push_back(patch);
+            }
         }
     };
 
@@ -429,9 +442,23 @@ export
         std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
         std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
 
-        void applySerializerData(const MG1::BezierSurfaceC2& serialBezierSurface)
+        void applySerializerData(const MG1::BezierSurfaceC2& serialBezierSurface, std::vector<MG1::BezierPatchC2> patches)
         {
+            // TODO: optimize it
             IRenderable::applySerializerData(serialBezierSurface);
+
+            mBezierPatches.clear();
+            for (MG1::BezierPatchC2& serializerPatch : patches)
+            {
+                BezierPatch patch;
+                for (auto pointRef : serializerPatch.controlPoints)
+                {
+                    patch.controlPointIds.emplace_back(pointRef.GetId());
+                    mControlPointIds.emplace_back(pointRef.GetId());
+                }
+                ASSERT(patch.controlPointIds.size() == numberOfControlPoints);
+                mBezierPatches.push_back(patch);
+            }
         }
 
         bool mIsPolygon{};
@@ -1018,8 +1045,11 @@ IBezierSurface::~IBezierSurface()
         for (auto pControlPointId : bezierPatch.controlPointIds)
         {
             auto pPoint = static_cast<Point*>(mpRenderer->getRenderable(pControlPointId));
-            ASSERT(pPoint != nullptr);
-            pPoint->setDeletable(false);
+            if (pPoint != nullptr)
+            {
+                ASSERT(false);
+                pPoint->setDeletable(false);
+            }
         }
     }
 }
@@ -1262,6 +1292,11 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForCylin
 void BezierSurfaceC2::regenerateData()
 {
     IBezierSurface::regenerateData();
+
+    if (!mBezierPatches.empty())
+    {
+        return;
+    }
 
     if (!mBezierPatchCreator.isWrapped)
     {
