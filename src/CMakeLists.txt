@@ -74,13 +74,14 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     shaders
 )
 
+set(DEBUG_SHADERS_DIR src/shaders)
+set(RELEASE_SHADERS_DIR assets/shaders)
+
 set(PROJECT_DEFINITIONS
     PROJECT_NAME="${CMAKE_PROJECT_NAME}"
     W_PROJECT_NAME=L"${CMAKE_PROJECT_NAME}"
-    ASSETS_PATH="${ASSETS_DIR}"
-    W_ASSETS_PATH=L"${ASSETS_DIR}"
-    SHADERS_PATH="${CMAKE_SOURCE_DIR}/src/shaders/"
-    W_SHADERS_PATH=L"${CMAKE_SOURCE_DIR}/src/shaders/"
+    $<$<CONFIG:Debug>:DEBUG>
+    SHADERS_DIR=$<$<CONFIG:Debug>:"${DEBUG_SHADERS_DIR}";"${RELEASE_SHADERS_DIR}">
 )
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
@@ -126,6 +127,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PUBLIC
 
 add_custom_target(copy_assets ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${ASSETS_DIR} $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/assets
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/${DEBUG_SHADERS_DIR}
   COMMENT "Copying assets to build directory"
 )
 

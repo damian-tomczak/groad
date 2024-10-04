@@ -136,7 +136,7 @@ void WaterSurface::init()
 
     HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
 
-    mpEnvTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH"textures/cubemap.dds");
+    mpEnvTexture = pDX11Renderer->createShaderResourceView("assets/textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,

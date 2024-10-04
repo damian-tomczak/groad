@@ -30,7 +30,7 @@ using namespace std::string_literals;
 #error not implemented
 #endif
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define DEBUG_LOG_INFO std::string("(" __FILE__ ":" STR(__LINE__) " " FUNCTION_SIGNATURE ") ") +
 #define WDEBUG_LOG_INFO std::wstring(L"(" __FILE__ ":" STR(__LINE__) " " FUNCTION_SIGNATURE ") ") +
 #else
@@ -55,7 +55,7 @@ using namespace std::literals;
 
 // TODO: assert with msg
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #define ASSERT(x)                                \
     if (!(x))                                    \
     {                                            \

@@ -110,7 +110,7 @@ void log(std::string_view msg, const LogLevel level, bool shouldTerminate)
     {
         std::clog << out.str();
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #ifdef _WIN32
         DebugBreak();
 #else
@@ -155,7 +155,7 @@ void log(const std::wstring_view msg, const LogLevel level, bool shouldTerminate
     {
         std::wclog << out.str();
 
-#ifndef NDEBUG
+#ifdef DEBUG
 #ifdef _WIN32
         DebugBreak();
 #else

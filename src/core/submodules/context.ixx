@@ -32,16 +32,39 @@ enum class InteractionType
 
 inline const char* interationsNames[] = {"MOVE", "ROTATE", "SCALE", "SELECT"};
 
+struct RenderableSelection
+{
+    std::unordered_set<Id> renderableIds;
+
+    template <typename RenderableType>
+    std::vector<RenderableType*> getRenderables(IRenderer* pRenderer)
+    {
+        auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+
+        std::vector<RenderableType*> result;
+        for (const auto renderableId : renderableIds)
+        {
+            auto pRenderable = pDX11Renderer->getRenderable(renderableId);
+            if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable))
+            {
+                result.push_back(pRenderableCasted);
+            }
+        }
+
+        return result;
+    }
+};
+
 struct Context
 {
-    std::unordered_set<Id> selectedRenderableIds;
+    struct RenderableSelection renderableSelection;
     Id lastSelectedRenderableId = invalidId;
 
-    XMVECTOR pivotPos;
-    float pivotPitch;
-    float pivotYaw;
-    float pivotRoll;
-    float pivotScale;
+    XMVECTOR centroidPos;
+    float centroidPitch;
+    float centroidYaw;
+    float centroidRoll;
+    float centroidScale;
 
     bool isMenuEnabled;
     bool isUiClicked;

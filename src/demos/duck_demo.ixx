@@ -45,7 +45,7 @@ std::pair<std::vector<PositionNormalLayout>, std::vector<short>> createBox(float
 DuckDemo::DuckDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "DuckDemo", pRenderer, pWindow, std::make_unique<WaterSurface>(pRenderer, 10.0f, 256)},
       mBox(mpRenderer, createBox(9.90f, 10.0f, 9.90f)),
-      mDuck{MeshLoader::loadMesh<TexturedLayout>(mpRenderer, ASSETS_PATH "meshes/duck.txt")}
+      mDuck{MeshLoader::loadMesh<TexturedLayout>(mpRenderer, "assets/meshes/duck.txt")}
 {
 }
 
@@ -58,8 +58,8 @@ void DuckDemo::init()
 
     auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
-    mDuckTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH "textures/ducktex.jpg");
-    mpEnvTexture = pDX11Renderer->createShaderResourceView(ASSETS_PATH "textures/cubemap.dds");
+    mDuckTexture = pDX11Renderer->createShaderResourceView("assets/textures/ducktex.jpg");
+    mpEnvTexture = pDX11Renderer->createShaderResourceView("assets/textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,

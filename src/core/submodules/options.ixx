@@ -14,15 +14,21 @@ export
     struct ParsedOptions
     {
         API api;
+        unsigned short gpuIndex;
     };
 
     struct Options final
     {
-        std::string_view api{"DX11"};
+        std::string_view api = "DX11";
+        unsigned short gpuIndex = 0;
 
         [[nodiscard]] ParsedOptions parse()
         {
-            return {.api{strToApi(api)}};
+            return
+            {
+                .api = strToApi(api),
+                .gpuIndex = gpuIndex,
+            };
         }
     };
 

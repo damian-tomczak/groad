@@ -94,7 +94,7 @@ public:
         Shader<ID3D11PixelShader> blendPS;
     };
 
-    void init() override;
+    void init(unsigned short gpuIndex) override;
     void onResize() override;
     void buildGeometryBuffers();
 
@@ -234,7 +234,7 @@ public:
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 
 private:
-    void initCore();
+    void initCore(unsigned short gpuIndex);
     void buildVertexLayout();
     void createRasterizers();
 
@@ -263,9 +263,9 @@ private:
 
 module :private;
 
-void DX11Renderer::init()
+void DX11Renderer::init(unsigned short gpuIndex)
 {
-    initCore();
+    initCore(gpuIndex);
     onResize();
 
     createShaders();
@@ -342,10 +342,10 @@ void DX11Renderer::onResize()
     mpContext->OMSetBlendState(pBlendState.Get(), blendFactor, sampleMask);
 }
 
-void DX11Renderer::initCore()
+void DX11Renderer::initCore(unsigned short gpuIndex)
 {
     UINT createDeviceFlags = 0;
-#ifndef NDEBUG
+#ifdef DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
@@ -361,31 +361,25 @@ void DX11Renderer::initCore()
 
     if (adapters.size() == 0)
     {
-        ERR("No capable device detected to render!");
+        ERR("No GPU detected!");
     }
 
-    IDXGIAdapter* selectedAdapter = adapters[0].Get();
+    if (gpuIndex >= adapters.size())
+    {
+        ERR(std::format("Following {} gpu index doesn't exist", gpuIndex));
+    }
+
+    IDXGIAdapter* pSelectedAdapter = adapters[gpuIndex].Get();
 
     DXGI_ADAPTER_DESC adapterDesc;
-    if (SUCCEEDED(selectedAdapter->GetDesc(&adapterDesc)))
-    {
-        WLOG(std::format(L"Selected GPU: {}", adapterDesc.Description).data());
-    }
-    else
-    {
-        WARN("Couldn't fetch info about selected GPU");
-    }
+    HR(pSelectedAdapter->GetDesc(&adapterDesc));
 
-    D3D_FEATURE_LEVEL featureLevel{};
-    HR(D3D11CreateDevice(selectedAdapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, createDeviceFlags, nullptr, 0,
+    WLOG(std::format(L"Selected GPU: {}", adapterDesc.Description).data());
+
+    HR(D3D11CreateDevice(pSelectedAdapter, D3D_DRIVER_TYPE_UNKNOWN, nullptr, createDeviceFlags, nullptr, 0,
                          D3D11_SDK_VERSION,
                          &mpDevice,
-                         &featureLevel, mpContext.GetAddressOf()));
-
-    if (featureLevel != D3D_FEATURE_LEVEL_11_0)
-    {
-        ERR("Direct11 unsupported");
-    }
+                         nullptr, mpContext.GetAddressOf()));
 
     mpDevice->CheckMultisampleQualityLevels(DXGI_FORMAT_R8G8B8A8_UNORM, 8, &m4xMsaaQuality); // 4x Msaa is always supported
     ASSERT(m4xMsaaQuality > 0);
@@ -518,17 +512,20 @@ void DX11Renderer::createShaders()
 
         static constexpr std::string_view shaderEntryPoint{"main"};
 
-        // TODO: fix it
-        const fs::path fullShaderPath = SHADERS_PATH / shaderPath;
+#ifndef DEBUG
+#error no impl
+#endif
+
+        const fs::path fullShaderPath = SHADERS_DIR / shaderPath;
 
         if (!fs::exists(fullShaderPath))
         {
-            ERR(("Shaders compiler error: following path doesn't exist " + fullShaderPath.string()).c_str());
+            ERR(("Shaders compiler error: following path doesn't exist " + (fs::current_path() / fullShaderPath).string()).c_str());
         }
 
         ComPtr<ID3D10Blob> compilationMsgs;
         DWORD shaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
-#ifndef NDEBUG
+#ifdef DEBUG
         shaderFlags |= D3D10_SHADER_DEBUG | D3D10_SHADER_SKIP_OPTIMIZATION;
 #endif
 

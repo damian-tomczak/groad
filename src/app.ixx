@@ -63,7 +63,9 @@ private:
     void processInput(IWindow::Message msg, float dt);
     void renderUi();
     void loadDemo(App::Demo mode);
+#ifdef DEBUG
     void checkShaders();
+#endif
 
     const ParsedOptions mOptions;
 
@@ -132,7 +134,7 @@ void App::init()
 
     mpRenderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
     ASSERT(mpRenderer != nullptr);
-    mpRenderer->init();
+    mpRenderer->init(mOptions.gpuIndex);
 
     mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
     mpDemo->init();
@@ -150,13 +152,13 @@ void App::run()
     LARGE_INTEGER previousTime;
     QueryPerformanceCounter(&previousTime);
 
-#ifndef NDEBUG
+#ifdef DEBUG
     mLastShadersCompilationTime = fs::file_time_type::clock::now();
 #endif
 
     while (mIsRunning)
     {
-#ifndef NDEBUG
+#ifdef DEBUG
         checkShaders();
 #endif
         LARGE_INTEGER nowTime;
@@ -436,10 +438,11 @@ void App::loadDemo(App::Demo mode)
     mpDemo->init();
 }
 
+#ifdef DEBUG
 void App::checkShaders()
 {
     bool shouldRecompileShaders = false;
-    for (const auto& entry : fs::recursive_directory_iterator(SHADERS_PATH))
+    for (const auto& entry : fs::recursive_directory_iterator(SHADERS_DIR))
     {
         if (fs::is_regular_file(entry.status()))
         {
@@ -459,6 +462,7 @@ void App::checkShaders()
         WARN("Shaders recompiled!");
     }
 }
+#endif
 
 void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 {

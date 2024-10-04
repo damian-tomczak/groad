@@ -49,6 +49,8 @@ public:
 
     void moveCamera(const CameraMovement dir, float dt)
     {
+        updateCameraVectors();
+
         const float velocity = mMovementSpeed * dt;
 
         switch (dir)

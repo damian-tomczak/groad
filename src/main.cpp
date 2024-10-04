@@ -11,17 +11,20 @@ enum ParseResult
     STOP_PROGRAM
 };
 
-constexpr const char* helpMessage{
-    PROJECT_NAME " [--graphics|-g <Graphics API>]: \n"
-    "Graphics APIs:            "
-    "DX11, D3D12"
-};
+constexpr const char* helpMessage = 
+    PROJECT_NAME " [--help|-h] [--graphics|-g <Graphics API>] [--index|-i <Device Index>]: \n"
+    "  --help|-h                Displays this help message.\n"
+    "  --graphics|-g <API>      Sets the graphics API to be used.\n"
+    "                           Supported APIs: DX11, D3D12\n"
+    "  --index|-i <Index>       Selects the GPU device by index.\n"
+    "                           Use a non-negative integer as <Index>.\n";
+
 
 ParseResult updateOptions(Options& options, int argc, const char** argv)
 {
     int i = 1;
 
-    const auto getNextArg = [&] {
+    auto getNextArg = [&]() -> std::string_view {
         if (i >= argc)
         {
             ERR("Argument parameter missing");
@@ -32,8 +35,13 @@ ParseResult updateOptions(Options& options, int argc, const char** argv)
 
     while (i < argc)
     {
-        const auto arg{getNextArg()};
-        if (equalsIgnoreCase(arg, "--graphics") || equalsIgnoreCase(arg, "-g"))
+        const std::string_view arg = getNextArg();
+        if (equalsIgnoreCase(arg, "--help") || equalsIgnoreCase(arg, "-h"))
+        {
+            std::cout << helpMessage << std::endl;
+            return STOP_PROGRAM;
+        }
+        else if (equalsIgnoreCase(arg, "--graphics") || equalsIgnoreCase(arg, "-g"))
         {
             static bool isApiSet{};
 
@@ -44,9 +52,15 @@ ParseResult updateOptions(Options& options, int argc, const char** argv)
             options.api = getNextArg();
             isApiSet = true;
         }
-        else if (equalsIgnoreCase(arg, "--help") || equalsIgnoreCase(arg, "-h"))
+        else if (equalsIgnoreCase(arg, "--index") || equalsIgnoreCase(arg, "-i"))
         {
-            std::cout << helpMessage << std::endl;
+            std::string_view stringViewGpuIndex = getNextArg();
+            auto [_, ec] = std::from_chars(stringViewGpuIndex.data(), stringViewGpuIndex.data() + stringViewGpuIndex.size(), options.gpuIndex);
+
+            if (ec != std::errc())
+            {
+                ERR("--index/i invalid gpu index");
+            }
         }
         else
         {

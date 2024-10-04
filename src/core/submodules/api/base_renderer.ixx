@@ -46,6 +46,7 @@ export
         }
     }
 
+    // ACHTUNG Serializer drops Id onto uint32_t
     using Id = long long int;
     inline constexpr Id invalidId = -1;
 
@@ -109,7 +110,7 @@ export
         // TODO: refactor
         int mTesFactor = 4;
 
-        virtual void draw(class IRenderer* pRenderer, unsigned long long int renderableIdx) = 0;
+        virtual void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) = 0;
         virtual const unsigned int& getStride() const = 0;
         virtual const unsigned int& getOffset() const
         {
@@ -196,7 +197,7 @@ export
             isRendererCreated = false;
         }
 
-        virtual void init() = 0;
+        virtual void init(unsigned short gpuIndex) = 0;
         virtual void onResize() = 0;
 
         static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
