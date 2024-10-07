@@ -1518,23 +1518,24 @@ void CADDemo::renderUi()
 
                     for (IRenderable* pRenderableWithControlPointBased : mpRenderer->getRenderables<IControlPointBased>())
                     {
-                        bool isRemoved = false;
+                        bool shouldRemoveFirst = false;
+                        bool shouldRemoveSecond = false;
                         auto pControlPointBasedRenderable = dynamic_cast<IControlPointBased*>(pRenderableWithControlPointBased);
                         for (const Id id : pControlPointBasedRenderable->mControlPointIds)
                         {
                             if (firstPointId == id)
                             {
-                                pControlPointBasedRenderable->mControlPointIds.erase(
-                                    std::remove(
-                                        pControlPointBasedRenderable->mControlPointIds.begin(),
-                                        pControlPointBasedRenderable->mControlPointIds.end(),
-                                        firstPointId),
-                                    pControlPointBasedRenderable->mControlPointIds.end()
-                                );
-
-                                isRemoved = true;
+                                shouldRemoveFirst = true;
                             }
                             else if (secondPointId == id)
+                            {
+                                shouldRemoveSecond = true;
+                            }
+                        }
+
+                        if (shouldRemoveFirst || shouldRemoveSecond)
+                        {
+                            if (shouldRemoveFirst)
                             {
                                 pControlPointBasedRenderable->mControlPointIds.erase(
                                     std::remove(
@@ -1543,13 +1544,18 @@ void CADDemo::renderUi()
                                         firstPointId),
                                     pControlPointBasedRenderable->mControlPointIds.end()
                                 );
-
-                                isRemoved = true;
                             }
-                        }
+                            if (shouldRemoveSecond)
+                            {
+                                pControlPointBasedRenderable->mControlPointIds.erase(
+                                    std::remove(
+                                        pControlPointBasedRenderable->mControlPointIds.begin(),
+                                        pControlPointBasedRenderable->mControlPointIds.end(),
+                                        secondPointId),
+                                    pControlPointBasedRenderable->mControlPointIds.end()
+                                );
+                            }
 
-                        if (isRemoved)
-                        {
                             pControlPointBasedRenderable->mControlPointIds.push_back(newPointId);
                             pRenderableWithControlPointBased->regenerateData();
                         }

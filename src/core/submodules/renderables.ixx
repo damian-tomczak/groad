@@ -1011,7 +1011,7 @@ void IBezierSurface::rotateControlPoints(float pitchoff, float yawoff, float rol
             pRenderable->mWorldPos = model.r[3];
 
             const XMMATRIX scaleMat = localScaleMat * centroidScaleMat;
-            pRenderable->mScale = XMVECTOR{ XMVectorGetX(scaleMat.r[0]), XMVectorGetY(scaleMat.r[1]), XMVectorGetZ(scaleMat.r[2]), 1.f };
+            pRenderable->mScale = XMVectorSet(XMVectorGetX(scaleMat.r[0]), XMVectorGetY(scaleMat.r[1]), XMVectorGetZ(scaleMat.r[2]), 1.f);
 
             const XMMATRIX rotationMat =
                 localRotationMat * translationToOrigin * centroidRotationMat * translationBack;
@@ -1088,6 +1088,17 @@ void IBezierSurface::updateControlPoints()
 
     for (auto& bezierPatch : mBezierPatches)
     {
+        bezierPatch.controlPointIds.erase(
+            std::remove_if(
+                bezierPatch.controlPointIds.begin(),
+                bezierPatch.controlPointIds.end(),
+                [this](Id id) {
+                    return std::find(mControlPointIds.begin(), mControlPointIds.end(), id) == mControlPointIds.end();
+                }
+            ),
+            bezierPatch.controlPointIds.end()
+        );
+
         for (auto controlPointId : bezierPatch.controlPointIds)
         {
             auto pRenderable = mpRenderer->getRenderable(controlPointId);
