@@ -1503,7 +1503,60 @@ void CADDemo::renderUi()
             {
                 if (ImGui::Button("Collapse points"))
                 {
-                    
+                    const XMVECTOR averagePos = (selectedPoints[0]->mWorldPos + selectedPoints[1]->mWorldPos) / 2;
+                    const float averageRadius = (selectedPoints[0]->mRadius + selectedPoints[1]->mRadius) / 2;
+
+                    const Id firstPointId = selectedPoints[0]->getId();
+                    const Id secondPointId = selectedPoints[1]->getId();
+
+                    mpRenderer->removeRenderable(firstPointId);
+                    mpRenderer->removeRenderable(secondPointId);
+
+                    auto pNewPoint = std::make_unique<Point>(averagePos, averageRadius);
+                    const Id newPointId = pNewPoint->getId();
+                    mpRenderer->addRenderable(std::move(pNewPoint));
+
+                    for (IRenderable* pRenderableWithControlPointBased : mpRenderer->getRenderables<IControlPointBased>())
+                    {
+                        bool isRemoved = false;
+                        auto pControlPointBasedRenderable = dynamic_cast<IControlPointBased*>(pRenderableWithControlPointBased);
+                        for (const Id id : pControlPointBasedRenderable->mControlPointIds)
+                        {
+                            if (firstPointId == id)
+                            {
+                                pControlPointBasedRenderable->mControlPointIds.erase(
+                                    std::remove(
+                                        pControlPointBasedRenderable->mControlPointIds.begin(),
+                                        pControlPointBasedRenderable->mControlPointIds.end(),
+                                        firstPointId),
+                                    pControlPointBasedRenderable->mControlPointIds.end()
+                                );
+
+                                isRemoved = true;
+                            }
+                            else if (secondPointId == id)
+                            {
+                                pControlPointBasedRenderable->mControlPointIds.erase(
+                                    std::remove(
+                                        pControlPointBasedRenderable->mControlPointIds.begin(),
+                                        pControlPointBasedRenderable->mControlPointIds.end(),
+                                        firstPointId),
+                                    pControlPointBasedRenderable->mControlPointIds.end()
+                                );
+
+                                isRemoved = true;
+                            }
+                        }
+
+                        if (isRemoved)
+                        {
+                            pControlPointBasedRenderable->mControlPointIds.push_back(newPointId);
+                            pRenderableWithControlPointBased->regenerateData();
+                        }
+
+                    }
+
+                    mCtx.renderableSelection.renderableIds.clear();
                 }
             }
         }

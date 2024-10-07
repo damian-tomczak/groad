@@ -236,6 +236,21 @@ export
             return mRenderablePtrs;
         }
 
+        template <typename RenderableType>
+        std::vector<IRenderable*> getRenderables() const
+        {
+            std::vector<IRenderable*> result;
+            for (auto& pRenderable : mRenderablePtrs)
+            {
+                if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable.get()))
+                {
+                    result.push_back(pRenderable.get());
+                }
+            }
+
+            return result;
+        }
+
     protected:
         std::vector<std::unique_ptr<IRenderable>> mRenderablePtrs;
         std::weak_ptr<IWindow> mpWindow;
