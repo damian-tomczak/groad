@@ -8,7 +8,6 @@ module;
 
 export module core.model_loader;
 import dxrenderer;
-import dx11renderer;
 import std;
 
 export
@@ -92,13 +91,7 @@ export
         {
             auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
             ASSERT(pDXRenderer != nullptr);
-            auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
-            ASSERT(pDX11Renderer != nullptr);
-            if (pDX11Renderer == nullptr)
-            {
-                ERR("DX11 renderer is required to initialize mesh resources");
-                return;
-            }
+
             const D3D11_BUFFER_DESC vbd{
                 .ByteWidth = static_cast<unsigned>(sizeof(Layout) * mVertices.size()),
                 .Usage = D3D11_USAGE_DYNAMIC,
@@ -110,7 +103,7 @@ export
             const D3D11_SUBRESOURCE_DATA vinitData{
                 .pSysMem = mVertices.data(),
             };
-            HR(pDX11Renderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
+            HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
 
             const D3D11_BUFFER_DESC ibd{
                 .ByteWidth = static_cast<unsigned>(sizeof(short) * mIndices.size()),
@@ -123,7 +116,7 @@ export
             const D3D11_SUBRESOURCE_DATA initData{
                 .pSysMem = mIndices.data(),
             };
-            HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
+            HR(pDXRenderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
 
             const D3D11_RASTERIZER_DESC restarizerDesc{
                 .FillMode = D3D11_FILL_SOLID,
@@ -138,32 +131,24 @@ export
                 .AntialiasedLineEnable = false,
             };
 
-            HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+            HR(pDXRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
         }
 
         void draw()
         {
             auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
             ASSERT(pDXRenderer != nullptr);
-            auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
-            ASSERT(pDX11Renderer != nullptr);
-            if (pDX11Renderer == nullptr)
-            {
-                ERR("DX11 renderer is required to draw mesh instances");
-                return;
-            }
-            auto* pContext = pDX11Renderer->getContext();
-            ASSERT(pContext != nullptr);
 
-            pContext->RSSetState(mpRasterizer.Get());
+            pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
-            pContext->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(), &Layout::stride, &Layout::offset);
+            pDXRenderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(),
+                                                            &Layout::stride, &Layout::offset);
 
-            pContext->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+            pDXRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
-            pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            pContext->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
+            pDXRenderer->getContext()->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
         }
 
     private:
@@ -290,6 +275,7 @@ Mesh<Layout> MeshLoader::loadMesh(IRenderer* mpRenderer, const fs::path& filePat
     {
         vertices.emplace_back(positions[i], normals[i], uvs[i]);
     }
+
     return Mesh<Layout>{mpRenderer, {vertices, indices}};
 }
 
@@ -383,6 +369,7 @@ FileType MeshLoader::recognizeFileType(const fs::path& path)
     {
         return FileType::OBJ;
     }
+
     return FileType::UNKNOWN;
 }
 

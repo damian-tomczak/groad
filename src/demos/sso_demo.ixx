@@ -6,7 +6,6 @@ module;
 export module sso_demo;
 export import core.demo;
 import dxrenderer;
-import dx11renderer;
 
 export class SSODemo : public IDemo
 {

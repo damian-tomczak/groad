@@ -23,7 +23,6 @@ import core;
 import core.options;
 import window;
 import dxrenderer;
-import dx11renderer;
 
 import duck_demo;
 import cad_demo;
@@ -209,20 +208,7 @@ void App::draw()
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
     ASSERT(pDXRenderer != nullptr);
 
-    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
-    ASSERT(pDX11Renderer != nullptr);
-    if (pDX11Renderer == nullptr)
-    {
-        ERR("DX11 renderer is required for this rendering path");
-        return;
-    }
-    auto* pContext = pDX11Renderer->getContext();
-    ASSERT(pContext != nullptr);
-    if (pContext == nullptr)
-    {
-        ERR("DX11 renderer did not provide a valid immediate context");
-        return;
-    }
+    auto* pContext = pDXRenderer->getContext();
 
     pContext->VSSetShader(nullptr, nullptr, 0);
     pContext->HSSetShader(nullptr, nullptr, 0);
@@ -232,8 +218,8 @@ void App::draw()
 
     pDXRenderer->buildGeometryBuffers();
 
-    pContext->ClearRenderTargetView(pDX11Renderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    pContext->ClearDepthStencilView(pDX11Renderer->getDepthStencilView(),
+    pContext->ClearRenderTargetView(pDXRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
+    pContext->ClearDepthStencilView(pDXRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
@@ -243,7 +229,7 @@ void App::draw()
     };
 
     ComPtr<ID3D11DepthStencilState> pDepthStencilState;
-    pDX11Renderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
+    pDXRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
     pContext->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
 
     XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
@@ -271,7 +257,7 @@ void App::draw()
     pContext->GSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
     pContext->PSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
 
-    pContext->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
+    pContext->IASetInputLayout(pDXRenderer->getDefaultInputLayout());
 
     mpDemo->draw();
 
@@ -489,28 +475,15 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
     ASSERT(pDXRenderer != nullptr);
-    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
-    ASSERT(pDX11Renderer != nullptr);
-    if (pDX11Renderer == nullptr)
-    {
-        ERR("DX11 renderer is required to draw the cursor");
-        return;
-    }
-    auto* pContext = pDX11Renderer->getContext();
-    ASSERT(pContext != nullptr);
-    if (pContext == nullptr)
-    {
-        ERR("DX11 renderer did not provide a valid immediate context for cursor rendering");
-        return;
-    }
+    auto* pContext = pDXRenderer->getContext();
 
-    pDX11Renderer->updateCB(globalCB);
+    pDXRenderer->updateCB(globalCB);
 
-    pContext->VSSetShader(pDX11Renderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+    pContext->VSSetShader(pDXRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
     pContext->HSSetShader(nullptr, nullptr, 0);
     pContext->DSSetShader(nullptr, nullptr, 0);
-    pContext->GSSetShader(pDX11Renderer->getShaders().cursorGS.first.Get(), nullptr, 0);
-    pContext->PSSetShader(pDX11Renderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+    pContext->GSSetShader(pDXRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+    pContext->PSSetShader(pDXRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
     pContext->Draw(6, 0);
@@ -562,6 +535,7 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
 
         ImGui::EndMainMenuBar();
     }
+
     return result;
 }
 
