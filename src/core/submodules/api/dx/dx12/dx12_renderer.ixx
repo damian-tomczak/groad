@@ -1,6 +1,7 @@
 module;
 
 #include "utils.h"
+#include "imgui_impl_dx12.h"
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -26,6 +27,9 @@ public:
 
     ~DX12Renderer()
     {
+        clearRenderables();
+        ImGui_ImplDX12_Shutdown();
+
         if (mpCommandQueue && mpFence)
         {
             flushCommandQueue();
@@ -89,6 +93,16 @@ public:
         return mpSwapChain.Get();
     }
 
+    ID3D12GraphicsCommandList* getCommandList() const
+    {
+        return mpCommandList.Get();
+    }
+
+    ID3D12DescriptorHeap* getImguiSrvHeap() const
+    {
+        return mpImguiSrvHeap.Get();
+    }
+
     ID3D11DepthStencilView* getDepthStencilView() const override
     {
         return nullptr;
@@ -146,6 +160,7 @@ private:
     void createSwapChain();
     void createCommandObjects();
     void createDescriptorHeaps();
+    void createImguiDescriptorHeap();
     void flushCommandQueue();
 
     void buildRenderTargetViews();
@@ -165,6 +180,7 @@ private:
 
     ComPtr<ID3D12DescriptorHeap> mpRtvHeap;
     ComPtr<ID3D12DescriptorHeap> mpDsvHeap;
+    ComPtr<ID3D12DescriptorHeap> mpImguiSrvHeap;
 
     std::array<ComPtr<ID3D12Resource>, frameCount> mSwapChainBuffer;
     ComPtr<ID3D12Resource> mpDepthStencilBuffer;
@@ -203,6 +219,11 @@ void DX12Renderer::init(unsigned short gpuIndex)
 {
     initCore(gpuIndex);
     createDescriptorHeaps();
+    createImguiDescriptorHeap();
+
+    ImGui_ImplDX12_Init(mpDevice.Get(), frameCount, DXGI_FORMAT_R8G8B8A8_UNORM,
+                        mpImguiSrvHeap.Get(), mpImguiSrvHeap->GetCPUDescriptorHandleForHeapStart(),
+                        mpImguiSrvHeap->GetGPUDescriptorHandleForHeapStart());
     onResize();
 }
 
@@ -314,6 +335,17 @@ void DX12Renderer::createDescriptorHeaps()
     dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
     dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     HR(mpDevice->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&mpDsvHeap)));
+}
+
+void DX12Renderer::createImguiDescriptorHeap()
+{
+    ASSERT(mpDevice);
+
+    D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc{};
+    srvHeapDesc.NumDescriptors = frameCount;
+    srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    HR(mpDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mpImguiSrvHeap)));
 }
 
 void DX12Renderer::flushCommandQueue()
