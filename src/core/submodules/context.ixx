@@ -37,9 +37,9 @@ struct RenderableSelection
     std::unordered_set<Id> renderableIds;
 
     template <typename RenderableType>
-    std::vector<RenderableType*> getRenderables(IRenderer* pRenderer)
+    std::vector<RenderableType*> getRenderables(DXRenderer* pRenderer)
     {
-        auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+        auto* pDXRenderer = pRenderer;
         ASSERT(pDXRenderer != nullptr);
 
         std::vector<RenderableType*> result;

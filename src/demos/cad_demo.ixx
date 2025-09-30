@@ -18,7 +18,7 @@ export class CADDemo : public IDemo
     static constexpr float renderablesListHeight = 0.3f;
 
 public:
-    CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    CADDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
     ~CADDemo();
 
     void init() override;
@@ -144,9 +144,9 @@ private:
     ComPtr<ID3D11SamplerState> mpBlendSamplerState;
     struct RenderTarget
     {
-        RenderTarget(IRenderer* pRenderer, unsigned width, unsigned height)
+        RenderTarget(DXRenderer* pRenderer, unsigned width, unsigned height)
         {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+            auto* pDXRenderer = pRenderer;
             ASSERT(pDXRenderer != nullptr);
 
             if (width == 0 || height == 0)
@@ -223,14 +223,14 @@ private:
 class GridSurface : public ISurface
 {
 public:
-    GridSurface(IRenderer* pRenderer) : ISurface{pRenderer}
+    GridSurface(DXRenderer* pRenderer) : ISurface{pRenderer}
     {
     }
 
     void init() override{};
     void draw() override
     {
-        auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+        auto* pDXRenderer = mpRenderer;
         ASSERT(pDXRenderer != nullptr);
 
         pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().gridVS.first.Get(), nullptr, 0);
@@ -249,7 +249,7 @@ public:
 
 module :private;
 
-CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
+CADDemo::CADDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "CADDemo", pRenderer, pWindow, std::make_unique<GridSurface>(pRenderer)}
 {
     reloadCounters();
@@ -275,7 +275,7 @@ CADDemo::CADDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pW
 
         if (mIsStereoscopy && (mpBlendSamplerState == nullptr))
         {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+            auto* pDXRenderer = mpRenderer;
             ASSERT(pDXRenderer != nullptr);
 
             D3D11_SAMPLER_DESC samplerDesc{};
@@ -353,7 +353,7 @@ void CADDemo::draw()
     //IDemo::draw();
 
     auto drawScene = [this]() {
-        auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+        auto* pDXRenderer = mpRenderer;
         ASSERT(pDXRenderer != nullptr);
 
         mpSurface->draw();
@@ -524,7 +524,7 @@ void CADDemo::draw()
         };
 
         auto renderSceneForEye = [this, drawScene](Eye eye) {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+            auto* pDXRenderer = mpRenderer;
             ASSERT(pDXRenderer != nullptr);
 
             mEyeForCurrentRendering = eye;
@@ -557,7 +557,7 @@ void CADDemo::draw()
         };
 
         auto blendEyesToSingle = [this]() {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+            auto* pDXRenderer = mpRenderer;
             ASSERT(pDXRenderer != nullptr);
 
             pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -587,7 +587,7 @@ void CADDemo::draw()
             pDXRenderer->getContext()->Draw(6, 0);
         };
 
-        auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+        auto* pDXRenderer = mpRenderer;
         ASSERT(pDXRenderer != nullptr);
 
         updateProjectionMatrices(mpWindow->getAspectRatio(), mCamera.getZoom(), 0.01f, 100.0f);
@@ -603,7 +603,7 @@ void CADDemo::draw()
 
 void CADDemo::processInput(IWindow::Message msg, float dt)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     switch (msg)
@@ -881,7 +881,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
 void CADDemo::renderUi()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     mCtx.isMenuEnabled = false;
@@ -1589,13 +1589,13 @@ void CADDemo::update(float dt)
 {
     IDemo::update(dt);
 
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 }
 
 void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

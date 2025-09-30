@@ -5,6 +5,8 @@ module;
 
 export module core.renderer;
 
+export class DXRenderer;
+
 import window;
 import std;
 
@@ -110,7 +112,7 @@ export
         // TODO: refactor
         int mTesFactor = 4;
 
-        virtual void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) = 0;
+        virtual void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) = 0;
         virtual const unsigned int& getStride() const = 0;
         virtual const unsigned int& getOffset() const
         {
@@ -181,78 +183,5 @@ export
     private:
         bool mShouldRebuildBuffers = false;
         bool mIsDeletable = true;
-    };
-
-    class IRenderer : public NonCopyableAndMoveable
-    {
-        inline static bool isRendererCreated{};
-
-    public:
-        IRenderer(std::weak_ptr<IWindow> pWindow) : mpWindow{pWindow}
-        {
-        }
-
-        virtual ~IRenderer()
-        {
-            isRendererCreated = false;
-        }
-
-        virtual void init(unsigned short gpuIndex) = 0;
-        virtual void onResize() = 0;
-
-        static IRenderer* const createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow);
-
-        virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
-        virtual void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) = 0;
-        virtual void removeRenderable(Id id) = 0;
-        virtual void removeRenderable(std::vector<Id> ids) = 0;
-        virtual class IRenderable* getRenderable(Id id) const = 0;
-        void clearRenderables()
-        {
-            for (int i = 0; i < mRenderablePtrs.size(); ++i)
-            {
-                auto& pRenderable = mRenderablePtrs[i];
-
-                if (pRenderable == nullptr)
-                {
-                    continue;
-                }
-
-                if (pRenderable->isDeletable())
-                {
-                    pRenderable.reset();
-                }
-            }
-
-            for (int i = 0; i < mRenderablePtrs.size(); ++i)
-            {
-                mRenderablePtrs[i].reset();
-            }
-        }
-
-        // TODO: getter
-        const std::vector<std::unique_ptr<IRenderable>>& getRenderables() const
-        {
-            return mRenderablePtrs;
-        }
-
-        template <typename RenderableType>
-        std::vector<IRenderable*> getRenderables() const
-        {
-            std::vector<IRenderable*> result;
-            for (auto& pRenderable : mRenderablePtrs)
-            {
-                if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable.get()))
-                {
-                    result.push_back(pRenderable.get());
-                }
-            }
-
-            return result;
-        }
-
-    protected:
-        std::vector<std::unique_ptr<IRenderable>> mRenderablePtrs;
-        std::weak_ptr<IWindow> mpWindow;
     };
 }
