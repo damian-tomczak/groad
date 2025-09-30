@@ -207,16 +207,18 @@ void App::draw()
 {
     auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
-    mpRenderer->getContext()->VSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->PSSetShader(nullptr, nullptr, 0);
+    auto* pContext = pDX11Renderer->getContext();
 
-    mpRenderer->buildGeometryBuffers();
+    pContext->VSSetShader(nullptr, nullptr, 0);
+    pContext->HSSetShader(nullptr, nullptr, 0);
+    pContext->DSSetShader(nullptr, nullptr, 0);
+    pContext->GSSetShader(nullptr, nullptr, 0);
+    pContext->PSSetShader(nullptr, nullptr, 0);
 
-    mpRenderer->getContext()->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    mpRenderer->getContext()->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
+    pDX11Renderer->buildGeometryBuffers();
+
+    pContext->ClearRenderTargetView(pDX11Renderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
+    pContext->ClearDepthStencilView(pDX11Renderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
@@ -226,8 +228,8 @@ void App::draw()
     };
 
     ComPtr<ID3D11DepthStencilState> pDepthStencilState;
-    mpRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
-    mpRenderer->getContext()->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
+    pDX11Renderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
+    pContext->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
 
     XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
     XMMATRIX projMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mpDemo->mCamera.getZoom()),
@@ -246,15 +248,15 @@ void App::draw()
         .screenHeight = mpWindow->getHeight(),
     };
     pDX11Renderer->mGlobalCB = std::move(globalCB);
-    mpRenderer->createCB(pDX11Renderer->mGlobalCB);
+    pDX11Renderer->createCB(pDX11Renderer->mGlobalCB);
 
-    mpRenderer->getContext()->VSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
-    mpRenderer->getContext()->HSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
-    mpRenderer->getContext()->DSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
-    mpRenderer->getContext()->GSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
-    mpRenderer->getContext()->PSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->VSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->HSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->DSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->GSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->PSSetConstantBuffers(0, 1, pDX11Renderer->mGlobalCB.buffer.GetAddressOf());
 
-    mpRenderer->getContext()->IASetInputLayout(mpRenderer->getDefaultInputLayout());
+    pContext->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
 
     mpDemo->draw();
 
@@ -262,7 +264,7 @@ void App::draw()
 
     renderUi();
 
-    mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
+    pDX11Renderer->getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
@@ -458,7 +460,8 @@ void App::checkShaders()
     if (shouldRecompileShaders)
     {
         WARN("Starting recompiling shaders!");
-        mpRenderer->createShaders();
+        auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+        pDX11Renderer->createShaders();
         WARN("Shaders recompiled!");
     }
 }
@@ -468,16 +471,19 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 {
     globalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
-    mpRenderer->updateCB(globalCB);
+    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pContext = pDX11Renderer->getContext();
 
-    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
-    mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    mpRenderer->getContext()->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
-    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
-    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pDX11Renderer->updateCB(globalCB);
 
-    mpRenderer->getContext()->Draw(6, 0);
+    pContext->VSSetShader(pDX11Renderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+    pContext->HSSetShader(nullptr, nullptr, 0);
+    pContext->DSSetShader(nullptr, nullptr, 0);
+    pContext->GSSetShader(pDX11Renderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+    pContext->PSSetShader(pDX11Renderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+
+    pContext->Draw(6, 0);
 }
 
 std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
