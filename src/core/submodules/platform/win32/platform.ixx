@@ -196,6 +196,9 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         case 'E':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_E_DOWN), wParam, lParam);
             return true;
+        case 'R':
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_R_DOWN), wParam, lParam);
+            return true;
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_DOWN), wParam, lParam);
             return true;
@@ -224,6 +227,9 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
         {
         case 'E':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_E_UP), wParam, lParam);
+            return true;
+        case 'R':
+            PostMessage(hwnd, static_cast<UINT32>(Message::KEY_R_UP), wParam, lParam);
             return true;
         case 'W':
             PostMessage(hwnd, static_cast<UINT32>(Message::KEY_W_UP), wParam, lParam);

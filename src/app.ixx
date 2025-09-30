@@ -32,6 +32,7 @@ import duck_demo;
 import cad_demo;
 import gable_demo;
 import sso_demo;
+import bloom_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -56,6 +57,7 @@ public:
         DUCK,
         GABLE,
         SSO,
+        BLOOM,
     };
 
     struct Settings
@@ -312,6 +314,9 @@ void App::processInput(const IWindow::Message msg, float dt)
     case IWindow::Message::KEY_F3:
         loadDemo(Demo::GABLE);
         break;
+    case IWindow::Message::KEY_F4:
+        loadDemo(Demo::BLOOM);
+        break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
         {
@@ -452,6 +457,9 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
+    case App::Demo::BLOOM:
+        mpDemo = std::make_unique<BloomDemo>(mCtx, mpRenderer, mpWindow);
+        break;
     default:
         break;
     }
@@ -528,6 +536,10 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
             else if (ImGui::MenuItem("SSODemo", ""))
             {
                 result = App::Demo::SSO;
+            }
+            else if (ImGui::MenuItem("BloomDemo", "F4"))
+            {
+                result = App::Demo::BLOOM;
             }
 
             ImGui::EndMenu();
