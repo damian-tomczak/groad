@@ -7,12 +7,14 @@ module;
 #include <filesystem>
 
 #include <d3d11.h>
+#include <d3d12.h>
 #include <wrl/client.h>
 
 #include "utils.h"
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
+#include "imgui_impl_dx12.h"
 #include "imgui_impl_win32.h"
 
 #include "mg.hpp"
@@ -279,9 +281,9 @@ void App::drawDX11(DX11Renderer& renderer)
     renderUi();
 }
 
-void App::drawDX12(DX12Renderer& renderer)
+void App::drawDX12(DX12Renderer& /*renderer*/)
 {
-    // TODO: hook DX12 rendering path
+    renderUi();
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
@@ -553,7 +555,22 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
 
 void App::renderUi()
 {
-    ImGui_ImplDX11_NewFrame();
+    auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(mpRenderer);
+    auto* const pDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer);
+
+    if (pDx12Renderer != nullptr)
+    {
+        ImGui_ImplDX12_NewFrame();
+    }
+    else if (pDx11Renderer != nullptr)
+    {
+        ImGui_ImplDX11_NewFrame();
+    }
+    else
+    {
+        ASSERT(false);
+    }
+
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
@@ -566,5 +583,20 @@ void App::renderUi()
     mpDemo->renderUi();
 
     ImGui::Render();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+    if (pDx12Renderer != nullptr)
+    {
+        ID3D12DescriptorHeap* descriptorHeaps[] = {pDx12Renderer->getImguiSrvHeap()};
+        constexpr UINT descriptorHeapCount = 1u;
+        pDx12Renderer->getCommandList()->SetDescriptorHeaps(descriptorHeapCount, descriptorHeaps);
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), pDx12Renderer->getCommandList());
+    }
+    else if (pDx11Renderer != nullptr)
+    {
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    }
+    else
+    {
+        ASSERT(false);
+    }
 }
