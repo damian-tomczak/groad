@@ -1,11 +1,11 @@
 module;
 
 export module dx12renderer;
-export import core.renderer;
 
-export class DX12Renderer : public IRenderer
+export import dx11renderer;
+
+export class DX12Renderer final : public DX11Renderer
 {
-    DX12Renderer(std::weak_ptr<IWindow> pWindow) : IRenderer{pWindow}
-    {
-    }
+public:
+    using DX11Renderer::DX11Renderer;
 };
