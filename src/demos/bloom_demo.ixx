@@ -4,8 +4,11 @@ module;
 
 #include <d3d11.h>
 #include <cmath>
+#include <algorithm>
 #include <array>
+#include <memory>
 #include <numbers>
+#include <vector>
 
 export module bloom_demo;
 
