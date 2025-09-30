@@ -42,8 +42,8 @@ export
         {}
 
         const unsigned int& getStride() const override { static constexpr unsigned int stride = sizeof(XMFLOAT3); return stride; }
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) override;
-        static void drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius = defaultRadius, int segments = defaultNumberOfSegments);
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) override;
+        static void drawPrimitive(DXRenderer* pRenderer, XMVECTOR pos, float radius = defaultRadius, int segments = defaultNumberOfSegments);
 
         static std::vector<XMFLOAT3> produceGeometry(float radius, int segments);
         static std::vector<unsigned int> produceTopology(int segments);
@@ -88,7 +88,7 @@ export
 
         const unsigned int& getStride() const override { static constexpr unsigned int stride = sizeof(XMFLOAT3); return stride; }
 
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex);
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex);
 
         void generateGeometry();
         void generateTopology();
@@ -123,7 +123,7 @@ export
 
         const unsigned int& getStride() const override { static constexpr unsigned int stride = 4 * sizeof(XMFLOAT3); return stride; }
 
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) override;
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) override;
 
         void insertDeBoorPointId(const Id id)
         {
@@ -152,10 +152,10 @@ export
     {
         COUNTER();
 
-        const IRenderer* mpRenderer;
+        const DXRenderer* mpRenderer;
 
     public:
-        BezierCurveC0(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
+        BezierCurveC0(const std::vector<Id>& selectedRenderableIds, const DXRenderer* pRenderer, Color color = defaultColor)
             : IBezierCurve{selectedRenderableIds, "BezierCurveC0 " + std::to_string(counter++), color}, mpRenderer{pRenderer}
         {}
 
@@ -166,10 +166,10 @@ export
     {
         COUNTER();
 
-        const IRenderer* mpRenderer;
+        const DXRenderer* mpRenderer;
 
     public:
-        BezierCurveC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
+        BezierCurveC2(const std::vector<Id>& selectedRenderableIds, const DXRenderer* pRenderer, Color color = defaultColor)
             : IBezierCurve{selectedRenderableIds, "BezierCurveC2 " + std::to_string(counter++), color}, mpRenderer{pRenderer}
         {}
 
@@ -194,10 +194,10 @@ export
     {
         COUNTER();
 
-        const IRenderer* mpRenderer;
+        const DXRenderer* mpRenderer;
 
     public:
-        InterpolatedBezierCurveC2(const std::vector<Id>& selectedRenderableIds, const IRenderer* pRenderer, Color color = defaultColor)
+        InterpolatedBezierCurveC2(const std::vector<Id>& selectedRenderableIds, const DXRenderer* pRenderer, Color color = defaultColor)
             : IBezierCurve{selectedRenderableIds, "InterpolatedBezierCurveC2 " + std::to_string(counter++), color},
               mpRenderer{pRenderer}
         {}
@@ -228,7 +228,7 @@ export
         static constexpr float controlPointSize = 0.01f;
         static constexpr unsigned int numberOfControlPoints = 16;
 
-        IBezierSurface(FXMVECTOR pos, std::string&& tag, IRenderer* pRenderer, const BezierSurfaceCreator&& bezierPatchCreator)
+        IBezierSurface(FXMVECTOR pos, std::string&& tag, DXRenderer* pRenderer, const BezierSurfaceCreator&& bezierPatchCreator)
             : IRenderable{std::move(tag), pos}, mpRenderer{pRenderer}, mBezierPatchCreator{std::move(bezierPatchCreator)}
         {}
         ~IBezierSurface();
@@ -241,13 +241,13 @@ export
         const unsigned int& getStride() const override { static constexpr unsigned int stride = numberOfControlPoints * sizeof(XMFLOAT3); return stride; }
 
         void regenerateData() override;
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) override;
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) override;
         void updateControlPoints();
 
         virtual std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV) = 0;
         virtual std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV) = 0;
 
-        IRenderer* const mpRenderer;
+        DXRenderer* const mpRenderer;
         const BezierSurfaceCreator mBezierPatchCreator;
         std::vector<BezierPatch> mBezierPatches;
     };
@@ -257,13 +257,13 @@ export
         COUNTER();
 
     public:
-        BezierSurfaceC0(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
+        BezierSurfaceC0(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, DXRenderer* pRenderer)
             : IBezierSurface{pos, "BezierSurfaceC0 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
         {}
 
         void regenerateData() override;
 
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) override;
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) override;
 
         std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
         std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
@@ -276,13 +276,13 @@ export
         COUNTER();
 
     public:
-        BezierSurfaceC2(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, IRenderer* pRenderer)
+        BezierSurfaceC2(FXMVECTOR pos, const BezierSurfaceCreator&& bezierPatchCreator, DXRenderer* pRenderer)
             : IBezierSurface{pos, "BezierSurfaceC2 " + std::to_string(counter++), pRenderer, std::move(bezierPatchCreator)}
         {}
 
         void regenerateData() override;
 
-        void draw(class IRenderer* pRenderer, unsigned long long int renderableIndex) override;
+        void draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex) override;
 
         std::vector<std::unique_ptr<Point>> createControlPointsForFlatSurface(FXMVECTOR pos_, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
         std::vector<std::unique_ptr<Point>> createControlPointsForCylinder(FXMVECTOR pos, unsigned int u, unsigned int v, float patchSizeU, float patchSizeV);
@@ -302,9 +302,9 @@ export
 
 module :private;
 
-void Point::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void Point::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -319,9 +319,9 @@ void Point::draw(class IRenderer* pRenderer, unsigned long long int renderableIn
     pDXRenderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
 }
 
-void Point::drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius, int segments)
+void Point::drawPrimitive(DXRenderer* pRenderer, XMVECTOR pos, float radius, int segments)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     std::vector<XMFLOAT3> geometry = produceGeometry(radius, segments);
@@ -423,9 +423,9 @@ std::vector<unsigned int> Point::produceTopology(int segments)
     return topology;
 }
 
-void Torus::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void Torus::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
@@ -494,9 +494,9 @@ void Torus::applySerializerData(const MG1::Torus& serialTorus)
     mMinorRadius = serialTorus.smallRadius;
 }
 
-void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void IBezierCurve::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     auto defaultColor = pDXRenderer->mGlobalCB.color;
@@ -1064,9 +1064,9 @@ void IBezierSurface::regenerateData()
     }
 }
 
-void IBezierSurface::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void IBezierSurface::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
@@ -1188,9 +1188,9 @@ void BezierSurfaceC0::regenerateData()
     updateControlPoints();
 }
 
-void BezierSurfaceC0::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void BezierSurfaceC0::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
@@ -1369,9 +1369,9 @@ void BezierSurfaceC2::regenerateData()
     updateControlPoints();
 }
 
-void BezierSurfaceC2::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
+void BezierSurfaceC2::draw(class DXRenderer* pRenderer, unsigned long long int renderableIndex)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+    auto* pDXRenderer = pRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().bezierPatchC2VS.first.Get(), nullptr, 0);

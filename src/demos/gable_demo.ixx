@@ -10,7 +10,7 @@ import dxrenderer;
 export class GableDemo : public IDemo
 {
 public:
-    GableDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    GableDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
 
     void init() override;
     void update(float dt) override;
@@ -36,7 +36,7 @@ private:
 
 module :private;
 
-GableDemo::GableDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
+GableDemo::GableDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "GableDemo", pRenderer, pWindow, nullptr}
 {
 }
@@ -45,7 +45,7 @@ void GableDemo::init()
 {
     IDemo::init();
 
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
 	float gap = 1.f;
@@ -145,7 +145,7 @@ void GableDemo::draw()
 {
     IDemo::draw();
 
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     // Border
@@ -202,7 +202,7 @@ void GableDemo::processInput(IWindow::Message msg, float dt)
 
 void GableDemo::renderUi()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     ImGui::Begin("Control Panel");

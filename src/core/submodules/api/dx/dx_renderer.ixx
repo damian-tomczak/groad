@@ -12,6 +12,7 @@ export module dxrenderer;
 export import core.renderer;
 
 import std;
+import window;
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -24,8 +25,10 @@ struct CB : ICB
     char padding[8];
 };
 
-export class DXRenderer : public IRenderer
+export class DXRenderer : public NonCopyableAndMoveable
 {
+    inline static bool isRendererCreated{};
+
 public:
     using Device = ID3D11Device;
     using DeviceContext = ID3D11DeviceContext;
@@ -91,11 +94,68 @@ public:
         Shader<ID3D11PixelShader> blendPS;
     };
 
-    DXRenderer(std::weak_ptr<IWindow> pWindow) : IRenderer{pWindow}
+    DXRenderer(std::weak_ptr<IWindow> pWindow) : mpWindow{pWindow}
     {
     }
 
-    virtual ~DXRenderer() = default;
+    virtual ~DXRenderer()
+    {
+        isRendererCreated = false;
+    }
+
+    static DXRenderer* const createRenderer(API selectedApi, std::weak_ptr<IWindow> pWindow);
+
+    virtual void init(unsigned short gpuIndex) = 0;
+    virtual void onResize() = 0;
+
+    virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
+    virtual void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) = 0;
+    virtual void removeRenderable(Id id) = 0;
+    virtual void removeRenderable(std::vector<Id> ids) = 0;
+    virtual class IRenderable* getRenderable(Id id) const = 0;
+
+    void clearRenderables()
+    {
+        for (int i = 0; i < mRenderablePtrs.size(); ++i)
+        {
+            auto& pRenderable = mRenderablePtrs[i];
+
+            if (pRenderable == nullptr)
+            {
+                continue;
+            }
+
+            if (pRenderable->isDeletable())
+            {
+                pRenderable.reset();
+            }
+        }
+
+        for (int i = 0; i < mRenderablePtrs.size(); ++i)
+        {
+            mRenderablePtrs[i].reset();
+        }
+    }
+
+    const std::vector<std::unique_ptr<IRenderable>>& getRenderables() const
+    {
+        return mRenderablePtrs;
+    }
+
+    template <typename RenderableType>
+    std::vector<IRenderable*> getRenderables() const
+    {
+        std::vector<IRenderable*> result;
+        for (auto& pRenderable : mRenderablePtrs)
+        {
+            if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable.get()))
+            {
+                result.push_back(pRenderable.get());
+            }
+        }
+
+        return result;
+    }
 
     const Shaders& getShaders() const
     {
@@ -179,5 +239,7 @@ public:
     } mGlobalCB;
 
 protected:
+    std::vector<std::unique_ptr<IRenderable>> mRenderablePtrs;
+    std::weak_ptr<IWindow> mpWindow;
     Shaders mShaders;
 };

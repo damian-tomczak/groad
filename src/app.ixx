@@ -132,7 +132,7 @@ void App::init()
     mpWindow->init();
     mpWindow->show();
 
-    mpRenderer = dynamic_cast<DXRenderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
+    mpRenderer = DXRenderer::createRenderer(mOptions.api, mpWindow);
     ASSERT(mpRenderer != nullptr);
     mpRenderer->init(mOptions.gpuIndex);
 
@@ -205,7 +205,7 @@ void App::update(float dt)
 
 void App::draw()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     auto* pContext = pDXRenderer->getContext();
@@ -461,7 +461,7 @@ void App::checkShaders()
     if (shouldRecompileShaders)
     {
         WARN("Starting recompiling shaders!");
-        auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+        auto* pDXRenderer = mpRenderer;
         ASSERT(pDXRenderer != nullptr);
         pDXRenderer->createShaders();
         WARN("Shaders recompiled!");
@@ -473,7 +473,7 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 {
     globalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
     auto* pContext = pDXRenderer->getContext();
 

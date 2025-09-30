@@ -10,7 +10,7 @@ import dxrenderer;
 export class SSODemo : public IDemo
 {
 public:
-    SSODemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    SSODemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
 
     void init() override;
     void update(float dt) override;
@@ -23,7 +23,7 @@ private:
 
 module :private;
 
-SSODemo::SSODemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
+SSODemo::SSODemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "SSODemo", pRenderer, pWindow, nullptr}
 {
 }
@@ -32,14 +32,14 @@ void SSODemo::init()
 {
     IDemo::init();
 
-    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
+    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::draw()
 {
     IDemo::draw();
 
-    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
+    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::processInput(IWindow::Message msg, float dt)
@@ -48,7 +48,7 @@ void SSODemo::processInput(IWindow::Message msg, float dt)
 
 void SSODemo::renderUi()
 {
-    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
+    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::update(float dt)

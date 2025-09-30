@@ -17,12 +17,12 @@ public:
     virtual void draw() = 0;
 
 protected:
-    ISurface(IRenderer* pRenderer) : mpRenderer{pRenderer}
+    ISurface(DXRenderer* pRenderer) : mpRenderer{pRenderer}
     {
 
     }
 
-    IRenderer* mpRenderer;
+    DXRenderer* mpRenderer;
 };
 
 export class WaterSurface : public ISurface
@@ -30,7 +30,7 @@ export class WaterSurface : public ISurface
     static constexpr float dropRatePerSecond = 5.0f;
 
 public:
-    WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textureSize);
+    WaterSurface(DXRenderer* pRenderer, float planeSize, unsigned textureSize);
 
     void init() override;
     void draw() override;
@@ -51,7 +51,7 @@ private:
     {
     public:
     public:
-        WaveTexture(IRenderer* pRenderer, unsigned textureSize);
+        WaveTexture(DXRenderer* pRenderer, unsigned textureSize);
 
         void Update();
         void SetValue(int x, int y, XMFLOAT3 value);
@@ -70,7 +70,7 @@ private:
 
         ComPtr<ID3D11Texture2D> texture;
         ComPtr<ID3D11ShaderResourceView> texture_resource_view;
-        IRenderer* mpRenderer;
+        DXRenderer* mpRenderer;
     };
 
     struct AbsorptionTexture
@@ -111,7 +111,7 @@ private:
 
 module :private;
 
-WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textureSize)
+WaterSurface::WaterSurface(DXRenderer* pRenderer, float planeSize, unsigned textureSize)
     : ISurface{pRenderer}, mPlaneSize{planeSize}, mTextureSize{textureSize}, mWaveTexture{mpRenderer, textureSize},
       mNextHeightMap{textureSize}, mCurrentHeightMap{textureSize}, mPreviousHeightMap{textureSize}, mAbsorptionTexture{textureSize}
 {
@@ -119,7 +119,7 @@ WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textu
 
 void WaterSurface::init()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = mpRenderer; // TODO: fix it
     ASSERT(pDXRenderer != nullptr);
 
     const D3D11_RASTERIZER_DESC restarizerDesc{
@@ -160,7 +160,7 @@ void WaterSurface::init()
 
 void WaterSurface::update(float dt)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = mpRenderer; // TODO: fix it
     ASSERT(pDXRenderer != nullptr);
 
     updateHeightMap();
@@ -170,7 +170,7 @@ void WaterSurface::update(float dt)
 
 void WaterSurface::draw()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = mpRenderer; // TODO: fix it
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
@@ -298,9 +298,9 @@ WaterSurface::AbsorptionTexture::AbsorptionTexture(unsigned textureSize_) : text
         }
 }
 
-WaterSurface::WaveTexture::WaveTexture(IRenderer* pRenderer, unsigned textureSize_) : mpRenderer(pRenderer)
+WaterSurface::WaveTexture::WaveTexture(DXRenderer* pRenderer, unsigned textureSize_) : mpRenderer(pRenderer)
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     unsigned texture_bpp = 4u;
@@ -349,7 +349,7 @@ void WaterSurface::WaveTexture::SetValue(int x, int y, XMFLOAT3 value)
 
 void WaterSurface::WaveTexture::Update()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
@@ -358,7 +358,7 @@ void WaterSurface::WaveTexture::Update()
 
 ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     ID3D11ShaderResourceView* pTexture;

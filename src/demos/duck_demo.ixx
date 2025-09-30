@@ -11,7 +11,7 @@ export class DuckDemo : public IDemo
     static constexpr float cDropTime = 0.05f;
 
 public:
-    DuckDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    DuckDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
 
     void init() override;
     void update(float dt) override;
@@ -42,7 +42,7 @@ std::pair<std::vector<PositionNormalLayout>, std::vector<short>> createBox(float
     return {boxVertices(width, height, depth), indices};
 }
 
-DuckDemo::DuckDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
+DuckDemo::DuckDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "DuckDemo", pRenderer, pWindow, std::make_unique<WaterSurface>(pRenderer, 10.0f, 256)},
       mBox(mpRenderer, createBox(9.90f, 10.0f, 9.90f)),
       mDuck{MeshLoader::loadMesh<TexturedLayout>(mpRenderer, "assets/meshes/duck.txt")}
@@ -56,7 +56,7 @@ void DuckDemo::init()
     mBox.init();
     mDuck.init();
 
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     mDuckTexture = pDXRenderer->createShaderResourceView("assets/textures/ducktex.jpg");
@@ -93,7 +93,7 @@ void DuckDemo::draw()
     // TODO: 27.7.2024
     IDemo::draw();
 
-    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     drawDuck();
     drawBox();
@@ -111,7 +111,7 @@ void DuckDemo::update(float dt)
 
 void DuckDemo::drawDuck()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().duckVS.first.Get(), nullptr, 0);
@@ -133,7 +133,7 @@ void DuckDemo::drawDuck()
 
 void DuckDemo::drawBox()
 {
-    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    auto* pDXRenderer = mpRenderer;
     ASSERT(pDXRenderer != nullptr);
 
     pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().wallsVS.first.Get(), nullptr, 0);

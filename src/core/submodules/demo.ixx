@@ -50,14 +50,14 @@ public:
     Camera mCamera{0.0f, 0.5f, 10.0f};
 
 protected:
-    IDemo(Context& ctx, const char* demoName, IRenderer* pRenderer, std::shared_ptr<IWindow> pWindow, std::unique_ptr<ISurface> pSurface = nullptr)
+    IDemo(Context& ctx, const char* demoName, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow, std::unique_ptr<ISurface> pSurface = nullptr)
         : mCtx{ctx}, mpRenderer{pRenderer}, mpDemoName{demoName}, mpSurface{std::move(pSurface)}, mpWindow{pWindow}
     {
 
     }
 
     std::unique_ptr<ISurface> mpSurface;
-    IRenderer* mpRenderer;
+    DXRenderer* mpRenderer;
     Context& mCtx;
     std::shared_ptr<IWindow> mpWindow;
 };

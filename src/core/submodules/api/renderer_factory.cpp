@@ -3,17 +3,17 @@
 import std;
 import dx11renderer;
 import dx12renderer;
-import core.renderer;
+import dxrenderer;
 import window;
 
-IRenderer* const IRenderer::createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow)
+DXRenderer* const DXRenderer::createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow)
 {
     if (isRendererCreated)
     {
         ERR("Renderer is already created");
     }
 
-    IRenderer* pRenderer;
+    DXRenderer* pRenderer = nullptr;
 
     switch (selectedApi)
     {

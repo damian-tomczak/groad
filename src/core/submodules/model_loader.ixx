@@ -82,14 +82,14 @@ export
     class Mesh : public NonCopyable
     {
     public:
-        Mesh(IRenderer* pRenderer, std::pair<std::vector<Layout>, std::vector<short>>&& data)
+        Mesh(DXRenderer* pRenderer, std::pair<std::vector<Layout>, std::vector<short>>&& data)
             : mpRenderer{pRenderer}, mVertices{std::move(data.first)}, mIndices{std::move(data.second)}
         {
         }
 
         void init()
         {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+            auto* pDXRenderer = mpRenderer; // TODO: fix it
             ASSERT(pDXRenderer != nullptr);
 
             const D3D11_BUFFER_DESC vbd{
@@ -136,7 +136,7 @@ export
 
         void draw()
         {
-            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+            auto* pDXRenderer = mpRenderer; // TODO: fix it
             ASSERT(pDXRenderer != nullptr);
 
             pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
@@ -160,7 +160,7 @@ export
         std::vector<Layout> mVertices;
         std::vector<short> mIndices;
 
-        IRenderer* mpRenderer;
+        DXRenderer* mpRenderer;
     };
 
     enum class FileType
@@ -175,7 +175,7 @@ export
     public:
         template <typename Layout>
         requires IsLayout<Layout>
-        static Mesh<Layout> loadMesh(IRenderer* mpRenderer, const fs::path& path);
+        static Mesh<Layout> loadMesh(DXRenderer* mpRenderer, const fs::path& path);
 
         static FileType recognizeFileType(const fs::path& path);
 
@@ -244,7 +244,7 @@ export
 
 template <typename Layout>
 requires IsLayout<Layout>
-Mesh<Layout> MeshLoader::loadMesh(IRenderer* mpRenderer, const fs::path& filePath)
+Mesh<Layout> MeshLoader::loadMesh(DXRenderer* mpRenderer, const fs::path& filePath)
 {
     std::vector<Layout> vertices;
 
