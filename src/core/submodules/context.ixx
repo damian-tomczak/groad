@@ -16,7 +16,7 @@ module;
 #include "mg.hpp"
 
 export module core.context;
-import std.core;
+import std;
 import dx11renderer;
 import window;
 

@@ -4,7 +4,7 @@ module;
 #include "mg.hpp"
 
 export module core.camera;
-import std.core;
+import std;
 
 export inline constexpr float mouseSensitivity = 0.05f;
 

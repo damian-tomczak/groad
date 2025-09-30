@@ -12,8 +12,7 @@ module;
 
 export module dx11renderer;
 export import dxrenderer;
-import std.core;
-import std.filesystem;
+import std;
 
 import platform;
 

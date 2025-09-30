@@ -14,16 +14,13 @@ if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(WARNING "Config was tested only on MVSC compiler!")
 endif()
 
-if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL "19.35.32216.1")
+# cmake .. -T version=19.44.35217.0
+set(TESTED_COMPILER_VERSION "19.44.35217.0")
+if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL ${TESTED_COMPILER_VERSION})
     message(WARNING
-        "Config was tested on the MSVC compiler version 19.35.32216.1\n"
+        "Config was tested on the MSVC compiler version ${TESTED_COMPILER_VERSION}\n"
         "Your compiler version: ${CMAKE_CXX_COMPILER_VERSION}"
     )
-endif()
-
-# cmake .. -T version=14.41.17.11
-if (DEFINED CMAKE_VS_PLATFORM_TOOLSET_VERSION AND CMAKE_VS_PLATFORM_TOOLSET_VERSION VERSION_LESS "14.41.17.11")
-    message(WARNING "The toolset version does not support C++20 Modules")
 endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)

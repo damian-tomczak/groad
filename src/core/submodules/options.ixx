@@ -3,7 +3,7 @@ module;
 #include "utils.h"
 
 export module core.options;
-export import std.core;
+export import std;
 
 import core.renderer;
 

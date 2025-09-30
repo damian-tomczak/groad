@@ -4,7 +4,7 @@ module;
 
 export module surface;
 import dx11renderer;
-import std.core;
+import std;
 
 export class ISurface
 {

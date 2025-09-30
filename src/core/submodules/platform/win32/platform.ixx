@@ -11,7 +11,7 @@ module;
 #define LoadFunction GetProcAddress
 
 export module platform;
-import std.core;
+import std;
 import window;
 
 export class Win32Window final : public IWindow

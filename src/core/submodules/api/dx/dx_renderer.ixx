@@ -7,7 +7,7 @@ module;
 export module dxrenderer;
 export import core.renderer;
 
-import std.core;
+import std;
 
 using namespace Microsoft::WRL;
 using namespace DirectX;

@@ -6,7 +6,7 @@ module;
 export module core.renderer;
 
 import window;
-import std.core;
+import std;
 
 export
 {

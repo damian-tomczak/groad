@@ -6,7 +6,7 @@
 
 #include <sstream>
 
-import std.core;
+import std;
 
 namespace
 {

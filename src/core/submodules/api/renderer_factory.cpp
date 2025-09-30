@@ -1,6 +1,6 @@
 #include "utils.h"
 
-import std.core;
+import std;
 import dx11renderer;
 import core.renderer;
 import window;

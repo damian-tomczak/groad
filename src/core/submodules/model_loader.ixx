@@ -8,7 +8,7 @@ module;
 
 export module core.model_loader;
 import dx11renderer;
-import std.core;
+import std;
 
 export
 {

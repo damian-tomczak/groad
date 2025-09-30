@@ -117,9 +117,7 @@ target_compile_options(${CMAKE_PROJECT_NAME} PUBLIC
         $<$<CONFIG:Debug>: /Zi /Od /MDd>
         $<$<CONFIG:RelWithDebInfo>: /Zi /O2 /MD>
         $<$<CONFIG:Release>: /O2 /MD>
-        /W3 /WX /wd4710
-        /wd5050 # WO: "Possible incompatible environment while importing module 'std.core': _M_FP_PRECISE is defined in current command line and not in module command line"
-        /experimental:module /scanDependencies # WO: wo for bleeding modules
+        /W3 /WX
     >
 
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: "not implemented" >
