@@ -39,13 +39,10 @@ struct RenderableSelection
     template <typename RenderableType>
     std::vector<RenderableType*> getRenderables(DXRenderer* pRenderer)
     {
-        auto* pDXRenderer = pRenderer;
-        ASSERT(pDXRenderer != nullptr);
-
         std::vector<RenderableType*> result;
         for (const auto renderableId : renderableIds)
         {
-            auto pRenderable = pDXRenderer->getRenderable(renderableId);
+            auto pRenderable = pRenderer->getRenderable(renderableId);
             if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable))
             {
                 result.push_back(pRenderableCasted);

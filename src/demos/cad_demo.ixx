@@ -146,9 +146,6 @@ private:
     {
         RenderTarget(DXRenderer* pRenderer, unsigned width, unsigned height)
         {
-            auto* pDXRenderer = pRenderer;
-            ASSERT(pDXRenderer != nullptr);
-
             if (width == 0 || height == 0)
             {
                 renderTargetView = nullptr;
@@ -172,19 +169,19 @@ private:
                 .BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
             };
 
-            HR(pDXRenderer->getDevice()->CreateTexture2D(&desc, nullptr, targetTexture.GetAddressOf()));
+            HR(pRenderer->getDevice()->CreateTexture2D(&desc, nullptr, targetTexture.GetAddressOf()));
 
-            HR(pDXRenderer->getDevice()->CreateRenderTargetView(targetTexture.Get(), nullptr, renderTargetView.GetAddressOf()));
+            HR(pRenderer->getDevice()->CreateRenderTargetView(targetTexture.Get(), nullptr, renderTargetView.GetAddressOf()));
 
             desc.MipLevels = 1;
             desc.Format = DXGI_FORMAT_D32_FLOAT;
             desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
             ComPtr<ID3D11Texture2D> depthStencilTexture;
-            HR(pDXRenderer->getDevice()->CreateTexture2D(&desc, nullptr, depthStencilTexture.GetAddressOf()));
+            HR(pRenderer->getDevice()->CreateTexture2D(&desc, nullptr, depthStencilTexture.GetAddressOf()));
 
             ComPtr<ID3D11DepthStencilView> result;
-            HR(pDXRenderer->getDevice()->CreateDepthStencilView(depthStencilTexture.Get(), nullptr, depthStencilView.GetAddressOf()));
+            HR(pRenderer->getDevice()->CreateDepthStencilView(depthStencilTexture.Get(), nullptr, depthStencilView.GetAddressOf()));
 
             D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
             srvDesc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -192,7 +189,7 @@ private:
             srvDesc.Texture2D.MostDetailedMip = 0;
             srvDesc.Texture2D.MipLevels = 1;
 
-            HR(pDXRenderer->getDevice()->CreateShaderResourceView(targetTexture.Get(), &srvDesc, shaderResourceView.GetAddressOf()));
+            HR(pRenderer->getDevice()->CreateShaderResourceView(targetTexture.Get(), &srvDesc, shaderResourceView.GetAddressOf()));
         }
 
         ComPtr<ID3D11Texture2D> targetTexture;
@@ -230,16 +227,15 @@ public:
     void init() override{};
     void draw() override
     {
-        auto* pDXRenderer = mpRenderer;
-        ASSERT(pDXRenderer != nullptr);
+        auto* pContext = mpRenderer->getContext();
 
-        pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().gridVS.first.Get(), nullptr, 0);
-        pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().gridPS.first.Get(), nullptr, 0);
-        pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        pDXRenderer->getContext()->Draw(6, 0);
+        pContext->VSSetShader(mpRenderer->getShaders().gridVS.first.Get(), nullptr, 0);
+        pContext->HSSetShader(nullptr, nullptr, 0);
+        pContext->DSSetShader(nullptr, nullptr, 0);
+        pContext->GSSetShader(nullptr, nullptr, 0);
+        pContext->PSSetShader(mpRenderer->getShaders().gridPS.first.Get(), nullptr, 0);
+        pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pContext->Draw(6, 0);
     }
 
     void update(float dt) override
@@ -275,14 +271,11 @@ CADDemo::CADDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> p
 
         if (mIsStereoscopy && (mpBlendSamplerState == nullptr))
         {
-            auto* pDXRenderer = mpRenderer;
-            ASSERT(pDXRenderer != nullptr);
-
             D3D11_SAMPLER_DESC samplerDesc{};
 
             samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 
-            HR(pDXRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpBlendSamplerState.GetAddressOf()));
+            HR(mpRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpBlendSamplerState.GetAddressOf()));
         }
 
         ImGui::MenuItem("Stereoscopy settings", nullptr, &mIsOpenStereoscopyPopup);
@@ -353,9 +346,6 @@ void CADDemo::draw()
     //IDemo::draw();
 
     auto drawScene = [this]() {
-        auto* pDXRenderer = mpRenderer;
-        ASSERT(pDXRenderer != nullptr);
-
         mpSurface->draw();
 
         std::vector<Id> pointIdsPartOfSelected;
@@ -368,15 +358,15 @@ void CADDemo::draw()
             );
         }
 
-        for (const auto [renderableIndex, pRenderable] : std::views::enumerate(pDXRenderer->getRenderables()))
+        for (const auto [renderableIndex, pRenderable] : std::views::enumerate(mpRenderer->getRenderables()))
         {
             if (pRenderable == nullptr)
             {
                 continue;
             }
 
-            pDXRenderer->mGlobalCB.color = pRenderable->mColor;
-            pDXRenderer->mGlobalCB.tesFactor = pRenderable->mTesFactor;
+            mpRenderer->mGlobalCB.color = pRenderable->mColor;
+            mpRenderer->mGlobalCB.tesFactor = pRenderable->mTesFactor;
 
             XMMATRIX model = XMMatrixIdentity();
 
@@ -413,25 +403,25 @@ void CADDemo::draw()
                 translationToOrigin * centroidScaleMat * centroidRotationMat * translationBack *
                 worldTranslation;
 
-            pDXRenderer->mGlobalCB.modelMtx = model;
+            mpRenderer->mGlobalCB.modelMtx = model;
 
             const bool isPointSelected = std::ranges::find(pointIdsPartOfSelected, pRenderable->getId()) != pointIdsPartOfSelected.end();
 
             if (mCtx.renderableSelection.renderableIds.contains(pRenderable->getId()) || isPointSelected)
             {
-                pDXRenderer->mGlobalCB.color = defaultSelectionColor;
+                mpRenderer->mGlobalCB.color = defaultSelectionColor;
             }
 
-            pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+            mpRenderer->updateCB(mpRenderer->mGlobalCB);
 
-            ID3D11Buffer* const* const pVertexBuffer = pDXRenderer->getVertexBufferAddress(renderableIndex);
+            ID3D11Buffer* const* const pVertexBuffer = mpRenderer->getVertexBufferAddress(renderableIndex);
             //ASSERT(*pVertexBuffer != nullptr);
-            pDXRenderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer, &pRenderable->getStride(), &pRenderable->getOffset());
+            mpRenderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer, &pRenderable->getStride(), &pRenderable->getOffset());
 
-            ID3D11Buffer* const pIndexBuffer = pDXRenderer->getIndexBuffer(renderableIndex);
+            ID3D11Buffer* const pIndexBuffer = mpRenderer->getIndexBuffer(renderableIndex);
             if (pIndexBuffer != nullptr)
             {
-                pDXRenderer->getContext()->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
+                mpRenderer->getContext()->IASetIndexBuffer(pIndexBuffer, DXGI_FORMAT_R32_UINT, 0);
             }
 
             pRenderable->draw(mpRenderer, renderableIndex);
@@ -440,7 +430,7 @@ void CADDemo::draw()
         if (mCtx.renderableSelection.renderableIds.size() == 1)
         {
             Id selectedRenderableId = *mCtx.renderableSelection.renderableIds.begin();
-            IRenderable* pRenderable = pDXRenderer->getRenderable(selectedRenderableId);
+            IRenderable* pRenderable = mpRenderer->getRenderable(selectedRenderableId);
             if (auto pBezierC2 = dynamic_cast<BezierCurveC2*>(pRenderable); pBezierC2 != nullptr)
             {
                 drawBernsteins(pBezierC2->getBernsteinPositions());
@@ -451,7 +441,7 @@ void CADDemo::draw()
             XMVECTOR sum = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
             for (const auto& selectedRenderableId : mCtx.renderableSelection.renderableIds)
             {
-                const auto pRenderable = pDXRenderer->getRenderable(selectedRenderableId);
+                const auto pRenderable = mpRenderer->getRenderable(selectedRenderableId);
                 sum = XMVectorAdd(sum, pRenderable->getGlobalPos());
             }
 
@@ -473,18 +463,18 @@ void CADDemo::draw()
         }
 
         {
-            pDXRenderer->mGlobalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
+            mpRenderer->mGlobalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
-            pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+            mpRenderer->updateCB(mpRenderer->mGlobalCB);
 
-            pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
-            pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->GSSetShader(pDXRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
-            pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
-            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+            mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+            mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            mpRenderer->getContext()->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+            mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+            mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
-            pDXRenderer->getContext()->Draw(6, 0);
+            mpRenderer->getContext()->Draw(6, 0);
         }
     };
 
@@ -524,8 +514,7 @@ void CADDemo::draw()
         };
 
         auto renderSceneForEye = [this, drawScene](Eye eye) {
-            auto* pDXRenderer = mpRenderer;
-            ASSERT(pDXRenderer != nullptr);
+            ASSERT(mpRenderer != nullptr);
 
             mEyeForCurrentRendering = eye;
 
@@ -534,11 +523,11 @@ void CADDemo::draw()
             ASSERT(renderTarget != nullptr);
 
             const float clearColor[]{ 0.0f, 0.0f, 0.0f, 0.0f };
-            pDXRenderer->getContext()->ClearRenderTargetView(renderTarget->renderTargetView.Get(), clearColor);
-            pDXRenderer->getContext()->ClearDepthStencilView(renderTarget->depthStencilView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-            pDXRenderer->getContext()->OMSetRenderTargets(1, renderTarget->renderTargetView.GetAddressOf(), renderTarget->depthStencilView.Get());
+            mpRenderer->getContext()->ClearRenderTargetView(renderTarget->renderTargetView.Get(), clearColor);
+            mpRenderer->getContext()->ClearDepthStencilView(renderTarget->depthStencilView.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+            mpRenderer->getContext()->OMSetRenderTargets(1, renderTarget->renderTargetView.GetAddressOf(), renderTarget->depthStencilView.Get());
 
-            pDXRenderer->mGlobalCB.proj = mProjectionMatricesForEyes[eye];
+            mpRenderer->mGlobalCB.proj = mProjectionMatricesForEyes[eye];
 
             drawScene();
         };
@@ -557,10 +546,9 @@ void CADDemo::draw()
         };
 
         auto blendEyesToSingle = [this]() {
-            auto* pDXRenderer = mpRenderer;
-            ASSERT(pDXRenderer != nullptr);
+            ASSERT(mpRenderer != nullptr);
 
-            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
             auto& leftEye = mEyeRenderTargets[Eye::LEFT];
             auto& rightEye = mEyeRenderTargets[Eye::RIGHT];
@@ -570,25 +558,24 @@ void CADDemo::draw()
                 return;
             }
 
-            pDXRenderer->getContext()->OMSetRenderTargets(1, pDXRenderer->getAddressOfRenderTargetView(), pDXRenderer->getDepthStencilView());
-            pDXRenderer->getContext()->RSSetViewports(1, pDXRenderer->getAddressOfScreenViewport());
-            pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().blendVS.first.Get(), nullptr, 0);
-            pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().blendPS.first.Get(), nullptr, 0);
-            pDXRenderer->getContext()->RSSetState(nullptr);
+            mpRenderer->getContext()->OMSetRenderTargets(1, mpRenderer->getAddressOfRenderTargetView(), mpRenderer->getDepthStencilView());
+            mpRenderer->getContext()->RSSetViewports(1, mpRenderer->getAddressOfScreenViewport());
+            mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().blendVS.first.Get(), nullptr, 0);
+            mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            mpRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+            mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().blendPS.first.Get(), nullptr, 0);
+            mpRenderer->getContext()->RSSetState(nullptr);
 
             ID3D11ShaderResourceView* eyeSRV[] = { leftEye->shaderResourceView.Get(), rightEye->shaderResourceView.Get() };
 
-            pDXRenderer->getContext()->PSSetSamplers(0, 1, mpBlendSamplerState.GetAddressOf());
-            pDXRenderer->getContext()->PSSetShaderResources(0, 2, eyeSRV);
+            mpRenderer->getContext()->PSSetSamplers(0, 1, mpBlendSamplerState.GetAddressOf());
+            mpRenderer->getContext()->PSSetShaderResources(0, 2, eyeSRV);
 
-            pDXRenderer->getContext()->Draw(6, 0);
+            mpRenderer->getContext()->Draw(6, 0);
         };
 
-        auto* pDXRenderer = mpRenderer;
-        ASSERT(pDXRenderer != nullptr);
+        ASSERT(mpRenderer != nullptr);
 
         updateProjectionMatrices(mpWindow->getAspectRatio(), mCamera.getZoom(), 0.01f, 100.0f);
 
@@ -603,8 +590,7 @@ void CADDemo::draw()
 
 void CADDemo::processInput(IWindow::Message msg, float dt)
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     switch (msg)
     {
@@ -862,13 +848,13 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                 continue;
             }
 
-            pDXRenderer->removeRenderable(*it);
+            mpRenderer->removeRenderable(*it);
             mCtx.renderableSelection.renderableIds.erase(*it);
             it = mCtx.renderableSelection.renderableIds.begin();
         }
 
         // TODO: perf bottleneck
-        for (auto& pRenderable : pDXRenderer->getRenderables())
+        for (auto& pRenderable : mpRenderer->getRenderables())
         {
             if (pRenderable != nullptr)
             {
@@ -881,8 +867,7 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
 void CADDemo::renderUi()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     mCtx.isMenuEnabled = false;
     mCtx.isUiClicked = false;
@@ -1344,7 +1329,7 @@ void CADDemo::renderUi()
                         }
 
                         ImGui::SameLine();
-                        ImGui::Text("- %s", pDXRenderer->getRenderable(id)->mTag.c_str());
+                        ImGui::Text("- %s", mpRenderer->getRenderable(id)->mTag.c_str());
                     }
 
                     if (idToDelete != invalidId)
@@ -1431,7 +1416,7 @@ void CADDemo::renderUi()
             if (dataChanged)
             {
                 pSelectedRenderable->regenerateData();
-                pDXRenderer->buildGeometryBuffers();
+                mpRenderer->buildGeometryBuffers();
             }
 
             mCtx.isUiClicked |= dataChanged;
@@ -1589,40 +1574,38 @@ void CADDemo::update(float dt)
 {
     IDemo::update(dt);
 
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 }
 
 void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions)
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().billboardVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().billboardPS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().billboardVS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().billboardPS.first.Get(), nullptr, 0);
 
     long long int currentBernsteinIndex = 0;
     for (const XMFLOAT3& bernsteinPos : bernsteinPositions)
     {
         const XMVECTOR bernsteinVec = XMLoadFloat3(&bernsteinPos);
-        pDXRenderer->mGlobalCB.modelMtx =
+        mpRenderer->mGlobalCB.modelMtx =
             XMMatrixScaling(0.05f, 0.05f, 0.05f) * XMMatrixTranslationFromVector(bernsteinVec);
         if ((currentBernsteinIndex == mSelectedBernsteinPointIndex) ||
             ((currentBernsteinIndex == mSelectedBernsteinPointIndex - 1) && (mSelectedBernsteinPointIndex % 4 == 0)))
         {
-            pDXRenderer->mGlobalCB.color = defaultSelectionColor;
+            mpRenderer->mGlobalCB.color = defaultSelectionColor;
         }
         else
         {
-            pDXRenderer->mGlobalCB.color = defaultColor;
+            mpRenderer->mGlobalCB.color = defaultColor;
         }
-        pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
-        pDXRenderer->getContext()->Draw(6, 0); // TODO: drawInstanced
+        mpRenderer->updateCB(mpRenderer->mGlobalCB);
+        mpRenderer->getContext()->Draw(6, 0); // TODO: drawInstanced
         currentBernsteinIndex++;
     }
 }

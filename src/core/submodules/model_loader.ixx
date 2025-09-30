@@ -89,8 +89,6 @@ export
 
         void init()
         {
-            ASSERT(mpRenderer != nullptr);
-
             const D3D11_BUFFER_DESC vbd{
                 .ByteWidth = static_cast<unsigned>(sizeof(Layout) * mVertices.size()),
                 .Usage = D3D11_USAGE_DYNAMIC,
@@ -135,8 +133,6 @@ export
 
         void draw()
         {
-            ASSERT(mpRenderer != nullptr);
-
             mpRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
             mpRenderer->getContext()->IASetVertexBuffers(
