@@ -15,7 +15,7 @@ constexpr const char* helpMessage =
     PROJECT_NAME " [--help|-h] [--graphics|-g <Graphics API>] [--index|-i <Device Index>]: \n"
     "  --help|-h                Displays this help message.\n"
     "  --graphics|-g <API>      Sets the graphics API to be used.\n"
-    "                           Supported APIs: DX11, D3D12\n"
+    "                           Supported APIs: DX11, DX12\n"
     "  --index|-i <Index>       Selects the GPU device by index.\n"
     "                           Use a non-negative integer as <Index>.\n";
 
