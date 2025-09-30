@@ -12,6 +12,7 @@ module;
 
 export module core.renderables;
 import dxrenderer;
+import dx11renderer;
 import dx12renderer;
 
 namespace
@@ -306,24 +307,36 @@ void Point::draw(class IRenderer* pRenderer, unsigned long long int renderableIn
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
 
-    pDXRenderer->getContext()->IASetInputLayout(pDXRenderer->getDefaultInputLayout());
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().defaultVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().defaultPS.first.Get(), nullptr, 0);
-
-    pDXRenderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
+    pDX11Renderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
 }
 
 void Point::drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius, int segments)
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
-
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
     std::vector<XMFLOAT3> geometry = produceGeometry(radius, segments);
     std::vector<unsigned> topology = produceTopology(segments);
 
@@ -341,7 +354,7 @@ void Point::drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius, int 
     D3D11_SUBRESOURCE_DATA vinitData{
         .pSysMem = geometry.data(),
     };
-    HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &vinitData, &pVertexBuffer));
+    HR(pDX11Renderer->getDevice()->CreateBuffer(&vbd, &vinitData, &pVertexBuffer));
 
     D3D11_BUFFER_DESC ibd{
         .ByteWidth = static_cast<UINT>(sizeof(unsigned) * topology.size()),
@@ -354,26 +367,26 @@ void Point::drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius, int 
     D3D11_SUBRESOURCE_DATA initData{
         .pSysMem = topology.data(),
     };
-    HR(pDXRenderer->getDevice()->CreateBuffer(&ibd, &initData, &pIndexBuffer));
+    HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd, &initData, &pIndexBuffer));
 
     const XMMATRIX translationMat = XMMatrixTranslationFromVector(pos);
-    pDXRenderer->mGlobalCB.modelMtx = translationMat;
+    pDX11Renderer->mGlobalCB.modelMtx = translationMat;
 
-    pDXRenderer->mGlobalCB.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
-    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+    pDX11Renderer->mGlobalCB.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
+    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
     UINT vStride = sizeof(XMFLOAT3), offset = 0;
-    pDXRenderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer.GetAddressOf(), &vStride, &offset);
-    pDXRenderer->getContext()->IASetIndexBuffer(pIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
+    pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, pVertexBuffer.GetAddressOf(), &vStride, &offset);
+    pDX11Renderer->getContext()->IASetIndexBuffer(pIndexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
 
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().defaultVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().defaultPS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDXRenderer->getContext()->DrawIndexed(static_cast<UINT>(topology.size()), 0, 0);
+    pDX11Renderer->getContext()->DrawIndexed(static_cast<UINT>(topology.size()), 0, 0);
 }
 
 std::vector<XMFLOAT3> Point::produceGeometry(float radius, int segments)
@@ -392,7 +405,6 @@ std::vector<XMFLOAT3> Point::produceGeometry(float radius, int segments)
             geometry.emplace_back(x, y, z);
         }
     }
-
     return geometry;
 }
 
@@ -419,7 +431,6 @@ std::vector<unsigned int> Point::produceTopology(int segments)
             topology.insert(topology.end(), { topRight, bottomLeft, bottomRight });
         }
     }
-
     return topology;
 }
 
@@ -427,17 +438,23 @@ void Torus::draw(class IRenderer* pRenderer, unsigned long long int renderableIn
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getDefaultInputLayout());
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().defaultVS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().defaultPS.first.Get(), nullptr, 0);
 
-    pDXRenderer->getContext()->IASetInputLayout(pDXRenderer->getDefaultInputLayout());
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().defaultVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().defaultPS.first.Get(), nullptr, 0);
-
-    pDXRenderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
+    pDX11Renderer->getContext()->DrawIndexed(static_cast<UINT>(getTopology().size()), 0, 0);
 }
 
 void Torus::generateGeometry()
@@ -498,47 +515,53 @@ void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int rende
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    auto defaultColor = pDX11Renderer->mGlobalCB.color;
 
-    auto defaultColor = pDXRenderer->mGlobalCB.color;
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-
-    pDXRenderer->getContext()->IASetInputLayout(pDXRenderer->getBezierCurveInputLayout());
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().bezierCurveVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(pDXRenderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(pDXRenderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().bezierCurvePS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierCurveInputLayout());
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierCurveVS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierCurvePS.first.Get(), nullptr, 0);
 
     for (unsigned int i = 0; i < mGeometry.size() + 1; i += IBezierCurve::deBoorNumber)
     {
         unsigned int offset = i * sizeof(XMFLOAT3);
-        pDXRenderer->getContext()->IASetVertexBuffers(
-            0, 1, pDXRenderer->getVertexBufferAddress(renderableIndex), &getStride(),
+        pDX11Renderer->getContext()->IASetVertexBuffers(
+            0, 1, pDX11Renderer->getVertexBufferAddress(renderableIndex), &getStride(),
             &offset);
 
-        pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
-        pDXRenderer->getContext()->HSSetShader(pDXRenderer->getShaders().bezierCurveHS.first.Get(), nullptr,
+        pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+        pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierCurveHS.first.Get(), nullptr,
             0);
-        pDXRenderer->getContext()->DSSetShader(pDXRenderer->getShaders().bezierCurveDS.first.Get(), nullptr,
+        pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierCurveDS.first.Get(), nullptr,
             0);
-        pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->mGlobalCB.color = defaultColor;
-        pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+        pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->mGlobalCB.color = defaultColor;
+        pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
-        pDXRenderer->getContext()->Draw(1, 0);
+        pDX11Renderer->getContext()->Draw(1, 0);
 
         if (mIsPolygon)
         {
-            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
-            pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-            pDXRenderer->getContext()->GSSetShader(
-            pDXRenderer->getShaders().bezierCurveBorderGS.first.Get(), nullptr, 0);
-            pDXRenderer->mGlobalCB.color = Colors::Green;
-            pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+            pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+            pDX11Renderer->getContext()->GSSetShader(
+            pDX11Renderer->getShaders().bezierCurveBorderGS.first.Get(), nullptr, 0);
+            pDX11Renderer->mGlobalCB.color = Colors::Green;
+            pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
-            pDXRenderer->getContext()->Draw(1, 0);
+            pDX11Renderer->getContext()->Draw(1, 0);
         }
     }
 }
@@ -812,7 +835,6 @@ std::tuple<std::vector<float>, std::vector<float>, std::vector<XMVECTOR>> Interp
         b[i - 1] = XMVectorDivide(XMVectorSubtract(diff1, diff2),
             XMVectorReplicate(chordSum));
     }
-
     return { alfa, beta, b };
 }
 
@@ -854,7 +876,6 @@ std::vector<XMVECTOR> InterpolatedBezierCurveC2::solveSplineSystem(const std::ve
             lastBeta = beta[i - 1] / (2.0f - alfa[i] * lastBeta);
         }
     }
-
     return R;
 }
 
@@ -934,7 +955,6 @@ std::vector<XMVECTOR> InterpolatedBezierCurveC2::getBezierPoints(const std::vect
             bezierPoints.push_back(XMVectorSet(XMVectorGetW(xs), XMVectorGetW(ys), XMVectorGetW(zs), 1.0f));
         }
     }
-
     return bezierPoints;
 }
 
@@ -1011,7 +1031,6 @@ void IBezierSurface::rotateControlPoints(float pitchoff, float yawoff, float rol
                 translationToOrigin * centroidScaleMat * centroidRotationMat * translationBack *
                 worldTranslation;
 
-
             pRenderable->mWorldPos = model.r[3];
 
             const XMMATRIX scaleMat = localScaleMat * centroidScaleMat;
@@ -1037,7 +1056,6 @@ void IBezierSurface::regenerateData()
     if (!mBezierPatches.empty())
     {
         updateControlPoints();
-
         return;
     }
 
@@ -1068,23 +1086,29 @@ void IBezierSurface::draw(class IRenderer* pRenderer, unsigned long long int ren
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+    pDX11Renderer->getContext()->IASetInputLayout(pDX11Renderer->getBezierPatchInputLayout());
 
-    pDXRenderer->getContext()->IASetInputLayout(pDXRenderer->getBezierPatchInputLayout());
-
-    pDXRenderer->setWireframeRaster();
+    pDX11Renderer->setWireframeRaster();
 
     for (unsigned int i = 0; i < mBezierPatchCreator.u * mBezierPatchCreator.v; i++)
     {
         unsigned int offset = sizeof(XMFLOAT3) * i * numberOfControlPoints;
 
-        pDXRenderer->getContext()->IASetVertexBuffers(
-            0, 1, pDXRenderer->getVertexBufferAddress(renderableIndex), &getStride(), &offset);
-        pDXRenderer->getContext()->Draw(1, 0);
+        pDX11Renderer->getContext()->IASetVertexBuffers(
+            0, 1, pDX11Renderer->getVertexBufferAddress(renderableIndex), &getStride(), &offset);
+        pDX11Renderer->getContext()->Draw(1, 0);
     }
 
-    pDXRenderer->setSolidRaster();
+    pDX11Renderer->setSolidRaster();
 }
 
 void IBezierSurface::updateControlPoints()
@@ -1192,12 +1216,18 @@ void BezierSurfaceC0::draw(class IRenderer* pRenderer, unsigned long long int re
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
-
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->HSSetShader(pDXRenderer->getShaders().bezierPatchC0HS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(pDXRenderer->getShaders().bezierPatchC0DS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().bezierPatchC0PS.first.Get(), nullptr, 0);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierPatchC0HS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierPatchC0DS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC0PS.first.Get(), nullptr, 0);
 
     IBezierSurface::draw(pRenderer, renderableIndex);
 }
@@ -1225,7 +1255,6 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForFlatS
             controlPoints.push_back(std::move(pPoint));
         }
     }
-
     return controlPoints;
 }
 
@@ -1274,7 +1303,6 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC0::createControlPointsForCylin
             radiusVector = nextRadiusVector;
         }
     }
-
     return controlPoints;
 }
 
@@ -1373,28 +1401,34 @@ void BezierSurfaceC2::draw(class IRenderer* pRenderer, unsigned long long int re
 {
     auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
     ASSERT(pDXRenderer != nullptr);
-
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().bezierPatchC2VS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().bezierPatchC2PS.first.Get(), nullptr, 0);
+    auto* pDX11Renderer = dynamic_cast<DX11Renderer*>(pDXRenderer);
+    ASSERT(pDX11Renderer != nullptr);
+    if (pDX11Renderer == nullptr)
+    {
+        ERR("DX11 renderer is required for this renderable path");
+        return;
+    }
+    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC2VS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().bezierPatchC2PS.first.Get(), nullptr, 0);
 
     if (mIsPolygon)
     {
-        pDXRenderer->getContext()->HSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->getContext()->DSSetShader(nullptr, nullptr, 0);
-        pDXRenderer->getContext()->GSSetShader(pDXRenderer->getShaders().bezierPatchC2GS.first.Get(), nullptr, 0);
+        pDX11Renderer->getContext()->HSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->DSSetShader(nullptr, nullptr, 0);
+        pDX11Renderer->getContext()->GSSetShader(pDX11Renderer->getShaders().bezierPatchC2GS.first.Get(), nullptr, 0);
 
-        pDXRenderer->mGlobalCB.color = Colors::Green;
-        pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+        pDX11Renderer->mGlobalCB.color = Colors::Green;
+        pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
         IBezierSurface::draw(pRenderer, renderableIndex);
     }
 
-    pDXRenderer->getContext()->HSSetShader(pDXRenderer->getShaders().bezierPatchC2HS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->DSSetShader(pDXRenderer->getShaders().bezierPatchC2DS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->GSSetShader(nullptr, nullptr, 0);
+    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().bezierPatchC2HS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().bezierPatchC2DS.first.Get(), nullptr, 0);
+    pDX11Renderer->getContext()->GSSetShader(nullptr, nullptr, 0);
 
-    pDXRenderer->mGlobalCB.color = Colors::White;
-    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+    pDX11Renderer->mGlobalCB.color = Colors::White;
+    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
 
     IBezierSurface::draw(pRenderer, renderableIndex);
 }
@@ -1421,7 +1455,6 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForFlatS
             controlPoints.push_back(std::move(pPoint));
         }
     }
-
     return controlPoints;
 }
 
@@ -1458,7 +1491,6 @@ std::vector<std::unique_ptr<Point>> BezierSurfaceC2::createControlPointsForCylin
             radiusVector = ca * radiusVector + sa * tangent;
         }
     }
-
     return controlPoints;
 }
 
