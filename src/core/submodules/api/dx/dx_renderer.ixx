@@ -179,6 +179,8 @@ public:
     virtual void createShaders() = 0;
     virtual ID3D11Buffer* const* getVertexBufferAddress(size_t index) const = 0;
     virtual ID3D11Buffer* getIndexBuffer(size_t index) const = 0;
+    virtual void beginFrame(const XMFLOAT4& clearColor) = 0;
+    virtual void endFrame(bool isVsync) = 0;
 
     template <typename Buffer>
     void createCB(Buffer& cb)

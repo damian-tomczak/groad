@@ -35,8 +35,8 @@ public:
     void init(unsigned short gpuIndex) override;
     void onResize() override;
 
-    void beginFrame(const XMFLOAT4& clearColor);
-    void endFrame(bool isVsync);
+    void beginFrame(const XMFLOAT4& clearColor) override;
+    void endFrame(bool isVsync) override;
 
     void buildGeometryBuffers() override
     {

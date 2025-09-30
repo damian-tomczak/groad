@@ -209,6 +209,10 @@ void App::update(float dt)
 
 void App::draw()
 {
+    ASSERT(mpRenderer != nullptr);
+
+    mpRenderer->beginFrame(backgroundColor);
+
     if (auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(mpRenderer))
     {
         drawDX11(*pDx11Renderer);
@@ -221,23 +225,15 @@ void App::draw()
     {
         ASSERT(false);
     }
+
+    mpRenderer->endFrame(mSettings.isVsync);
 }
 
 void App::drawDX11(DX11Renderer& renderer)
 {
     auto* pContext = renderer.getContext();
 
-    pContext->VSSetShader(nullptr, nullptr, 0);
-    pContext->HSSetShader(nullptr, nullptr, 0);
-    pContext->DSSetShader(nullptr, nullptr, 0);
-    pContext->GSSetShader(nullptr, nullptr, 0);
-    pContext->PSSetShader(nullptr, nullptr, 0);
-
     renderer.buildGeometryBuffers();
-
-    pContext->ClearRenderTargetView(renderer.getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    pContext->ClearDepthStencilView(renderer.getDepthStencilView(),
-                                                             D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
         .DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL,
@@ -281,17 +277,11 @@ void App::drawDX11(DX11Renderer& renderer)
     //drawCursor(mpRenderer->mGlobalCB);
 
     renderUi();
-
-    renderer.getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
 void App::drawDX12(DX12Renderer& renderer)
 {
-    renderer.beginFrame(backgroundColor);
-
     // TODO: hook DX12 rendering path
-
-    renderer.endFrame(mSettings.isVsync);
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
