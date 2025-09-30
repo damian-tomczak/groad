@@ -133,7 +133,6 @@ void App::init()
     mpWindow->show();
 
     mpRenderer = DXRenderer::createRenderer(mOptions.api, mpWindow);
-    ASSERT(mpRenderer != nullptr);
     mpRenderer->init(mOptions.gpuIndex);
 
     mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
@@ -205,10 +204,7 @@ void App::update(float dt)
 
 void App::draw()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
-
-    auto* pContext = pDXRenderer->getContext();
+    auto* pContext = mpRenderer->getContext();
 
     pContext->VSSetShader(nullptr, nullptr, 0);
     pContext->HSSetShader(nullptr, nullptr, 0);
@@ -216,10 +212,10 @@ void App::draw()
     pContext->GSSetShader(nullptr, nullptr, 0);
     pContext->PSSetShader(nullptr, nullptr, 0);
 
-    pDXRenderer->buildGeometryBuffers();
+    mpRenderer->buildGeometryBuffers();
 
-    pContext->ClearRenderTargetView(pDXRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    pContext->ClearDepthStencilView(pDXRenderer->getDepthStencilView(),
+    pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
+    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
@@ -229,7 +225,7 @@ void App::draw()
     };
 
     ComPtr<ID3D11DepthStencilState> pDepthStencilState;
-    pDXRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
+    mpRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
     pContext->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
 
     XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
@@ -248,24 +244,24 @@ void App::draw()
         .screenWidth = mpWindow->getWidth(),
         .screenHeight = mpWindow->getHeight(),
     };
-    pDXRenderer->mGlobalCB = std::move(globalCB);
-    pDXRenderer->createCB(pDXRenderer->mGlobalCB);
+    mpRenderer->mGlobalCB = std::move(globalCB);
+    mpRenderer->createCB(mpRenderer->mGlobalCB);
 
-    pContext->VSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->HSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->DSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->GSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->PSSetConstantBuffers(0, 1, pDXRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->VSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->HSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->DSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->GSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->PSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
 
-    pContext->IASetInputLayout(pDXRenderer->getDefaultInputLayout());
+    pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
 
     mpDemo->draw();
 
-    //drawCursor(pDXRenderer->mGlobalCB);
+    //drawCursor(mpRenderer->mGlobalCB);
 
     renderUi();
 
-    pDXRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
+    mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
@@ -461,9 +457,7 @@ void App::checkShaders()
     if (shouldRecompileShaders)
     {
         WARN("Starting recompiling shaders!");
-        auto* pDXRenderer = mpRenderer;
-        ASSERT(pDXRenderer != nullptr);
-        pDXRenderer->createShaders();
+        mpRenderer->createShaders();
         WARN("Shaders recompiled!");
     }
 }
@@ -473,17 +467,15 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 {
     globalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
 
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
-    auto* pContext = pDXRenderer->getContext();
+    auto* pContext = mpRenderer->getContext();
 
-    pDXRenderer->updateCB(globalCB);
+    mpRenderer->updateCB(globalCB);
 
-    pContext->VSSetShader(pDXRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
+    pContext->VSSetShader(mpRenderer->getShaders().cursorVS.first.Get(), nullptr, 0);
     pContext->HSSetShader(nullptr, nullptr, 0);
     pContext->DSSetShader(nullptr, nullptr, 0);
-    pContext->GSSetShader(pDXRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
-    pContext->PSSetShader(pDXRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
+    pContext->GSSetShader(mpRenderer->getShaders().cursorGS.first.Get(), nullptr, 0);
+    pContext->PSSetShader(mpRenderer->getShaders().cursorPS.first.Get(), nullptr, 0);
     pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
     pContext->Draw(6, 0);

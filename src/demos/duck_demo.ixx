@@ -56,11 +56,8 @@ void DuckDemo::init()
     mBox.init();
     mDuck.init();
 
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
-
-    mDuckTexture = pDXRenderer->createShaderResourceView("assets/textures/ducktex.jpg");
-    mpEnvTexture = pDXRenderer->createShaderResourceView("assets/textures/cubemap.dds");
+    mDuckTexture = mpRenderer->createShaderResourceView("assets/textures/ducktex.jpg");
+    mpEnvTexture = mpRenderer->createShaderResourceView("assets/textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,
@@ -75,25 +72,23 @@ void DuckDemo::init()
         .MaxLOD = D3D11_FLOAT32_MAX,
     };
 
-    HR(pDXRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
+    HR(mpRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
 
-    HR(pDXRenderer->getDevice()->CreateInputLayout(
+    HR(mpRenderer->getDevice()->CreateInputLayout(
         TexturedLayout::layout.data(), static_cast<unsigned>(TexturedLayout::layout.size()),
-        pDXRenderer->getShaders().duckVS.second->GetBufferPointer(),
-        pDXRenderer->getShaders().duckVS.second->GetBufferSize(), mpDuckLayout.GetAddressOf()));
+        mpRenderer->getShaders().duckVS.second->GetBufferPointer(),
+        mpRenderer->getShaders().duckVS.second->GetBufferSize(), mpDuckLayout.GetAddressOf()));
 
-    HR(pDXRenderer->getDevice()->CreateInputLayout(
+    HR(mpRenderer->getDevice()->CreateInputLayout(
         PositionNormalLayout::layout.data(), static_cast<unsigned>(PositionNormalLayout::layout.size()),
-        pDXRenderer->getShaders().wallsVS.second->GetBufferPointer(),
-        pDXRenderer->getShaders().wallsVS.second->GetBufferSize(), mpBoxLayout.GetAddressOf()));
+        mpRenderer->getShaders().wallsVS.second->GetBufferPointer(),
+        mpRenderer->getShaders().wallsVS.second->GetBufferSize(), mpBoxLayout.GetAddressOf()));
 }
 
 void DuckDemo::draw()
 {
     // TODO: 27.7.2024
     IDemo::draw();
-
-    ASSERT(mpRenderer != nullptr);
 
     drawDuck();
     drawBox();
@@ -111,39 +106,33 @@ void DuckDemo::update(float dt)
 
 void DuckDemo::drawDuck()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().duckVS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().duckPS.first.Get(), nullptr, 0);
 
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().duckVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().duckPS.first.Get(), nullptr, 0);
-
-    pDXRenderer->mGlobalCB.modelMtx =
+    mpRenderer->mGlobalCB.modelMtx =
         XMMatrixIdentity() * XMMatrixScaling(0.01f, 0.01f, 0.01f) * XMMatrixTranslation(0.0f, -3.0f, 0.0f);
-    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+    mpRenderer->updateCB(mpRenderer->mGlobalCB);
 
-    pDXRenderer->getContext()->PSSetShaderResources(0, 1, mDuckTexture.GetAddressOf());
-    pDXRenderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
+    mpRenderer->getContext()->PSSetShaderResources(0, 1, mDuckTexture.GetAddressOf());
+    mpRenderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDXRenderer->getContext()->IASetInputLayout(mpDuckLayout.Get());
+    mpRenderer->getContext()->IASetInputLayout(mpDuckLayout.Get());
 
     mDuck.draw();
 }
 
 void DuckDemo::drawBox()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().wallsVS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().wallsPS.first.Get(), nullptr, 0);
 
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().wallsVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().wallsPS.first.Get(), nullptr, 0);
+    mpRenderer->mGlobalCB.modelMtx = XMMatrixScaling(1.f, 1.f, 1.f);
+    mpRenderer->updateCB(mpRenderer->mGlobalCB);
 
-    pDXRenderer->mGlobalCB.modelMtx = XMMatrixScaling(1.f, 1.f, 1.f);
-    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
-
-    pDXRenderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
-    pDXRenderer->getContext()->IASetInputLayout(mpBoxLayout.Get());
+    mpRenderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
+    mpRenderer->getContext()->IASetInputLayout(mpBoxLayout.Get());
 
     mBox.draw();
 }

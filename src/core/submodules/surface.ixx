@@ -119,8 +119,6 @@ WaterSurface::WaterSurface(DXRenderer* pRenderer, float planeSize, unsigned text
 
 void WaterSurface::init()
 {
-    ASSERT(mpRenderer != nullptr);
-
     const D3D11_RASTERIZER_DESC restarizerDesc{
         .FillMode = D3D11_FILL_SOLID,
         .CullMode = D3D11_CULL_NONE,
@@ -159,8 +157,6 @@ void WaterSurface::init()
 
 void WaterSurface::update(float dt)
 {
-    ASSERT(mpRenderer != nullptr);
-
     updateHeightMap();
     updateWaveTextureMap();
     randomDrop(dt);
@@ -168,8 +164,6 @@ void WaterSurface::update(float dt)
 
 void WaterSurface::draw()
 {
-    ASSERT(mpRenderer != nullptr);
-
     mpRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
     mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);

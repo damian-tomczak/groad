@@ -32,14 +32,12 @@ void SSODemo::init()
 {
     IDemo::init();
 
-    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::draw()
 {
     IDemo::draw();
 
-    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::processInput(IWindow::Message msg, float dt)
@@ -48,7 +46,6 @@ void SSODemo::processInput(IWindow::Message msg, float dt)
 
 void SSODemo::renderUi()
 {
-    ASSERT(mpRenderer != nullptr);
 }
 
 void SSODemo::update(float dt)
