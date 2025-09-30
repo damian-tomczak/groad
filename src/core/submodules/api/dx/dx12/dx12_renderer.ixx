@@ -35,6 +35,9 @@ public:
     void init(unsigned short gpuIndex) override;
     void onResize() override;
 
+    void beginFrame(const XMFLOAT4& clearColor) override;
+    void endFrame(bool isVsync) override;
+
     void buildGeometryBuffers() override
     {
         ASSERT(false);
@@ -435,6 +438,65 @@ void DX12Renderer::onResize()
         0,
         static_cast<LONG>(pWindow->getWidth()),
         static_cast<LONG>(pWindow->getHeight())};
+}
+
+void DX12Renderer::beginFrame(const XMFLOAT4& clearColor)
+{
+    ASSERT(mpCommandQueue);
+    ASSERT(mpCommandList);
+    ASSERT(mpDirectCmdListAlloc);
+    ASSERT(mSwapChainBuffer[mCurrentBackBuffer]);
+
+    HR(mpDirectCmdListAlloc->Reset());
+    HR(mpCommandList->Reset(mpDirectCmdListAlloc.Get(), nullptr));
+
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = mSwapChainBuffer[mCurrentBackBuffer].Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    mpCommandList->ResourceBarrier(1, &barrier);
+
+    auto rtvHandle = mpRtvHeap->GetCPUDescriptorHandleForHeapStart();
+    rtvHandle.ptr += static_cast<SIZE_T>(mCurrentBackBuffer) * mRtvDescriptorSize;
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = mpDsvHeap->GetCPUDescriptorHandleForHeapStart();
+
+    mpCommandList->OMSetRenderTargets(1, &rtvHandle, TRUE, &dsvHandle);
+    mpCommandList->RSSetViewports(1, &mScreenViewport);
+    mpCommandList->RSSetScissorRects(1, &mScissorRect);
+    mpCommandList->ClearRenderTargetView(rtvHandle, reinterpret_cast<const float*>(&clearColor), 0, nullptr);
+    mpCommandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+}
+
+void DX12Renderer::endFrame(bool isVsync)
+{
+    ASSERT(mpCommandQueue);
+    ASSERT(mpCommandList);
+
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    barrier.Transition.pResource = mSwapChainBuffer[mCurrentBackBuffer].Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+
+    mpCommandList->ResourceBarrier(1, &barrier);
+
+    HR(mpCommandList->Close());
+
+    ID3D12CommandList* cmdsLists[] = {mpCommandList.Get()};
+    mpCommandQueue->ExecuteCommandLists(1, cmdsLists);
+
+    HR(mpSwapChain->Present(isVsync ? 1u : 0u, 0));
+
+    mCurrentBackBuffer = (mCurrentBackBuffer + 1u) % frameCount;
+
+    flushCommandQueue();
 }
 
 void DX12Renderer::addRenderable(std::unique_ptr<IRenderable>&& pRenderable)

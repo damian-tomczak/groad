@@ -143,6 +143,9 @@ public:
 
     void createShaders() override;
 
+    void beginFrame(const XMFLOAT4& clearColor) override;
+    void endFrame(bool isVsync) override;
+
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
 private:
@@ -250,6 +253,42 @@ void DX11Renderer::onResize()
     float blendFactor[]{0.0f, 0.0f, 0.0f, 0.0f};
     UINT sampleMask = 0xffffffff;
     mpContext->OMSetBlendState(pBlendState.Get(), blendFactor, sampleMask);
+}
+
+void DX11Renderer::beginFrame(const XMFLOAT4& clearColor)
+{
+    ASSERT(mpContext);
+    ASSERT(mpRenderTargetView);
+    ASSERT(mpDepthStencilView);
+
+    ID3D11DeviceContext* const pContext = mpContext.Get();
+
+    pContext->VSSetShader(nullptr, nullptr, 0);
+    pContext->HSSetShader(nullptr, nullptr, 0);
+    pContext->DSSetShader(nullptr, nullptr, 0);
+    pContext->GSSetShader(nullptr, nullptr, 0);
+    pContext->PSSetShader(nullptr, nullptr, 0);
+
+    pContext->OMSetRenderTargets(1, mpRenderTargetView.GetAddressOf(), mpDepthStencilView.Get());
+
+    const D3D11_VIEWPORT* const pViewport = getAddressOfScreenViewport();
+    if (pViewport != nullptr)
+    {
+        pContext->RSSetViewports(1, pViewport);
+    }
+
+    pContext->ClearRenderTargetView(mpRenderTargetView.Get(), reinterpret_cast<const float*>(&clearColor));
+    pContext->ClearDepthStencilView(mpDepthStencilView.Get(),
+                                   D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+                                   1.0f,
+                                   0);
+}
+
+void DX11Renderer::endFrame(bool isVsync)
+{
+    ASSERT(mpSwapChain);
+
+    HR(mpSwapChain->Present(isVsync ? 1u : 0u, 0));
 }
 
 void DX11Renderer::initCore(unsigned short gpuIndex)
