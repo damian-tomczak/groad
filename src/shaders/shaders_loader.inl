@@ -84,4 +84,10 @@
     COMPILE_VERTEX_SHADER("blend/blend_vs.hlsl", mShaders.blendVS);
     COMPILE_PIXEL_SHADER("blend/blend_ps.hlsl", mShaders.blendPS);
 #pragma endregion blend
+
+#pragma region bloom
+    COMPILE_PIXEL_SHADER("bloom/bloom_extract_ps.hlsl", mShaders.bloomExtractPS);
+    COMPILE_PIXEL_SHADER("bloom/bloom_blur_ps.hlsl", mShaders.bloomBlurPS);
+    COMPILE_PIXEL_SHADER("bloom/bloom_composite_ps.hlsl", mShaders.bloomCompositePS);
+#pragma endregion bloom
 #pragma endregion

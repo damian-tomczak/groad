@@ -92,6 +92,10 @@ public:
 
         Shader<ID3D11VertexShader> blendVS;
         Shader<ID3D11PixelShader> blendPS;
+
+        Shader<ID3D11PixelShader> bloomExtractPS;
+        Shader<ID3D11PixelShader> bloomBlurPS;
+        Shader<ID3D11PixelShader> bloomCompositePS;
     };
 
     DXRenderer(std::weak_ptr<IWindow> pWindow) : mpWindow{pWindow}
