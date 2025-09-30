@@ -70,7 +70,7 @@ private:
     const ParsedOptions mOptions;
 
     std::shared_ptr<IWindow> mpWindow;
-    DX11Renderer* mpRenderer;
+    DXRenderer* mpRenderer;
 
     bool mIsRunning{};
 
@@ -132,7 +132,7 @@ void App::init()
     mpWindow->init();
     mpWindow->show();
 
-    mpRenderer = dynamic_cast<DX11Renderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
+    mpRenderer = dynamic_cast<DXRenderer*>(IRenderer::createRenderer(mOptions.api, mpWindow));
     ASSERT(mpRenderer != nullptr);
     mpRenderer->init(mOptions.gpuIndex);
 
