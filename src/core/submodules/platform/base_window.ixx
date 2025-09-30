@@ -91,6 +91,8 @@ public:
         KEY_SHIFT_UP,
         KEY_E_DOWN,
         KEY_E_UP,
+        KEY_R_DOWN,
+        KEY_R_UP,
         MOUSE_LEFT_DOWN,
         MOUSE_LEFT_UP,
         MOUSE_MIDDLE_DOWN,
