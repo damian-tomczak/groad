@@ -23,6 +23,8 @@ import core;
 import core.options;
 import window;
 import dxrenderer;
+import dx11renderer;
+import dx12renderer;
 
 import duck_demo;
 import cad_demo;
@@ -86,6 +88,9 @@ private:
     Demo mMode{};
 
     void drawCursor(DXRenderer::GlobalCB& cb);
+
+    void drawDX11(DX11Renderer& renderer);
+    void drawDX12(DX12Renderer& renderer);
 
     Context mCtx{};
 
@@ -204,7 +209,23 @@ void App::update(float dt)
 
 void App::draw()
 {
-    auto* pContext = mpRenderer->getContext();
+    if (auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(mpRenderer))
+    {
+        drawDX11(*pDx11Renderer);
+    }
+    else if (auto* const pDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer))
+    {
+        drawDX12(*pDx12Renderer);
+    }
+    else
+    {
+        ASSERT(false);
+    }
+}
+
+void App::drawDX11(DX11Renderer& renderer)
+{
+    auto* pContext = renderer.getContext();
 
     pContext->VSSetShader(nullptr, nullptr, 0);
     pContext->HSSetShader(nullptr, nullptr, 0);
@@ -212,10 +233,10 @@ void App::draw()
     pContext->GSSetShader(nullptr, nullptr, 0);
     pContext->PSSetShader(nullptr, nullptr, 0);
 
-    mpRenderer->buildGeometryBuffers();
+    renderer.buildGeometryBuffers();
 
-    pContext->ClearRenderTargetView(mpRenderer->getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
-    pContext->ClearDepthStencilView(mpRenderer->getDepthStencilView(),
+    pContext->ClearRenderTargetView(renderer.getRenderTargetView(), reinterpret_cast<const float*>(&backgroundColor));
+    pContext->ClearDepthStencilView(renderer.getDepthStencilView(),
                                                              D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
     const D3D11_DEPTH_STENCIL_DESC depthStencilDesc{
         .DepthEnable = TRUE,
@@ -225,7 +246,7 @@ void App::draw()
     };
 
     ComPtr<ID3D11DepthStencilState> pDepthStencilState;
-    mpRenderer->getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
+    renderer.getDevice()->CreateDepthStencilState(&depthStencilDesc, pDepthStencilState.GetAddressOf());
     pContext->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
 
     XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
@@ -244,16 +265,16 @@ void App::draw()
         .screenWidth = mpWindow->getWidth(),
         .screenHeight = mpWindow->getHeight(),
     };
-    mpRenderer->mGlobalCB = std::move(globalCB);
-    mpRenderer->createCB(mpRenderer->mGlobalCB);
+    renderer.mGlobalCB = std::move(globalCB);
+    renderer.createCB(renderer.mGlobalCB);
 
-    pContext->VSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->HSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->DSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->GSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
-    pContext->PSSetConstantBuffers(0, 1, mpRenderer->mGlobalCB.buffer.GetAddressOf());
+    pContext->VSSetConstantBuffers(0, 1, renderer.mGlobalCB.buffer.GetAddressOf());
+    pContext->HSSetConstantBuffers(0, 1, renderer.mGlobalCB.buffer.GetAddressOf());
+    pContext->DSSetConstantBuffers(0, 1, renderer.mGlobalCB.buffer.GetAddressOf());
+    pContext->GSSetConstantBuffers(0, 1, renderer.mGlobalCB.buffer.GetAddressOf());
+    pContext->PSSetConstantBuffers(0, 1, renderer.mGlobalCB.buffer.GetAddressOf());
 
-    pContext->IASetInputLayout(mpRenderer->getDefaultInputLayout());
+    pContext->IASetInputLayout(renderer.getDefaultInputLayout());
 
     mpDemo->draw();
 
@@ -261,7 +282,16 @@ void App::draw()
 
     renderUi();
 
-    mpRenderer->getSwapchain()->Present(mSettings.isVsync, 0);
+    renderer.getSwapchain()->Present(mSettings.isVsync, 0);
+}
+
+void App::drawDX12(DX12Renderer& renderer)
+{
+    renderer.beginFrame(backgroundColor);
+
+    // TODO: hook DX12 rendering path
+
+    renderer.endFrame(mSettings.isVsync);
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
