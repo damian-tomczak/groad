@@ -37,69 +37,13 @@ public:
         ImGui_ImplDX11_Shutdown();
     }
 
-    struct Shaders
-    {
-        template <typename ShaderType>
-        using Shader = std::pair<ComPtr<ShaderType>, ComPtr<ID3D10Blob>>;
-
-        Shader<ID3D11VertexShader> defaultVS;
-        Shader<ID3D11PixelShader> defaultPS;
-
-        Shader<ID3D11VertexShader> gridVS;
-        Shader<ID3D11PixelShader> gridPS;
-
-        Shader<ID3D11VertexShader> cursorVS;
-        Shader<ID3D11GeometryShader> cursorGS;
-        Shader<ID3D11PixelShader> cursorPS;
-
-        Shader<ID3D11VertexShader> bezierCurveVS;
-        Shader<ID3D11HullShader> bezierCurveHS;
-        Shader<ID3D11DomainShader> bezierCurveDS;
-        Shader<ID3D11GeometryShader> bezierCurveBorderGS;
-        Shader<ID3D11PixelShader> bezierCurvePS;
-
-        Shader<ID3D11VertexShader> bezierPatchC0VS;
-        Shader<ID3D11HullShader> bezierPatchC0HS;
-        Shader<ID3D11DomainShader> bezierPatchC0DS;
-        Shader<ID3D11PixelShader> bezierPatchC0PS;
-
-        Shader<ID3D11VertexShader> bezierPatchC2VS;
-        Shader<ID3D11HullShader> bezierPatchC2HS;
-        Shader<ID3D11DomainShader> bezierPatchC2DS;
-        Shader<ID3D11GeometryShader> bezierPatchC2GS;
-        Shader<ID3D11PixelShader> bezierPatchC2PS;
-
-        Shader<ID3D11VertexShader> waterSurfaceVS;
-        Shader<ID3D11PixelShader> waterSurfacePS;
-
-        Shader<ID3D11VertexShader> wallsVS;
-        Shader<ID3D11PixelShader> wallsPS;
-
-        Shader<ID3D11VertexShader> duckVS;
-        Shader<ID3D11PixelShader> duckPS;
-
-        Shader<ID3D11VertexShader> gableBorderVS;
-        Shader<ID3D11PixelShader> gableBorderPS;
-
-        Shader<ID3D11VertexShader> gableVS;
-        Shader<ID3D11HullShader> gableHS;
-        Shader<ID3D11DomainShader> gableDS;
-        Shader<ID3D11PixelShader> gablePS;
-
-        Shader<ID3D11VertexShader> billboardVS;
-        Shader<ID3D11PixelShader> billboardPS;
-
-        Shader<ID3D11VertexShader> blendVS;
-        Shader<ID3D11PixelShader> blendPS;
-    };
-
     void init(unsigned short gpuIndex) override;
     void onResize() override;
-    void buildGeometryBuffers();
+    void buildGeometryBuffers() override;
 
-    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const;
+    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& texPath) const override;
 
-    void setSolidRaster(bool isCull = false)
+    void setSolidRaster(bool isCull = false) override
     {
         if (!isCull)
         {
@@ -111,7 +55,7 @@ public:
         }
     }
 
-    void setWireframeRaster(bool isCull = false)
+    void setWireframeRaster(bool isCull = false) override
     {
         if (!isCull)
         {
@@ -123,94 +67,64 @@ public:
         }
     }
 
-    const Shaders& getShaders() const
-    {
-        return mShaders;
-    }
-
-    ID3D11Device* getDevice() const
+    ID3D11Device* getDevice() const override
     {
         return mpDevice.Get();
     }
 
-    ID3D11DeviceContext* getContext() const
+    ID3D11DeviceContext* getContext() const override
     {
         return mpContext.Get();
     }
 
-    ID3D11RenderTargetView* getRenderTargetView() const
+    ID3D11RenderTargetView* getRenderTargetView() const override
     {
         return mpRenderTargetView.Get();
     }
 
-    ID3D11RenderTargetView* const* getAddressOfRenderTargetView() const
+    ID3D11RenderTargetView* const* getAddressOfRenderTargetView() const override
     {
         return mpRenderTargetView.GetAddressOf();
     }
 
-    IDXGISwapChain* getSwapchain() const
+    IDXGISwapChain* getSwapchain() const override
     {
         return mpSwapChain.Get();
     }
 
-    ID3D11DepthStencilView* getDepthStencilView() const
+    ID3D11DepthStencilView* getDepthStencilView() const override
     {
         return mpDepthStencilView.Get();
     }
 
-    ID3D11InputLayout* getDefaultInputLayout() const
+    ID3D11InputLayout* getDefaultInputLayout() const override
     {
         return mpDefaultInputLayout.Get();
     }
 
-    ID3D11InputLayout* getBezierCurveInputLayout() const
+    ID3D11InputLayout* getBezierCurveInputLayout() const override
     {
         return mpBezierCurveInputLayout.Get();
     }
 
-    ID3D11InputLayout* getBezierPatchInputLayout() const
+    ID3D11InputLayout* getBezierPatchInputLayout() const override
     {
         return mpBezierPatchInputLayout.Get();
     }
 
-    const D3D11_VIEWPORT* getAddressOfScreenViewport() const
+    const D3D11_VIEWPORT* getAddressOfScreenViewport() const override
     {
         return &mScreenViewport;
     }
 
-    template <typename Buffer>
-    void createCB(Buffer& cb)
+    ID3D11Buffer* const* getVertexBufferAddress(size_t index) const override
     {
-        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "CB must inherit from ICB");
-
-        const size_t cbSize = sizeof(Buffer);
-        const size_t iSize = sizeof(CB<ID3D11Buffer>);
-        const size_t byteWidth = cbSize - iSize;
-
-        const D3D11_BUFFER_DESC desc{
-            .ByteWidth = byteWidth,
-            .Usage = D3D11_USAGE_DYNAMIC,
-            .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
-            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        };
-
-        const D3D11_SUBRESOURCE_DATA initData{
-            .pSysMem = reinterpret_cast<void*>(reinterpret_cast<char*>(&cb) + iSize),
-        };
-
-        HR(mpDevice->CreateBuffer(&desc, &initData, cb.buffer.GetAddressOf()));
+        return mVertexBuffers.at(index).GetAddressOf();
     }
 
-    template <typename Buffer>
-    void updateCB(const Buffer& cb)
+    ID3D11Buffer* getIndexBuffer(size_t index) const override
     {
-        static_assert(std::is_base_of<CB<ID3D11Buffer>, Buffer>::value, "Buffer must be DX11");
-
-        D3D11_MAPPED_SUBRESOURCE cbData;
-        mpContext->Map(cb.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &cbData);
-        const char* baseAddress = reinterpret_cast<const char*>(&cb);
-        memcpy(cbData.pData, baseAddress + sizeof(CB<ID3D11Buffer>), sizeof(Buffer) - sizeof(CB<ID3D11Buffer>));
-        mpContext->Unmap(cb.buffer.Get(), 0);
+        return mIndexBuffers.at(index).Get();
     }
 
     void addRenderable(std::unique_ptr<IRenderable>&& renderable) override;
@@ -227,17 +141,14 @@ public:
     }
     IRenderable* getRenderable(Id id) const override;
 
-    void createShaders();
+    void createShaders() override;
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
-
 private:
     void initCore(unsigned short gpuIndex);
     void buildVertexLayout();
     void createRasterizers();
-
-    Shaders mShaders;
 
     ComPtr<ID3D11Device> mpDevice;
     ComPtr<IDXGISwapChain> mpSwapChain;

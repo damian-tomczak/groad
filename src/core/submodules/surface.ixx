@@ -3,7 +3,7 @@ module;
 #include "utils.h"
 
 export module surface;
-import dx11renderer;
+import dxrenderer;
 import std;
 
 export class ISurface
@@ -119,7 +119,8 @@ WaterSurface::WaterSurface(IRenderer* pRenderer, float planeSize, unsigned textu
 
 void WaterSurface::init()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    ASSERT(pDXRenderer != nullptr);
 
     const D3D11_RASTERIZER_DESC restarizerDesc{
         .FillMode = D3D11_FILL_SOLID,
@@ -134,9 +135,9 @@ void WaterSurface::init()
         .AntialiasedLineEnable = false,
     };
 
-    HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
 
-    mpEnvTexture = pDX11Renderer->createShaderResourceView("assets/textures/cubemap.dds");
+    mpEnvTexture = pDXRenderer->createShaderResourceView("assets/textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,
@@ -153,13 +154,14 @@ void WaterSurface::init()
         .MaxLOD = D3D11_FLOAT32_MAX,
     };
 
-    HR(pDX11Renderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
 }
 
 
 void WaterSurface::update(float dt)
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    ASSERT(pDXRenderer != nullptr);
 
     updateHeightMap();
     updateWaveTextureMap();
@@ -168,25 +170,26 @@ void WaterSurface::update(float dt)
 
 void WaterSurface::draw()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+    ASSERT(pDXRenderer != nullptr);
 
-    pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
+    pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
-    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);
-    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().waterSurfacePS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().waterSurfacePS.first.Get(), nullptr, 0);
 
-    pDX11Renderer->mGlobalCB.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
-    pDX11Renderer->mGlobalCB.texMtx = mTexMtx;
-    pDX11Renderer->updateCB(pDX11Renderer->mGlobalCB);
+    pDXRenderer->mGlobalCB.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
+    pDXRenderer->mGlobalCB.texMtx = mTexMtx;
+    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
 
-    pDX11Renderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
-    pDX11Renderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
+    pDXRenderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
+    pDXRenderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
 
-    pDX11Renderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
+    pDXRenderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
 
-    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDX11Renderer->getContext()->Draw(6, 0);
+    pDXRenderer->getContext()->Draw(6, 0);
 }
 
 void WaterSurface::updateHeightMap()
@@ -297,7 +300,8 @@ WaterSurface::AbsorptionTexture::AbsorptionTexture(unsigned textureSize_) : text
 
 WaterSurface::WaveTexture::WaveTexture(IRenderer* pRenderer, unsigned textureSize_) : mpRenderer(pRenderer)
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
     unsigned texture_bpp = 4u;
     unsigned texture_width = 256u;
@@ -325,8 +329,8 @@ WaterSurface::WaveTexture::WaveTexture(IRenderer* pRenderer, unsigned textureSiz
     desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
     desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
-    pDX11Renderer->getDevice()->CreateTexture2D(&desc, 0, texture.GetAddressOf());
-    pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, texture_resource_view.GetAddressOf());
+    pDXRenderer->getDevice()->CreateTexture2D(&desc, 0, texture.GetAddressOf());
+    pDXRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, texture_resource_view.GetAddressOf());
 
     BYTE* value_pointer = texture_data.data();
 }
@@ -345,18 +349,20 @@ void WaterSurface::WaveTexture::SetValue(int x, int y, XMFLOAT3 value)
 
 void WaterSurface::WaveTexture::Update()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
-    pDX11Renderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
+    pDXRenderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
                                           txture_size);
 }
 
 ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
     ID3D11ShaderResourceView* pTexture;
-    HR(pDX11Renderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
+    HR(pDXRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
 
     return pTexture;
 }

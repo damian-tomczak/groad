@@ -5,7 +5,7 @@ module;
 
 export module gable_demo;
 export import core.demo;
-import dx11renderer;
+import dxrenderer;
 
 export class GableDemo : public IDemo
 {
@@ -45,7 +45,8 @@ void GableDemo::init()
 {
     IDemo::init();
 
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
 	float gap = 1.f;
     float x = -1.5f * gap;
@@ -97,11 +98,11 @@ void GableDemo::init()
         .pSysMem = mVertices1.data(),
     };
 
-    HR(pDX11Renderer->getDevice()->CreateBuffer(&vbd, &initData, mpVertexBuffer1.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &initData, mpVertexBuffer1.GetAddressOf()));
     mpCurrentVertexBuffer = mpVertexBuffer1.Get();
     initData.pSysMem = mVertices2.data();
 
-    HR(pDX11Renderer->getDevice()->CreateBuffer(&vbd, &initData, mpVertexBuffer2.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &initData, mpVertexBuffer2.GetAddressOf()));
 
     D3D11_BUFFER_DESC ibd1{
         .ByteWidth = static_cast<UINT>(sizeof(unsigned) * indices.size()),
@@ -114,7 +115,7 @@ void GableDemo::init()
 
     initData.pSysMem = indices.data();
 
-    HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd1, &initData, mpIndexBuffer1.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateBuffer(&ibd1, &initData, mpIndexBuffer1.GetAddressOf()));
 
     std::vector<short> indices2
     {
@@ -135,27 +136,28 @@ void GableDemo::init()
 
     initData.pSysMem = indices2.data();
 
-    HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd2, &initData, mpIndexBuffer2.GetAddressOf()));
+    HR(pDXRenderer->getDevice()->CreateBuffer(&ibd2, &initData, mpIndexBuffer2.GetAddressOf()));
 
-    pDX11Renderer->createCB(mTesselationFactors);
+    pDXRenderer->createCB(mTesselationFactors);
 }
 
 void GableDemo::draw()
 {
     IDemo::draw();
 
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
     // Border
-    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gableBorderVS.first.Get(), nullptr, 0);
-    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().gableBorderPS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().gableBorderVS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().gableBorderPS.first.Get(), nullptr, 0);
 
     unsigned int vertexStride = sizeof(XMFLOAT3), offset = 0;
-    pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, &mpCurrentVertexBuffer, &vertexStride, &offset);
-    pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer1.Get(), DXGI_FORMAT_R16_UINT, 0);
-    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+    pDXRenderer->getContext()->IASetVertexBuffers(0, 1, &mpCurrentVertexBuffer, &vertexStride, &offset);
+    pDXRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer1.Get(), DXGI_FORMAT_R16_UINT, 0);
+    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
 
-    pDX11Renderer->getContext()->DrawIndexed(48, 0, 0);
+    pDXRenderer->getContext()->DrawIndexed(48, 0, 0);
 
     const D3D11_RASTERIZER_DESC rasterDesc{
         .FillMode = mTesselationFactors.isWireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID,
@@ -170,23 +172,23 @@ void GableDemo::draw()
         .AntialiasedLineEnable = false,
     };
 
-    HR(pDX11Renderer->getDevice()->CreateRasterizerState(&rasterDesc, &mpRasterizerState));
+    HR(pDXRenderer->getDevice()->CreateRasterizerState(&rasterDesc, &mpRasterizerState));
 
-    pDX11Renderer->getContext()->RSSetState(mpRasterizerState.Get());
+    pDXRenderer->getContext()->RSSetState(mpRasterizerState.Get());
 
     //
-    pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gableVS.first.Get(), nullptr, 0);
-    pDX11Renderer->getContext()->HSSetShader(pDX11Renderer->getShaders().gableHS.first.Get(), nullptr, 0);
-    pDX11Renderer->getContext()->DSSetShader(pDX11Renderer->getShaders().gableDS.first.Get(), nullptr, 0);
-    pDX11Renderer->getContext()->PSSetShader(pDX11Renderer->getShaders().gablePS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().gableVS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->HSSetShader(pDXRenderer->getShaders().gableHS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->DSSetShader(pDXRenderer->getShaders().gableDS.first.Get(), nullptr, 0);
+    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().gablePS.first.Get(), nullptr, 0);
 
-    pDX11Renderer->getContext()->HSSetConstantBuffers(2, 1, mTesselationFactors.buffer.GetAddressOf());
-    pDX11Renderer->getContext()->PSSetConstantBuffers(2, 1, mTesselationFactors.buffer.GetAddressOf());
+    pDXRenderer->getContext()->HSSetConstantBuffers(2, 1, mTesselationFactors.buffer.GetAddressOf());
+    pDXRenderer->getContext()->PSSetConstantBuffers(2, 1, mTesselationFactors.buffer.GetAddressOf());
 
 
-    pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer2.Get(), DXGI_FORMAT_R16_UINT, 0);
-    pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST);
-    pDX11Renderer->getContext()->DrawIndexed(16, 0, 0);
+    pDXRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer2.Get(), DXGI_FORMAT_R16_UINT, 0);
+    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_16_CONTROL_POINT_PATCHLIST);
+    pDXRenderer->getContext()->DrawIndexed(16, 0, 0);
 }
 
 void GableDemo::processInput(IWindow::Message msg, float dt)
@@ -200,7 +202,8 @@ void GableDemo::processInput(IWindow::Message msg, float dt)
 
 void GableDemo::renderUi()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer);
+    ASSERT(pDXRenderer != nullptr);
 
     ImGui::Begin("Control Panel");
 
@@ -210,7 +213,7 @@ void GableDemo::renderUi()
 
     ImGui::Checkbox("Show Wireframe", &mTesselationFactors.isWireframe);
 
-    pDX11Renderer->updateCB(mTesselationFactors);
+    pDXRenderer->updateCB(mTesselationFactors);
 
     ImGui::End();
 }
