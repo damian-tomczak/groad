@@ -7,7 +7,7 @@ module;
 #include <filesystem> // WO: std.core appears to be importing the filesystem incorrectly.
 
 export module core.model_loader;
-import dx11renderer;
+import dxrenderer;
 import std;
 
 export
@@ -89,7 +89,8 @@ export
 
         void init()
         {
-            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+            ASSERT(pDXRenderer != nullptr);
 
             const D3D11_BUFFER_DESC vbd{
                 .ByteWidth = static_cast<unsigned>(sizeof(Layout) * mVertices.size()),
@@ -102,7 +103,7 @@ export
             const D3D11_SUBRESOURCE_DATA vinitData{
                 .pSysMem = mVertices.data(),
             };
-            HR(pDX11Renderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
+            HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
 
             const D3D11_BUFFER_DESC ibd{
                 .ByteWidth = static_cast<unsigned>(sizeof(short) * mIndices.size()),
@@ -115,7 +116,7 @@ export
             const D3D11_SUBRESOURCE_DATA initData{
                 .pSysMem = mIndices.data(),
             };
-            HR(pDX11Renderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
+            HR(pDXRenderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
 
             const D3D11_RASTERIZER_DESC restarizerDesc{
                 .FillMode = D3D11_FILL_SOLID,
@@ -130,23 +131,24 @@ export
                 .AntialiasedLineEnable = false,
             };
 
-            HR(pDX11Renderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+            HR(pDXRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
         }
 
         void draw()
         {
-            auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer); // TODO: fix it
+            auto* pDXRenderer = dynamic_cast<DXRenderer*>(mpRenderer); // TODO: fix it
+            ASSERT(pDXRenderer != nullptr);
 
-            pDX11Renderer->getContext()->RSSetState(mpRasterizer.Get());
+            pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
-            pDX11Renderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(),
+            pDXRenderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(),
                                                             &Layout::stride, &Layout::offset);
 
-            pDX11Renderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+            pDXRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
-            pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            pDX11Renderer->getContext()->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
+            pDXRenderer->getContext()->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
         }
 
     private:

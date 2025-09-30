@@ -35,6 +35,94 @@ public:
     void init(unsigned short gpuIndex) override;
     void onResize() override;
 
+    void buildGeometryBuffers() override
+    {
+        ASSERT(false);
+    }
+
+    ComPtr<ID3D11ShaderResourceView> createShaderResourceView(const fs::path& /*texPath*/) const override
+    {
+        ASSERT(false);
+        return {};
+    }
+
+    void createShaders() override
+    {
+        ASSERT(false);
+    }
+
+    void setSolidRaster(bool /*isCull*/ = false) override
+    {
+        ASSERT(false);
+    }
+
+    void setWireframeRaster(bool /*isCull*/ = false) override
+    {
+        ASSERT(false);
+    }
+
+    ID3D11Device* getDevice() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11DeviceContext* getContext() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11RenderTargetView* getRenderTargetView() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11RenderTargetView* const* getAddressOfRenderTargetView() const override
+    {
+        return nullptr;
+    }
+
+    IDXGISwapChain* getSwapchain() const override
+    {
+        return mpSwapChain.Get();
+    }
+
+    ID3D11DepthStencilView* getDepthStencilView() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11InputLayout* getDefaultInputLayout() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11InputLayout* getBezierCurveInputLayout() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11InputLayout* getBezierPatchInputLayout() const override
+    {
+        return nullptr;
+    }
+
+    const D3D11_VIEWPORT* getAddressOfScreenViewport() const override
+    {
+        return nullptr;
+    }
+
+    ID3D11Buffer* const* getVertexBufferAddress(size_t /*index*/) const override
+    {
+        ASSERT(false);
+        return nullptr;
+    }
+
+    ID3D11Buffer* getIndexBuffer(size_t /*index*/) const override
+    {
+        ASSERT(false);
+        return nullptr;
+    }
+
     void addRenderable(std::unique_ptr<IRenderable>&& renderable) override;
     void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) override
     {
@@ -50,7 +138,6 @@ public:
     }
 
     IRenderable* getRenderable(Id id) const override;
-
 private:
     void initCore(unsigned short gpuIndex);
     void createSwapChain();

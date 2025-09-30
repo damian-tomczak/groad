@@ -17,7 +17,7 @@ module;
 
 export module core.context;
 import std;
-import dx11renderer;
+import dxrenderer;
 import window;
 
 export
@@ -39,12 +39,13 @@ struct RenderableSelection
     template <typename RenderableType>
     std::vector<RenderableType*> getRenderables(IRenderer* pRenderer)
     {
-        auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
+        auto* pDXRenderer = dynamic_cast<DXRenderer*>(pRenderer);
+        ASSERT(pDXRenderer != nullptr);
 
         std::vector<RenderableType*> result;
         for (const auto renderableId : renderableIds)
         {
-            auto pRenderable = pDX11Renderer->getRenderable(renderableId);
+            auto pRenderable = pDXRenderer->getRenderable(renderableId);
             if (auto pRenderableCasted = dynamic_cast<RenderableType*>(pRenderable))
             {
                 result.push_back(pRenderableCasted);

@@ -5,7 +5,7 @@ module;
 
 export module sso_demo;
 export import core.demo;
-import dx11renderer;
+import dxrenderer;
 
 export class SSODemo : public IDemo
 {
@@ -32,14 +32,14 @@ void SSODemo::init()
 {
     IDemo::init();
 
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
 }
 
 void SSODemo::draw()
 {
     IDemo::draw();
 
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
 }
 
 void SSODemo::processInput(IWindow::Message msg, float dt)
@@ -48,7 +48,7 @@ void SSODemo::processInput(IWindow::Message msg, float dt)
 
 void SSODemo::renderUi()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    ASSERT(dynamic_cast<DXRenderer*>(mpRenderer) != nullptr);
 }
 
 void SSODemo::update(float dt)
