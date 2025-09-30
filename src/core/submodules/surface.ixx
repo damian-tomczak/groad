@@ -119,8 +119,7 @@ WaterSurface::WaterSurface(DXRenderer* pRenderer, float planeSize, unsigned text
 
 void WaterSurface::init()
 {
-    auto* pDXRenderer = mpRenderer; // TODO: fix it
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     const D3D11_RASTERIZER_DESC restarizerDesc{
         .FillMode = D3D11_FILL_SOLID,
@@ -135,9 +134,9 @@ void WaterSurface::init()
         .AntialiasedLineEnable = false,
     };
 
-    HR(pDXRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+    HR(mpRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
 
-    mpEnvTexture = pDXRenderer->createShaderResourceView("assets/textures/cubemap.dds");
+    mpEnvTexture = mpRenderer->createShaderResourceView("assets/textures/cubemap.dds");
 
     const D3D11_SAMPLER_DESC samplerDesc{
         .Filter = D3D11_FILTER_ANISOTROPIC,
@@ -154,14 +153,13 @@ void WaterSurface::init()
         .MaxLOD = D3D11_FLOAT32_MAX,
     };
 
-    HR(pDXRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
+    HR(mpRenderer->getDevice()->CreateSamplerState(&samplerDesc, mpSampler.GetAddressOf()));
 }
 
 
 void WaterSurface::update(float dt)
 {
-    auto* pDXRenderer = mpRenderer; // TODO: fix it
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     updateHeightMap();
     updateWaveTextureMap();
@@ -170,26 +168,25 @@ void WaterSurface::update(float dt)
 
 void WaterSurface::draw()
 {
-    auto* pDXRenderer = mpRenderer; // TODO: fix it
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
-    pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
+    mpRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
-    pDXRenderer->getContext()->VSSetShader(pDXRenderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);
-    pDXRenderer->getContext()->PSSetShader(pDXRenderer->getShaders().waterSurfacePS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->VSSetShader(mpRenderer->getShaders().waterSurfaceVS.first.Get(), nullptr, 0);
+    mpRenderer->getContext()->PSSetShader(mpRenderer->getShaders().waterSurfacePS.first.Get(), nullptr, 0);
 
-    pDXRenderer->mGlobalCB.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
-    pDXRenderer->mGlobalCB.texMtx = mTexMtx;
-    pDXRenderer->updateCB(pDXRenderer->mGlobalCB);
+    mpRenderer->mGlobalCB.modelMtx = XMMatrixScaling(mPlaneSize, mPlaneSize, mPlaneSize);
+    mpRenderer->mGlobalCB.texMtx = mTexMtx;
+    mpRenderer->updateCB(mpRenderer->mGlobalCB);
 
-    pDXRenderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
-    pDXRenderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
+    mpRenderer->getContext()->PSSetShaderResources(0, 1, mpEnvTexture.GetAddressOf());
+    mpRenderer->getContext()->PSSetShaderResources(1, 1, mWaveTexture.GetTexture().GetAddressOf());
 
-    pDXRenderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
+    mpRenderer->getContext()->PSSetSamplers(0, 1, mpSampler.GetAddressOf());
 
-    pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    pDXRenderer->getContext()->Draw(6, 0);
+    mpRenderer->getContext()->Draw(6, 0);
 }
 
 void WaterSurface::updateHeightMap()
@@ -300,8 +297,7 @@ WaterSurface::AbsorptionTexture::AbsorptionTexture(unsigned textureSize_) : text
 
 WaterSurface::WaveTexture::WaveTexture(DXRenderer* pRenderer, unsigned textureSize_) : mpRenderer(pRenderer)
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     unsigned texture_bpp = 4u;
     unsigned texture_width = 256u;
@@ -329,8 +325,8 @@ WaterSurface::WaveTexture::WaveTexture(DXRenderer* pRenderer, unsigned textureSi
     desc.BindFlags |= D3D11_BIND_RENDER_TARGET;
     desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
-    pDXRenderer->getDevice()->CreateTexture2D(&desc, 0, texture.GetAddressOf());
-    pDXRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, texture_resource_view.GetAddressOf());
+    mpRenderer->getDevice()->CreateTexture2D(&desc, 0, texture.GetAddressOf());
+    mpRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, texture_resource_view.GetAddressOf());
 
     BYTE* value_pointer = texture_data.data();
 }
@@ -349,20 +345,18 @@ void WaterSurface::WaveTexture::SetValue(int x, int y, XMFLOAT3 value)
 
 void WaterSurface::WaveTexture::Update()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
-    pDXRenderer->getContext()->UpdateSubresource(texture.Get(), 0, nullptr, texture_data.data(), texture_stride,
-                                          txture_size);
+    mpRenderer->getContext()->UpdateSubresource(
+        texture.Get(), 0, nullptr, texture_data.data(), texture_stride, txture_size);
 }
 
 ComPtr<ID3D11ShaderResourceView> WaterSurface::WaveTexture::GetTexture()
 {
-    auto* pDXRenderer = mpRenderer;
-    ASSERT(pDXRenderer != nullptr);
+    ASSERT(mpRenderer != nullptr);
 
     ID3D11ShaderResourceView* pTexture;
-    HR(pDXRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
+    HR(mpRenderer->getDevice()->CreateShaderResourceView(texture.Get(), nullptr, &pTexture));
 
     return pTexture;
 }

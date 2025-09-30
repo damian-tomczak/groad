@@ -89,8 +89,7 @@ export
 
         void init()
         {
-            auto* pDXRenderer = mpRenderer; // TODO: fix it
-            ASSERT(pDXRenderer != nullptr);
+            ASSERT(mpRenderer != nullptr);
 
             const D3D11_BUFFER_DESC vbd{
                 .ByteWidth = static_cast<unsigned>(sizeof(Layout) * mVertices.size()),
@@ -103,7 +102,7 @@ export
             const D3D11_SUBRESOURCE_DATA vinitData{
                 .pSysMem = mVertices.data(),
             };
-            HR(pDXRenderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
+            HR(mpRenderer->getDevice()->CreateBuffer(&vbd, &vinitData, &mpVertexBuffer));
 
             const D3D11_BUFFER_DESC ibd{
                 .ByteWidth = static_cast<unsigned>(sizeof(short) * mIndices.size()),
@@ -116,7 +115,7 @@ export
             const D3D11_SUBRESOURCE_DATA initData{
                 .pSysMem = mIndices.data(),
             };
-            HR(pDXRenderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
+            HR(mpRenderer->getDevice()->CreateBuffer(&ibd, &initData, &mpIndexBuffer));
 
             const D3D11_RASTERIZER_DESC restarizerDesc{
                 .FillMode = D3D11_FILL_SOLID,
@@ -131,24 +130,23 @@ export
                 .AntialiasedLineEnable = false,
             };
 
-            HR(pDXRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
+            HR(mpRenderer->getDevice()->CreateRasterizerState(&restarizerDesc, mpRasterizer.GetAddressOf()));
         }
 
         void draw()
         {
-            auto* pDXRenderer = mpRenderer; // TODO: fix it
-            ASSERT(pDXRenderer != nullptr);
+            ASSERT(mpRenderer != nullptr);
 
-            pDXRenderer->getContext()->RSSetState(mpRasterizer.Get());
+            mpRenderer->getContext()->RSSetState(mpRasterizer.Get());
 
-            pDXRenderer->getContext()->IASetVertexBuffers(0, 1, mpVertexBuffer.GetAddressOf(),
-                                                            &Layout::stride, &Layout::offset);
+            mpRenderer->getContext()->IASetVertexBuffers(
+                0, 1, mpVertexBuffer.GetAddressOf(), &Layout::stride, &Layout::offset);
 
-            pDXRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
+            mpRenderer->getContext()->IASetIndexBuffer(mpIndexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
 
-            pDXRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            mpRenderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-            pDXRenderer->getContext()->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
+            mpRenderer->getContext()->DrawIndexed(static_cast<unsigned>(mIndices.size()), 0, 0);
         }
 
     private:
