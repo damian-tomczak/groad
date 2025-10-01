@@ -319,22 +319,13 @@ void App::processInput(const IWindow::Message msg, float dt)
     }
         break;
     case IWindow::Message::KEY_F1:
-        if (!isDx12Renderer)
-        {
-            loadDemo(Demo::CAD);
-        }
+        loadDemo(Demo::CAD);
         break;
     case IWindow::Message::KEY_F2:
-        if (!isDx12Renderer)
-        {
-            loadDemo(Demo::DUCK);
-        }
+        loadDemo(Demo::DUCK);
         break;
     case IWindow::Message::KEY_F3:
-        if (!isDx12Renderer)
-        {
-            loadDemo(Demo::GABLE);
-        }
+        loadDemo(Demo::GABLE);
         break;
     case IWindow::Message::KEY_F4:
         if (isDx12Renderer)
@@ -466,17 +457,9 @@ void App::loadDemo(App::Demo mode)
 {
     const bool isDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr;
 
-    if (mode == Demo::DX12_TEST)
+    if ((mode == Demo::DX12_TEST) && !isDx12Renderer)
     {
-        if (!isDx12Renderer)
-        {
-            WARN("DX12 Test demo is only available when the DirectX 12 renderer is active.");
-            return;
-        }
-    }
-    else if (isDx12Renderer)
-    {
-        WARN("The selected demo is currently unavailable for the DirectX 12 renderer.");
+        WARN("DX12 Test demo is only available when the DirectX 12 renderer is active.");
         return;
     }
 
@@ -571,31 +554,27 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
 
         if (ImGui::BeginMenu("Demo"))
         {
-            if (!isDx12Renderer)
+            if (ImGui::MenuItem("CADDemo", "F1"))
             {
-                if (ImGui::MenuItem("CADDemo", "F1"))
-                {
-                    result = App::Demo::CAD;
-                }
-                else if (ImGui::MenuItem("DuckDemo", "F2"))
-                {
-                    result = App::Demo::DUCK;
-                }
-                else if (ImGui::MenuItem("GableDemo", "F3"))
-                {
-                    result = App::Demo::GABLE;
-                }
-                else if (ImGui::MenuItem("SSODemo", ""))
-                {
-                    result = App::Demo::SSO;
-                }
+                result = App::Demo::CAD;
             }
-            else
+            if (ImGui::MenuItem("DuckDemo", "F2"))
             {
-                if (ImGui::MenuItem("DX12 Test", "F4"))
-                {
-                    result = App::Demo::DX12_TEST;
-                }
+                result = App::Demo::DUCK;
+            }
+            if (ImGui::MenuItem("GableDemo", "F3"))
+            {
+                result = App::Demo::GABLE;
+            }
+            if (ImGui::MenuItem("SSODemo", ""))
+            {
+                result = App::Demo::SSO;
+            }
+
+            const bool enableDx12Test = isDx12Renderer;
+            if (ImGui::MenuItem("DX12 Test", "F4", false, enableDx12Test))
+            {
+                result = App::Demo::DX12_TEST;
             }
 
             ImGui::EndMenu();
