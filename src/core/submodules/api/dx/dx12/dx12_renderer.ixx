@@ -98,6 +98,11 @@ public:
         return mpCommandList.Get();
     }
 
+    ID3D12Device* getD3DDevice() const
+    {
+        return mpDevice.Get();
+    }
+
     ID3D12DescriptorHeap* getImguiSrvHeap() const
     {
         return mpImguiSrvHeap.Get();

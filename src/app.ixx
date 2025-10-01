@@ -32,6 +32,7 @@ import duck_demo;
 import cad_demo;
 import gable_demo;
 import sso_demo;
+import dx12_test_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -56,6 +57,7 @@ public:
         DUCK,
         GABLE,
         SSO,
+        DX12_TEST,
     };
 
     struct Settings
@@ -142,8 +144,14 @@ void App::init()
     mpRenderer = DXRenderer::createRenderer(mOptions.api, mpWindow);
     mpRenderer->init(mOptions.gpuIndex);
 
-    mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
-    mpDemo->init();
+    if (dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr)
+    {
+        loadDemo(Demo::DX12_TEST);
+    }
+    else
+    {
+        loadDemo(Demo::CAD);
+    }
 
     //mpRenderer->createCB(mLights);
 }
@@ -283,11 +291,18 @@ void App::drawDX11(DX11Renderer& renderer)
 
 void App::drawDX12(DX12Renderer& /*renderer*/)
 {
+    if (mpDemo != nullptr)
+    {
+        mpDemo->draw();
+    }
+
     renderUi();
 }
 
 void App::processInput(const IWindow::Message msg, float dt)
 {
+    const bool isDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr;
+
     switch (msg)
     {
     case IWindow::Message::QUIT:
@@ -304,13 +319,28 @@ void App::processInput(const IWindow::Message msg, float dt)
     }
         break;
     case IWindow::Message::KEY_F1:
-        loadDemo(Demo::CAD);
+        if (!isDx12Renderer)
+        {
+            loadDemo(Demo::CAD);
+        }
         break;
     case IWindow::Message::KEY_F2:
-        loadDemo(Demo::DUCK);
+        if (!isDx12Renderer)
+        {
+            loadDemo(Demo::DUCK);
+        }
         break;
     case IWindow::Message::KEY_F3:
-        loadDemo(Demo::GABLE);
+        if (!isDx12Renderer)
+        {
+            loadDemo(Demo::GABLE);
+        }
+        break;
+    case IWindow::Message::KEY_F4:
+        if (isDx12Renderer)
+        {
+            loadDemo(Demo::DX12_TEST);
+        }
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
@@ -434,6 +464,27 @@ void App::processInput(const IWindow::Message msg, float dt)
 
 void App::loadDemo(App::Demo mode)
 {
+    const bool isDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr;
+
+    if (mode == Demo::DX12_TEST)
+    {
+        if (!isDx12Renderer)
+        {
+            WARN("DX12 Test demo is only available when the DirectX 12 renderer is active.");
+            return;
+        }
+    }
+    else if (isDx12Renderer)
+    {
+        WARN("The selected demo is currently unavailable for the DirectX 12 renderer.");
+        return;
+    }
+
+    if ((mpDemo != nullptr) && (mode == mMode))
+    {
+        return;
+    }
+
     mMode = mode;
 
     mpRenderer->clearRenderables();
@@ -452,11 +503,17 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
+    case App::Demo::DX12_TEST:
+        mpDemo = std::make_unique<DX12TestDemo>(mCtx, mpRenderer, mpWindow);
+        break;
     default:
         break;
     }
 
-    mpDemo->init();
+    if (mpDemo != nullptr)
+    {
+        mpDemo->init();
+    }
 }
 
 #ifdef DEBUG
@@ -503,7 +560,8 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
     pContext->Draw(6, 0);
 }
 
-std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
+std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName,
+                                  float& menuBarHeight, bool isDx12Renderer)
 {
     std::optional<App::Demo> result{};
 
@@ -513,21 +571,31 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
 
         if (ImGui::BeginMenu("Demo"))
         {
-            if (ImGui::MenuItem("CADDemo", "F1"))
+            if (!isDx12Renderer)
             {
-                result = App::Demo::CAD;
+                if (ImGui::MenuItem("CADDemo", "F1"))
+                {
+                    result = App::Demo::CAD;
+                }
+                else if (ImGui::MenuItem("DuckDemo", "F2"))
+                {
+                    result = App::Demo::DUCK;
+                }
+                else if (ImGui::MenuItem("GableDemo", "F3"))
+                {
+                    result = App::Demo::GABLE;
+                }
+                else if (ImGui::MenuItem("SSODemo", ""))
+                {
+                    result = App::Demo::SSO;
+                }
             }
-            else if (ImGui::MenuItem("DuckDemo", "F2"))
+            else
             {
-                result = App::Demo::DUCK;
-            }
-            else if (ImGui::MenuItem("GableDemo", "F3"))
-            {
-                result = App::Demo::GABLE;
-            }
-            else if (ImGui::MenuItem("SSODemo", ""))
-            {
-                result = App::Demo::SSO;
+                if (ImGui::MenuItem("DX12 Test", "F4"))
+                {
+                    result = App::Demo::DX12_TEST;
+                }
             }
 
             ImGui::EndMenu();
@@ -558,6 +626,11 @@ void App::renderUi()
     auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(mpRenderer);
     auto* const pDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer);
 
+    if (mpDemo == nullptr)
+    {
+        return;
+    }
+
     if (pDx12Renderer != nullptr)
     {
         ImGui_ImplDX12_NewFrame();
@@ -574,7 +647,8 @@ void App::renderUi()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
+    std::optional<App::Demo> selectedMode =
+        showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight, pDx12Renderer != nullptr);
     if (selectedMode != std::nullopt)
     {
         loadDemo(*selectedMode);
