@@ -7,7 +7,9 @@ module;
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <array>
+#include <cstring>
 #include <format>
+#include <limits>
 #include <vector>
 
 export module dx12renderer;
@@ -67,6 +69,8 @@ public:
     {
         ASSERT(false);
     }
+
+    std::unique_ptr<IRenderBackend> createRenderBackend() override;
 
     ID3D11Device* getDevice() const override
     {
@@ -207,6 +211,141 @@ using namespace std;
 
 namespace
 {
+    class DX12ImmediateRenderBackend final : public IRenderBackend
+    {
+    public:
+        explicit DX12ImmediateRenderBackend(DX12Renderer& renderer) : mRenderer{renderer} {}
+
+        void createPipeline(const GraphicsPipelineDesc& desc) override
+        {
+            ID3D12Device* const pDevice = mRenderer.getD3DDevice();
+            ASSERT(pDevice != nullptr);
+
+            mTopology = desc.topology;
+
+            ComPtr<ID3DBlob> vertexShader = compileShader(desc.vertexShader);
+            ComPtr<ID3DBlob> pixelShader = compileShader(desc.pixelShader);
+
+            D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+            rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+            ComPtr<ID3DBlob> serializedSignature;
+            ComPtr<ID3DBlob> errorBlob;
+            HR(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+                                           serializedSignature.GetAddressOf(), errorBlob.GetAddressOf()));
+
+            if (errorBlob != nullptr)
+            {
+                WARN(static_cast<const char*>(errorBlob->GetBufferPointer()));
+            }
+
+            HR(pDevice->CreateRootSignature(0u, serializedSignature->GetBufferPointer(),
+                                            serializedSignature->GetBufferSize(),
+                                            IID_PPV_ARGS(&mpRootSignature)));
+
+            std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements;
+            inputElements.reserve(desc.inputElements.size());
+            for (const auto& element : desc.inputElements)
+            {
+                D3D12_INPUT_ELEMENT_DESC input{};
+                input.SemanticName = element.semanticName.c_str();
+                input.SemanticIndex = element.semanticIndex;
+                input.Format = element.format;
+                input.InputSlot = element.inputSlot;
+                input.AlignedByteOffset = element.alignedByteOffset;
+                input.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+                input.InstanceDataStepRate = 0u;
+                inputElements.push_back(input);
+            }
+
+            D3D12_RASTERIZER_DESC rasterizerDesc{};
+            rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+            rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+            rasterizerDesc.FrontCounterClockwise = FALSE;
+            rasterizerDesc.DepthClipEnable = TRUE;
+
+            D3D12_BLEND_DESC blendDesc{};
+            blendDesc.AlphaToCoverageEnable = FALSE;
+            blendDesc.IndependentBlendEnable = FALSE;
+            blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+            D3D12_DEPTH_STENCIL_DESC depthStencilDesc{};
+            depthStencilDesc.DepthEnable = TRUE;
+            depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+            depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineDesc{};
+            pipelineDesc.InputLayout = {inputElements.data(), static_cast<UINT>(inputElements.size())};
+            pipelineDesc.pRootSignature = mpRootSignature.Get();
+            pipelineDesc.VS = {vertexShader->GetBufferPointer(), vertexShader->GetBufferSize()};
+            pipelineDesc.PS = {pixelShader->GetBufferPointer(), pixelShader->GetBufferSize()};
+            pipelineDesc.RasterizerState = rasterizerDesc;
+            pipelineDesc.BlendState = blendDesc;
+            pipelineDesc.DepthStencilState = depthStencilDesc;
+            pipelineDesc.SampleMask = std::numeric_limits<UINT>::max();
+            pipelineDesc.PrimitiveTopologyType = toD3D12TopologyType(desc.topology);
+            pipelineDesc.NumRenderTargets = 1u;
+            pipelineDesc.RTVFormats[0] = desc.renderTargetFormat;
+            pipelineDesc.SampleDesc.Count = 1u;
+            pipelineDesc.DSVFormat = desc.depthStencilFormat;
+
+            HR(pDevice->CreateGraphicsPipelineState(&pipelineDesc, IID_PPV_ARGS(&mpPipelineState)));
+        }
+
+        void createVertexBuffer(const VertexBufferDesc& desc) override
+        {
+            ID3D12Device* const pDevice = mRenderer.getD3DDevice();
+            ASSERT(pDevice != nullptr);
+
+            D3D12_HEAP_PROPERTIES heapProperties{};
+            heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+            D3D12_RESOURCE_DESC resourceDesc{};
+            resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            resourceDesc.Width = desc.data.size();
+            resourceDesc.Height = 1u;
+            resourceDesc.DepthOrArraySize = 1u;
+            resourceDesc.MipLevels = 1u;
+            resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+            resourceDesc.SampleDesc.Count = 1u;
+            resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+            HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                IID_PPV_ARGS(&mpVertexBuffer)));
+
+            UINT8* pVertexDataBegin = nullptr;
+            D3D12_RANGE readRange{0u, 0u};
+            HR(mpVertexBuffer->Map(0u, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+            std::memcpy(pVertexDataBegin, desc.data.data(), desc.data.size());
+            mpVertexBuffer->Unmap(0u, nullptr);
+
+            mVertexBufferView.BufferLocation = mpVertexBuffer->GetGPUVirtualAddress();
+            mVertexBufferView.StrideInBytes = desc.stride;
+            mVertexBufferView.SizeInBytes = static_cast<UINT>(desc.data.size());
+        }
+
+        void draw(const DrawParams& params) override
+        {
+            ID3D12GraphicsCommandList* const pCommandList = mRenderer.getCommandList();
+            ASSERT(pCommandList != nullptr);
+
+            pCommandList->SetGraphicsRootSignature(mpRootSignature.Get());
+            pCommandList->SetPipelineState(mpPipelineState.Get());
+            pCommandList->IASetPrimitiveTopology(toD3D12Topology(mTopology));
+            pCommandList->IASetVertexBuffers(0, 1, &mVertexBufferView);
+            pCommandList->DrawInstanced(params.vertexCount, params.instanceCount, params.startVertex, 0u);
+        }
+
+    private:
+        DX12Renderer& mRenderer;
+        PrimitiveTopology mTopology{PrimitiveTopology::TriangleList};
+        ComPtr<ID3D12RootSignature> mpRootSignature;
+        ComPtr<ID3D12PipelineState> mpPipelineState;
+        ComPtr<ID3D12Resource> mpVertexBuffer;
+        D3D12_VERTEX_BUFFER_VIEW mVertexBufferView{};
+    };
+
     [[nodiscard]] vector<ComPtr<IDXGIAdapter1>> enumerateAdapters(ComPtr<IDXGIFactory4> pFactory)
     {
         vector<ComPtr<IDXGIAdapter1>> adapters;
@@ -218,6 +357,11 @@ namespace
 
         return adapters;
     }
+}
+
+std::unique_ptr<IRenderBackend> DX12Renderer::createRenderBackend()
+{
+    return std::make_unique<DX12ImmediateRenderBackend>(*this);
 }
 
 void DX12Renderer::init(unsigned short gpuIndex)

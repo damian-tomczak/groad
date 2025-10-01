@@ -10,6 +10,7 @@ module;
 
 export module dxrenderer;
 export import core.renderer;
+export import dx.render_backend;
 
 import std;
 import window;
@@ -107,6 +108,8 @@ public:
 
     virtual void init(unsigned short gpuIndex) = 0;
     virtual void onResize() = 0;
+
+    virtual std::unique_ptr<IRenderBackend> createRenderBackend() = 0;
 
     virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
     virtual void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) = 0;
