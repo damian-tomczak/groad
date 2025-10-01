@@ -32,6 +32,7 @@ import duck_demo;
 import cad_demo;
 import gable_demo;
 import sso_demo;
+import triangle_test_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -56,6 +57,7 @@ public:
         DUCK,
         GABLE,
         SSO,
+        TRIANGLE_TEST,
     };
 
     struct Settings
@@ -142,8 +144,14 @@ void App::init()
     mpRenderer = DXRenderer::createRenderer(mOptions.api, mpWindow);
     mpRenderer->init(mOptions.gpuIndex);
 
-    mpDemo = std::make_unique<CADDemo>(mCtx, mpRenderer, mpWindow);
-    mpDemo->init();
+    if (dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr)
+    {
+        loadDemo(Demo::TRIANGLE_TEST);
+    }
+    else
+    {
+        loadDemo(Demo::CAD);
+    }
 
     //mpRenderer->createCB(mLights);
 }
@@ -283,6 +291,11 @@ void App::drawDX11(DX11Renderer& renderer)
 
 void App::drawDX12(DX12Renderer& /*renderer*/)
 {
+    if (mpDemo != nullptr)
+    {
+        mpDemo->draw();
+    }
+
     renderUi();
 }
 
@@ -311,6 +324,9 @@ void App::processInput(const IWindow::Message msg, float dt)
         break;
     case IWindow::Message::KEY_F3:
         loadDemo(Demo::GABLE);
+        break;
+    case IWindow::Message::KEY_F4:
+        loadDemo(Demo::TRIANGLE_TEST);
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
@@ -434,6 +450,11 @@ void App::processInput(const IWindow::Message msg, float dt)
 
 void App::loadDemo(App::Demo mode)
 {
+    if ((mpDemo != nullptr) && (mode == mMode))
+    {
+        return;
+    }
+
     mMode = mode;
 
     mpRenderer->clearRenderables();
@@ -452,11 +473,17 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
+    case App::Demo::TRIANGLE_TEST:
+        mpDemo = std::make_unique<TriangleTestDemo>(mCtx, mpRenderer, mpWindow);
+        break;
     default:
         break;
     }
 
-    mpDemo->init();
+    if (mpDemo != nullptr)
+    {
+        mpDemo->init();
+    }
 }
 
 #ifdef DEBUG
@@ -503,7 +530,8 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
     pContext->Draw(6, 0);
 }
 
-std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
+std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName,
+                                  float& menuBarHeight, bool isTriangleTestAvailable)
 {
     std::optional<App::Demo> result{};
 
@@ -517,17 +545,22 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
             {
                 result = App::Demo::CAD;
             }
-            else if (ImGui::MenuItem("DuckDemo", "F2"))
+            if (ImGui::MenuItem("DuckDemo", "F2"))
             {
                 result = App::Demo::DUCK;
             }
-            else if (ImGui::MenuItem("GableDemo", "F3"))
+            if (ImGui::MenuItem("GableDemo", "F3"))
             {
                 result = App::Demo::GABLE;
             }
-            else if (ImGui::MenuItem("SSODemo", ""))
+            if (ImGui::MenuItem("SSODemo", ""))
             {
                 result = App::Demo::SSO;
+            }
+
+            if (ImGui::MenuItem("Triangle Test", "F4", false, isTriangleTestAvailable))
+            {
+                result = App::Demo::TRIANGLE_TEST;
             }
 
             ImGui::EndMenu();
@@ -558,6 +591,11 @@ void App::renderUi()
     auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(mpRenderer);
     auto* const pDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer);
 
+    if (mpDemo == nullptr)
+    {
+        return;
+    }
+
     if (pDx12Renderer != nullptr)
     {
         ImGui_ImplDX12_NewFrame();
@@ -574,7 +612,9 @@ void App::renderUi()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
+    const bool triangleTestAvailable = (pDx11Renderer != nullptr) || (pDx12Renderer != nullptr);
+    std::optional<App::Demo> selectedMode =
+        showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight, triangleTestAvailable);
     if (selectedMode != std::nullopt)
     {
         loadDemo(*selectedMode);
