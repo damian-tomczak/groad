@@ -2,6 +2,7 @@ module;
 
 #include "utils.h"
 
+#include <d3d11.h>
 #include <d3d12.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -9,13 +10,15 @@ module;
 
 #include <array>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <string_view>
 
-export module dx12_test_demo;
+export module triangle_test_demo;
 
 export import core.demo;
 import dxrenderer;
+import dx11renderer;
 import dx12renderer;
 
 using Microsoft::WRL::ComPtr;
@@ -46,7 +49,7 @@ namespace
 
         if (FAILED(hr))
         {
-            std::string errorMessage = "Failed to compile DX12 test shader";
+            std::string errorMessage = "Failed to compile triangle test shader";
             if (errorBlob != nullptr)
             {
                 errorMessage += std::string{": "} + static_cast<const char*>(errorBlob->GetBufferPointer());
@@ -57,12 +60,61 @@ namespace
 
         return shaderBlob;
     }
+
+    class ITriangleDemoRenderer
+    {
+    public:
+        virtual ~ITriangleDemoRenderer() = default;
+
+        virtual void init() = 0;
+        virtual void draw() = 0;
+    };
+
+    class TriangleTestRendererDX11 final : public ITriangleDemoRenderer
+    {
+    public:
+        explicit TriangleTestRendererDX11(DX11Renderer& renderer) : mRenderer{renderer} {}
+
+        void init() override;
+        void draw() override;
+
+    private:
+        void createPipelineObjects();
+        void createVertexBuffer();
+
+    private:
+        DX11Renderer& mRenderer;
+        ComPtr<ID3D11VertexShader> mpVertexShader;
+        ComPtr<ID3D11PixelShader> mpPixelShader;
+        ComPtr<ID3D11InputLayout> mpInputLayout;
+        ComPtr<ID3D11Buffer> mpVertexBuffer;
+    };
+
+    class TriangleTestRendererDX12 final : public ITriangleDemoRenderer
+    {
+    public:
+        explicit TriangleTestRendererDX12(DX12Renderer& renderer) : mRenderer{renderer} {}
+
+        void init() override;
+        void draw() override;
+
+    private:
+        void createPipelineObjects();
+        void createVertexBuffer();
+
+    private:
+        DX12Renderer& mRenderer;
+        ComPtr<ID3D12RootSignature> mpRootSignature;
+        ComPtr<ID3D12PipelineState> mpPipelineState;
+        ComPtr<ID3D12Resource> mpVertexBuffer;
+        D3D12_VERTEX_BUFFER_VIEW mVertexBufferView{};
+    };
 }
 
-export class DX12TestDemo final : public IDemo
+export class TriangleTestDemo final : public IDemo
 {
 public:
-    DX12TestDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
+    TriangleTestDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow);
 
     void init() override;
     void draw() override;
@@ -70,35 +122,102 @@ public:
     void update(float dt) override { IDemo::update(dt); }
 
 private:
-    void createPipelineObjects();
-    void createVertexBuffer();
-
-private:
-    DX12Renderer* mpDx12Renderer{};
-    ComPtr<ID3D12RootSignature> mpRootSignature;
-    ComPtr<ID3D12PipelineState> mpPipelineState;
-    ComPtr<ID3D12Resource> mpVertexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW mVertexBufferView{};
+    std::unique_ptr<ITriangleDemoRenderer> mpTriangleRenderer;
 };
 
 module :private;
 
-DX12TestDemo::DX12TestDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
-    : IDemo{ctx, "DX12 Test", pRenderer, pWindow, nullptr}
-{
-    mpDx12Renderer = dynamic_cast<DX12Renderer*>(pRenderer);
-    ASSERT(mpDx12Renderer != nullptr);
-}
-
-void DX12TestDemo::init()
+void TriangleTestRendererDX11::init()
 {
     createPipelineObjects();
     createVertexBuffer();
 }
 
-void DX12TestDemo::draw()
+void TriangleTestRendererDX11::draw()
 {
-    auto* const pCommandList = mpDx12Renderer->getCommandList();
+    auto* const pContext = mRenderer.getContext();
+    ASSERT(pContext != nullptr);
+
+    UINT stride = sizeof(Vertex);
+    UINT offset = 0u;
+    ID3D11Buffer* const vertexBuffers[] = {mpVertexBuffer.Get()};
+
+    pContext->IASetInputLayout(mpInputLayout.Get());
+    pContext->IASetVertexBuffers(0u, 1u, vertexBuffers, &stride, &offset);
+    pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    pContext->VSSetShader(mpVertexShader.Get(), nullptr, 0u);
+    pContext->HSSetShader(nullptr, nullptr, 0u);
+    pContext->DSSetShader(nullptr, nullptr, 0u);
+    pContext->GSSetShader(nullptr, nullptr, 0u);
+    pContext->PSSetShader(mpPixelShader.Get(), nullptr, 0u);
+
+    pContext->Draw(static_cast<UINT>(triangleVertices.size()), 0u);
+}
+
+void TriangleTestRendererDX11::createPipelineObjects()
+{
+    ID3D11Device* const pDevice = mRenderer.getDevice();
+    ASSERT(pDevice != nullptr);
+
+    static constexpr std::string_view vertexShaderSrc =
+        "struct VSInput { float3 position : POSITION; float4 color : COLOR; };\n"
+        "struct PSInput { float4 position : SV_POSITION; float4 color : COLOR; };\n"
+        "PSInput main(VSInput input) { PSInput output;\n"
+        "    output.position = float4(input.position, 1.0f);\n"
+        "    output.color = input.color;\n"
+        "    return output;\n"
+        "}\n";
+
+    static constexpr std::string_view pixelShaderSrc =
+        "struct PSInput { float4 position : SV_POSITION; float4 color : COLOR; };\n"
+        "float4 main(PSInput input) : SV_TARGET { return input.color; }\n";
+
+    ComPtr<ID3DBlob> vertexShader = compileShader(vertexShaderSrc, "main", "vs_5_0");
+    ComPtr<ID3DBlob> pixelShader = compileShader(pixelShaderSrc, "main", "ps_5_0");
+
+    HR(pDevice->CreateVertexShader(vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(), nullptr,
+                                    mpVertexShader.GetAddressOf()));
+    HR(pDevice->CreatePixelShader(pixelShader->GetBufferPointer(), pixelShader->GetBufferSize(), nullptr,
+                                   mpPixelShader.GetAddressOf()));
+
+    const D3D11_INPUT_ELEMENT_DESC inputLayout[] = {
+        {"POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, 0u, 0u, D3D11_INPUT_PER_VERTEX_DATA, 0u},
+        {"COLOR", 0u, DXGI_FORMAT_R32G32B32A32_FLOAT, 0u, 12u, D3D11_INPUT_PER_VERTEX_DATA, 0u},
+    };
+
+    HR(pDevice->CreateInputLayout(inputLayout, static_cast<UINT>(std::size(inputLayout)),
+                                  vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(),
+                                  mpInputLayout.GetAddressOf()));
+}
+
+void TriangleTestRendererDX11::createVertexBuffer()
+{
+    ID3D11Device* const pDevice = mRenderer.getDevice();
+    ASSERT(pDevice != nullptr);
+
+    const UINT vertexBufferSize = static_cast<UINT>(triangleVertices.size() * sizeof(Vertex));
+
+    D3D11_BUFFER_DESC bufferDesc{};
+    bufferDesc.ByteWidth = vertexBufferSize;
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA initData{};
+    initData.pSysMem = triangleVertices.data();
+
+    HR(pDevice->CreateBuffer(&bufferDesc, &initData, mpVertexBuffer.GetAddressOf()));
+}
+
+void TriangleTestRendererDX12::init()
+{
+    createPipelineObjects();
+    createVertexBuffer();
+}
+
+void TriangleTestRendererDX12::draw()
+{
+    auto* const pCommandList = mRenderer.getCommandList();
     ASSERT(pCommandList != nullptr);
 
     pCommandList->SetGraphicsRootSignature(mpRootSignature.Get());
@@ -111,9 +230,9 @@ void DX12TestDemo::draw()
     pCommandList->DrawInstanced(static_cast<UINT>(triangleVertices.size()), 1u, 0u, 0u);
 }
 
-void DX12TestDemo::createPipelineObjects()
+void TriangleTestRendererDX12::createPipelineObjects()
 {
-    ID3D12Device* const pDevice = mpDx12Renderer->getD3DDevice();
+    ID3D12Device* const pDevice = mRenderer.getD3DDevice();
     ASSERT(pDevice != nullptr);
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
@@ -190,9 +309,9 @@ void DX12TestDemo::createPipelineObjects()
     HR(pDevice->CreateGraphicsPipelineState(&pipelineDesc, IID_PPV_ARGS(&mpPipelineState)));
 }
 
-void DX12TestDemo::createVertexBuffer()
+void TriangleTestRendererDX12::createVertexBuffer()
 {
-    ID3D12Device* const pDevice = mpDx12Renderer->getD3DDevice();
+    ID3D12Device* const pDevice = mRenderer.getD3DDevice();
     ASSERT(pDevice != nullptr);
 
     constexpr UINT vertexBufferSize = static_cast<UINT>(triangleVertices.size() * sizeof(Vertex));
@@ -222,7 +341,7 @@ void DX12TestDemo::createVertexBuffer()
     UINT8* pVertexDataBegin = nullptr;
     D3D12_RANGE readRange{0u, 0u};
     HR(mpVertexBuffer->Map(0u, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
-    memcpy(pVertexDataBegin, triangleVertices.data(), vertexBufferSize);
+    std::memcpy(pVertexDataBegin, triangleVertices.data(), vertexBufferSize);
     mpVertexBuffer->Unmap(0u, nullptr);
 
     mVertexBufferView.BufferLocation = mpVertexBuffer->GetGPUVirtualAddress();
@@ -230,3 +349,35 @@ void DX12TestDemo::createVertexBuffer()
     mVertexBufferView.SizeInBytes = vertexBufferSize;
 }
 
+TriangleTestDemo::TriangleTestDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
+    : IDemo{ctx, "Triangle Test", pRenderer, pWindow, nullptr}
+{
+    ASSERT(pRenderer != nullptr);
+
+    if (auto* const pDx12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        mpTriangleRenderer = std::make_unique<TriangleTestRendererDX12>(*pDx12Renderer);
+    }
+    else if (auto* const pDx11Renderer = dynamic_cast<DX11Renderer*>(pRenderer))
+    {
+        mpTriangleRenderer = std::make_unique<TriangleTestRendererDX11>(*pDx11Renderer);
+    }
+    else
+    {
+        ASSERT(false);
+    }
+
+    ASSERT(mpTriangleRenderer != nullptr);
+}
+
+void TriangleTestDemo::init()
+{
+    ASSERT(mpTriangleRenderer != nullptr);
+    mpTriangleRenderer->init();
+}
+
+void TriangleTestDemo::draw()
+{
+    ASSERT(mpTriangleRenderer != nullptr);
+    mpTriangleRenderer->draw();
+}

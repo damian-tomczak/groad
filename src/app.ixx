@@ -32,7 +32,7 @@ import duck_demo;
 import cad_demo;
 import gable_demo;
 import sso_demo;
-import dx12_test_demo;
+import triangle_test_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -57,7 +57,7 @@ public:
         DUCK,
         GABLE,
         SSO,
-        DX12_TEST,
+        TRIANGLE_TEST,
     };
 
     struct Settings
@@ -146,7 +146,7 @@ void App::init()
 
     if (dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr)
     {
-        loadDemo(Demo::DX12_TEST);
+        loadDemo(Demo::TRIANGLE_TEST);
     }
     else
     {
@@ -301,8 +301,6 @@ void App::drawDX12(DX12Renderer& /*renderer*/)
 
 void App::processInput(const IWindow::Message msg, float dt)
 {
-    const bool isDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr;
-
     switch (msg)
     {
     case IWindow::Message::QUIT:
@@ -328,10 +326,7 @@ void App::processInput(const IWindow::Message msg, float dt)
         loadDemo(Demo::GABLE);
         break;
     case IWindow::Message::KEY_F4:
-        if (isDx12Renderer)
-        {
-            loadDemo(Demo::DX12_TEST);
-        }
+        loadDemo(Demo::TRIANGLE_TEST);
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
@@ -455,14 +450,6 @@ void App::processInput(const IWindow::Message msg, float dt)
 
 void App::loadDemo(App::Demo mode)
 {
-    const bool isDx12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr;
-
-    if ((mode == Demo::DX12_TEST) && !isDx12Renderer)
-    {
-        WARN("DX12 Test demo is only available when the DirectX 12 renderer is active.");
-        return;
-    }
-
     if ((mpDemo != nullptr) && (mode == mMode))
     {
         return;
@@ -486,8 +473,8 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
-    case App::Demo::DX12_TEST:
-        mpDemo = std::make_unique<DX12TestDemo>(mCtx, mpRenderer, mpWindow);
+    case App::Demo::TRIANGLE_TEST:
+        mpDemo = std::make_unique<TriangleTestDemo>(mCtx, mpRenderer, mpWindow);
         break;
     default:
         break;
@@ -544,7 +531,7 @@ void App::drawCursor(DXRenderer::GlobalCB& globalCB)
 }
 
 std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName,
-                                  float& menuBarHeight, bool isDx12Renderer)
+                                  float& menuBarHeight, bool isTriangleTestAvailable)
 {
     std::optional<App::Demo> result{};
 
@@ -571,10 +558,9 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
                 result = App::Demo::SSO;
             }
 
-            const bool enableDx12Test = isDx12Renderer;
-            if (ImGui::MenuItem("DX12 Test", "F4", false, enableDx12Test))
+            if (ImGui::MenuItem("Triangle Test", "F4", false, isTriangleTestAvailable))
             {
-                result = App::Demo::DX12_TEST;
+                result = App::Demo::TRIANGLE_TEST;
             }
 
             ImGui::EndMenu();
@@ -626,8 +612,9 @@ void App::renderUi()
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    const bool triangleTestAvailable = (pDx11Renderer != nullptr) || (pDx12Renderer != nullptr);
     std::optional<App::Demo> selectedMode =
-        showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight, pDx12Renderer != nullptr);
+        showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight, triangleTestAvailable);
     if (selectedMode != std::nullopt)
     {
         loadDemo(*selectedMode);
