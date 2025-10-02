@@ -30,7 +30,7 @@ export enum class PrimitiveTopology
     PointList,
 };
 
-constexpr D3D_PRIMITIVE_TOPOLOGY toD3DTopology(PrimitiveTopology topology)
+export constexpr D3D_PRIMITIVE_TOPOLOGY toD3DTopology(PrimitiveTopology topology)
 {
     switch (topology)
     {
@@ -50,7 +50,7 @@ constexpr D3D_PRIMITIVE_TOPOLOGY toD3DTopology(PrimitiveTopology topology)
     }
 }
 
-constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE toD3D12TopologyType(PrimitiveTopology topology)
+export constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE toD3D12TopologyType(PrimitiveTopology topology)
 {
     switch (topology)
     {
