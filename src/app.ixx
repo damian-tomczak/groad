@@ -33,6 +33,7 @@ import cad_demo;
 import gable_demo;
 import sso_demo;
 import triangle_test_demo;
+import cube_demo;
 
 export class App final : public NonCopyableAndMoveable
 {
@@ -57,6 +58,7 @@ public:
         DUCK,
         GABLE,
         SSO,
+        CUBE,
         TRIANGLE_TEST,
     };
 
@@ -328,6 +330,9 @@ void App::processInput(const IWindow::Message msg, float dt)
     case IWindow::Message::KEY_F4:
         loadDemo(Demo::TRIANGLE_TEST);
         break;
+    case IWindow::Message::KEY_F5:
+        loadDemo(Demo::CUBE);
+        break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
         {
@@ -473,6 +478,9 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
+    case App::Demo::CUBE:
+        mpDemo = std::make_unique<CubeDemo>(mCtx, mpRenderer, mpWindow);
+        break;
     case App::Demo::TRIANGLE_TEST:
         mpDemo = std::make_unique<TriangleTestDemo>(mCtx, mpRenderer, mpWindow);
         break;
@@ -556,6 +564,11 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
             if (ImGui::MenuItem("SSODemo", ""))
             {
                 result = App::Demo::SSO;
+            }
+
+            if (ImGui::MenuItem("CubeDemo", "F5"))
+            {
+                result = App::Demo::CUBE;
             }
 
             if (ImGui::MenuItem("Triangle Test", "F4", false, isTriangleTestAvailable))
