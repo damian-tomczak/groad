@@ -67,7 +67,9 @@ public:
         }
     }
 
-    std::unique_ptr<IRenderBackend> createRenderBackend() override;
+    void createPipeline(const GraphicsPipelineDesc& desc) override;
+    void createVertexBuffer(const VertexBufferDesc& desc) override;
+    void draw(const DrawParams& params) override;
 
     ID3D11Device* getDevice() const override
     {
@@ -150,6 +152,13 @@ public:
 
     std::vector<ComPtr<ID3D11Buffer>> mVertexBuffers;
     std::vector<ComPtr<ID3D11Buffer>> mIndexBuffers;
+
+    PrimitiveTopology mImmediateTopology{PrimitiveTopology::TriangleList};
+    uint32_t mImmediateVertexStride{};
+    ComPtr<ID3D11VertexShader> mpImmediateVertexShader;
+    ComPtr<ID3D11PixelShader> mpImmediatePixelShader;
+    ComPtr<ID3D11InputLayout> mpImmediateInputLayout;
+    ComPtr<ID3D11Buffer> mpImmediateVertexBuffer;
 private:
     void initCore(unsigned short gpuIndex);
     void buildVertexLayout();
@@ -178,102 +187,79 @@ private:
 
 module :private;
 
-namespace
+void DX11Renderer::createPipeline(const GraphicsPipelineDesc& desc)
 {
-    class DX11ImmediateRenderBackend final : public IRenderBackend
+    ID3D11Device* const pDevice = getDevice();
+    ASSERT(pDevice != nullptr);
+
+    mImmediateTopology = desc.topology;
+
+    ComPtr<ID3DBlob> vertexShader = compileShader(desc.vertexShader);
+    ComPtr<ID3DBlob> pixelShader = compileShader(desc.pixelShader);
+
+    HR(pDevice->CreateVertexShader(vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(), nullptr,
+                                   mpImmediateVertexShader.GetAddressOf()));
+    HR(pDevice->CreatePixelShader(pixelShader->GetBufferPointer(), pixelShader->GetBufferSize(), nullptr,
+                                  mpImmediatePixelShader.GetAddressOf()));
+
+    std::vector<D3D11_INPUT_ELEMENT_DESC> inputElements;
+    inputElements.reserve(desc.inputElements.size());
+    for (const auto& element : desc.inputElements)
     {
-    public:
-        explicit DX11ImmediateRenderBackend(DX11Renderer& renderer) : mRenderer{renderer} {}
+        D3D11_INPUT_ELEMENT_DESC input{};
+        input.SemanticName = element.semanticName.c_str();
+        input.SemanticIndex = element.semanticIndex;
+        input.Format = element.format;
+        input.InputSlot = element.inputSlot;
+        input.AlignedByteOffset = element.alignedByteOffset;
+        input.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
+        input.InstanceDataStepRate = 0u;
+        inputElements.push_back(input);
+    }
 
-        void createPipeline(const GraphicsPipelineDesc& desc) override
-        {
-            ID3D11Device* const pDevice = mRenderer.getDevice();
-            ASSERT(pDevice != nullptr);
-
-            mTopology = desc.topology;
-
-            ComPtr<ID3DBlob> vertexShader = compileShader(desc.vertexShader);
-            ComPtr<ID3DBlob> pixelShader = compileShader(desc.pixelShader);
-
-            HR(pDevice->CreateVertexShader(vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(),
-                                            nullptr, mpVertexShader.GetAddressOf()));
-            HR(pDevice->CreatePixelShader(pixelShader->GetBufferPointer(), pixelShader->GetBufferSize(), nullptr,
-                                           mpPixelShader.GetAddressOf()));
-
-            std::vector<D3D11_INPUT_ELEMENT_DESC> inputElements;
-            inputElements.reserve(desc.inputElements.size());
-            for (const auto& element : desc.inputElements)
-            {
-                D3D11_INPUT_ELEMENT_DESC input{};
-                input.SemanticName = element.semanticName.c_str();
-                input.SemanticIndex = element.semanticIndex;
-                input.Format = element.format;
-                input.InputSlot = element.inputSlot;
-                input.AlignedByteOffset = element.alignedByteOffset;
-                input.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-                input.InstanceDataStepRate = 0u;
-                inputElements.push_back(input);
-            }
-
-            HR(pDevice->CreateInputLayout(inputElements.data(), static_cast<UINT>(inputElements.size()),
-                                          vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(),
-                                          mpInputLayout.GetAddressOf()));
-        }
-
-        void createVertexBuffer(const VertexBufferDesc& desc) override
-        {
-            ID3D11Device* const pDevice = mRenderer.getDevice();
-            ASSERT(pDevice != nullptr);
-
-            D3D11_BUFFER_DESC bufferDesc{};
-            bufferDesc.ByteWidth = static_cast<UINT>(desc.data.size());
-            bufferDesc.Usage = D3D11_USAGE_DEFAULT;
-            bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-            D3D11_SUBRESOURCE_DATA initData{};
-            initData.pSysMem = desc.data.data();
-
-            HR(pDevice->CreateBuffer(&bufferDesc, &initData, mpVertexBuffer.GetAddressOf()));
-
-            mVertexStride = desc.stride;
-        }
-
-        void draw(const DrawParams& params) override
-        {
-            ID3D11DeviceContext* const pContext = mRenderer.getContext();
-            ASSERT(pContext != nullptr);
-
-            const UINT stride = mVertexStride;
-            UINT offset = 0u;
-            ID3D11Buffer* const vertexBuffers[] = {mpVertexBuffer.Get()};
-
-            pContext->IASetInputLayout(mpInputLayout.Get());
-            pContext->IASetVertexBuffers(0u, 1u, vertexBuffers, &stride, &offset);
-            pContext->IASetPrimitiveTopology(toD3DTopology(mTopology));
-
-            pContext->VSSetShader(mpVertexShader.Get(), nullptr, 0u);
-            pContext->HSSetShader(nullptr, nullptr, 0u);
-            pContext->DSSetShader(nullptr, nullptr, 0u);
-            pContext->GSSetShader(nullptr, nullptr, 0u);
-            pContext->PSSetShader(mpPixelShader.Get(), nullptr, 0u);
-
-            pContext->Draw(params.vertexCount, params.startVertex);
-        }
-
-    private:
-        DX11Renderer& mRenderer;
-        PrimitiveTopology mTopology{PrimitiveTopology::TriangleList};
-        uint32_t mVertexStride{};
-        ComPtr<ID3D11VertexShader> mpVertexShader;
-        ComPtr<ID3D11PixelShader> mpPixelShader;
-        ComPtr<ID3D11InputLayout> mpInputLayout;
-        ComPtr<ID3D11Buffer> mpVertexBuffer;
-    };
+    HR(pDevice->CreateInputLayout(inputElements.data(), static_cast<UINT>(inputElements.size()),
+                                  vertexShader->GetBufferPointer(), vertexShader->GetBufferSize(),
+                                  mpImmediateInputLayout.GetAddressOf()));
 }
 
-std::unique_ptr<IRenderBackend> DX11Renderer::createRenderBackend()
+void DX11Renderer::createVertexBuffer(const VertexBufferDesc& desc)
 {
-    return std::make_unique<DX11ImmediateRenderBackend>(*this);
+    ID3D11Device* const pDevice = getDevice();
+    ASSERT(pDevice != nullptr);
+
+    D3D11_BUFFER_DESC bufferDesc{};
+    bufferDesc.ByteWidth = static_cast<UINT>(desc.data.size());
+    bufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA initData{};
+    initData.pSysMem = desc.data.data();
+
+    HR(pDevice->CreateBuffer(&bufferDesc, &initData, mpImmediateVertexBuffer.GetAddressOf()));
+
+    mImmediateVertexStride = desc.stride;
+}
+
+void DX11Renderer::draw(const DrawParams& params)
+{
+    ID3D11DeviceContext* const pContext = getContext();
+    ASSERT(pContext != nullptr);
+
+    const UINT stride = mImmediateVertexStride;
+    UINT offset = 0u;
+    ID3D11Buffer* const vertexBuffers[] = {mpImmediateVertexBuffer.Get()};
+
+    pContext->IASetInputLayout(mpImmediateInputLayout.Get());
+    pContext->IASetVertexBuffers(0u, 1u, vertexBuffers, &stride, &offset);
+    pContext->IASetPrimitiveTopology(toD3DTopology(mImmediateTopology));
+
+    pContext->VSSetShader(mpImmediateVertexShader.Get(), nullptr, 0u);
+    pContext->HSSetShader(nullptr, nullptr, 0u);
+    pContext->DSSetShader(nullptr, nullptr, 0u);
+    pContext->GSSetShader(nullptr, nullptr, 0u);
+    pContext->PSSetShader(mpImmediatePixelShader.Get(), nullptr, 0u);
+
+    pContext->Draw(params.vertexCount, params.startVertex);
 }
 
 void DX11Renderer::init(unsigned short gpuIndex)

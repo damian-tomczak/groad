@@ -109,13 +109,15 @@ public:
     virtual void init(unsigned short gpuIndex) = 0;
     virtual void onResize() = 0;
 
-    virtual std::unique_ptr<IRenderBackend> createRenderBackend() = 0;
-
     virtual void addRenderable(std::unique_ptr<IRenderable>&& renderable) = 0;
     virtual void addRenderable(std::vector<std::unique_ptr<IRenderable>>&& renderables) = 0;
     virtual void removeRenderable(Id id) = 0;
     virtual void removeRenderable(std::vector<Id> ids) = 0;
     virtual class IRenderable* getRenderable(Id id) const = 0;
+
+    virtual void createPipeline(const GraphicsPipelineDesc& desc) = 0;
+    virtual void createVertexBuffer(const VertexBufferDesc& desc) = 0;
+    virtual void draw(const DrawParams& params) = 0;
 
     void clearRenderables()
     {

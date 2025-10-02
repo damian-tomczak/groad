@@ -107,16 +107,6 @@ export struct DrawParams
     uint32_t instanceCount = 1u;
 };
 
-export class IRenderBackend
-{
-public:
-    virtual ~IRenderBackend() = default;
-
-    virtual void createPipeline(const GraphicsPipelineDesc& desc) = 0;
-    virtual void createVertexBuffer(const VertexBufferDesc& desc) = 0;
-    virtual void draw(const DrawParams& params) = 0;
-};
-
 export inline ComPtr<ID3DBlob> compileShader(const ShaderSource& shader)
 {
     ComPtr<ID3DBlob> shaderBlob;

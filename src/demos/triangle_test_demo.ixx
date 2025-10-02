@@ -57,7 +57,6 @@ public:
     void update(float dt) override { IDemo::update(dt); }
 
 private:
-    std::unique_ptr<IRenderBackend> mpRenderBackend;
     DrawParams mDrawParams{};
 };
 
@@ -65,9 +64,8 @@ module :private;
 
 TriangleTestDemo::TriangleTestDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "Triangle Test", pRenderer, pWindow, nullptr}
-    , mpRenderBackend{pRenderer != nullptr ? pRenderer->createRenderBackend() : nullptr}
 {
-    ASSERT(mpRenderBackend != nullptr);
+    ASSERT(mpRenderer != nullptr);
 }
 
 void TriangleTestDemo::init()
@@ -83,19 +81,19 @@ void TriangleTestDemo::init()
     };
     pipelineDesc.topology = PrimitiveTopology::TriangleList;
 
-    mpRenderBackend->createPipeline(pipelineDesc);
+    mpRenderer->createPipeline(pipelineDesc);
 
     VertexBufferDesc vertexBufferDesc{
         .data = std::as_bytes(std::span{triangleVertices}),
         .stride = sizeof(Vertex),
     };
 
-    mpRenderBackend->createVertexBuffer(vertexBufferDesc);
+    mpRenderer->createVertexBuffer(vertexBufferDesc);
 
     mDrawParams.vertexCount = static_cast<uint32_t>(triangleVertices.size());
 }
 
 void TriangleTestDemo::draw()
 {
-    mpRenderBackend->draw(mDrawParams);
+    mpRenderer->draw(mDrawParams);
 }
