@@ -125,7 +125,6 @@ private:
         DirectX::XMMATRIX proj;
     };
 
-    DX12Renderer* getDX12Renderer() const;
     void createConstantBuffer();
     void updateConstantBuffer(const DirectX::XMMATRIX& model);
 
@@ -134,12 +133,14 @@ private:
     ComPtr<ID3D12Resource> mpConstantBuffer;
     std::byte* mpMappedConstantBuffer{};
     UINT mConstantBufferSize{};
+    DX12Renderer* mpDX12Renderer{};
 };
 
 module :private;
 
 CubeDemo::CubeDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "Cube Demo", pRenderer, pWindow, nullptr}
+    , mpDX12Renderer{dynamic_cast<DX12Renderer*>(pRenderer)}
 {
     ASSERT(mpRenderer != nullptr);
 }
@@ -152,9 +153,9 @@ CubeDemo::~CubeDemo()
         mpMappedConstantBuffer = nullptr;
     }
 
-    if (auto* const pDX12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer); pDX12Renderer != nullptr)
+    if (mpDX12Renderer != nullptr)
     {
-        pDX12Renderer->setImmediateConstantBuffer(nullptr);
+        mpDX12Renderer->setImmediateConstantBuffer(nullptr);
     }
 }
 
@@ -182,6 +183,12 @@ void CubeDemo::init()
 
     mDrawParams.vertexCount = static_cast<uint32_t>(cubeVertices.size());
 
+    if (mpDX12Renderer == nullptr)
+    {
+        WARN("CubeDemo requires the DX12 renderer; constant buffer initialization skipped.");
+        return;
+    }
+
     createConstantBuffer();
 }
 
@@ -194,30 +201,24 @@ void CubeDemo::update(float dt)
 
 void CubeDemo::draw()
 {
+    if (mpDX12Renderer == nullptr || mpMappedConstantBuffer == nullptr)
+    {
+        return;
+    }
+
     const DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(mRotationAngle) *
                                        DirectX::XMMatrixRotationX(mRotationAngle * 0.5f);
     const DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 5.0f);
 
     updateConstantBuffer(translation * rotation);
 
-    auto* const pDX12Renderer = getDX12Renderer();
-    ASSERT(pDX12Renderer != nullptr);
-
-    pDX12Renderer->setImmediateConstantBuffer(mpConstantBuffer.Get());
-    pDX12Renderer->draw(mDrawParams);
-}
-
-DX12Renderer* CubeDemo::getDX12Renderer() const
-{
-    auto* const pDX12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer);
-    ASSERT(pDX12Renderer != nullptr);
-    return pDX12Renderer;
+    mpDX12Renderer->setImmediateConstantBuffer(mpConstantBuffer.Get());
+    mpDX12Renderer->draw(mDrawParams);
 }
 
 void CubeDemo::createConstantBuffer()
 {
-    auto* const pDX12Renderer = getDX12Renderer();
-    ID3D12Device* const pDevice = pDX12Renderer->getD3DDevice();
+    ID3D12Device* const pDevice = mpDX12Renderer->getD3DDevice();
     ASSERT(pDevice != nullptr);
 
     mConstantBufferSize = (sizeof(TransformCB) + 255u) & ~255u;
@@ -246,6 +247,11 @@ void CubeDemo::createConstantBuffer()
 
 void CubeDemo::updateConstantBuffer(const DirectX::XMMATRIX& model)
 {
+    if (mpMappedConstantBuffer == nullptr)
+    {
+        return;
+    }
+
     auto* const pWindow = mpWindow.get();
     ASSERT(pWindow != nullptr);
 
