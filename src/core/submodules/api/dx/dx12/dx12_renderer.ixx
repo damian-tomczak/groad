@@ -73,6 +73,7 @@ public:
     void createPipeline(const GraphicsPipelineDesc& desc) override;
     void createVertexBuffer(const VertexBufferDesc& desc) override;
     void draw(const DrawParams& params) override;
+    void setImmediateConstantBuffer(ID3D12Resource* pBuffer);
 
     ID3D11Device* getDevice() const override
     {
@@ -211,6 +212,7 @@ private:
     ComPtr<ID3D12PipelineState> mpImmediatePipelineState;
     ComPtr<ID3D12Resource> mpImmediateVertexBuffer;
     D3D12_VERTEX_BUFFER_VIEW mImmediateVertexBufferView{};
+    D3D12_GPU_VIRTUAL_ADDRESS mImmediateConstantBufferAddress{};
 };
 
 module :private;
@@ -238,11 +240,20 @@ void DX12Renderer::createPipeline(const GraphicsPipelineDesc& desc)
     ASSERT(pDevice != nullptr);
 
     mImmediateTopology = desc.topology;
+    mImmediateConstantBufferAddress = 0u;
 
     ComPtr<ID3DBlob> vertexShader = compileShader(desc.vertexShader);
     ComPtr<ID3DBlob> pixelShader = compileShader(desc.pixelShader);
 
+    D3D12_ROOT_PARAMETER rootParameter{};
+    rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParameter.Descriptor.ShaderRegister = 0u;
+    rootParameter.Descriptor.RegisterSpace = 0u;
+    rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc{};
+    rootSignatureDesc.NumParameters = 1u;
+    rootSignatureDesc.pParameters = &rootParameter;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> serializedSignature;
@@ -347,10 +358,19 @@ void DX12Renderer::draw(const DrawParams& params)
     ASSERT(pCommandList != nullptr);
 
     pCommandList->SetGraphicsRootSignature(mpImmediateRootSignature.Get());
+    if (mImmediateConstantBufferAddress != 0u)
+    {
+        pCommandList->SetGraphicsRootConstantBufferView(0u, mImmediateConstantBufferAddress);
+    }
     pCommandList->SetPipelineState(mpImmediatePipelineState.Get());
     pCommandList->IASetPrimitiveTopology(toD3D12Topology(mImmediateTopology));
     pCommandList->IASetVertexBuffers(0, 1, &mImmediateVertexBufferView);
     pCommandList->DrawInstanced(params.vertexCount, params.instanceCount, params.startVertex, 0u);
+}
+
+void DX12Renderer::setImmediateConstantBuffer(ID3D12Resource* const pBuffer)
+{
+    mImmediateConstantBufferAddress = pBuffer != nullptr ? pBuffer->GetGPUVirtualAddress() : 0u;
 }
 
 void DX12Renderer::init(unsigned short gpuIndex)
