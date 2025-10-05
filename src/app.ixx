@@ -146,14 +146,7 @@ void App::init()
     mpRenderer = DXRenderer::createRenderer(mOptions.api, mpWindow);
     mpRenderer->init(mOptions.gpuIndex);
 
-    if (dynamic_cast<DX12Renderer*>(mpRenderer) != nullptr)
-    {
-        loadDemo(Demo::TRIANGLE_TEST);
-    }
-    else
-    {
-        loadDemo(Demo::CAD);
-    }
+    loadDemo(Demo::TRIANGLE_TEST);
 
     //mpRenderer->createCB(mLights);
 }
