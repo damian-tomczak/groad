@@ -4,6 +4,7 @@ module;
 
 #include <DirectXMath.h>
 
+#include <d3d11.h>
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -16,6 +17,7 @@ module;
 export module cube_demo;
 
 export import core.demo;
+import dx11renderer;
 import dx.render_backend;
 import dxrenderer;
 import dx12renderer;
@@ -125,14 +127,18 @@ private:
         DirectX::XMMATRIX proj;
     };
 
+    static_assert(sizeof(TransformCB) % 16u == 0u, "Transform constant buffer must be 16-byte aligned.");
+
     void createConstantBuffer();
     void updateConstantBuffer(const DirectX::XMMATRIX& model);
 
     DrawParams mDrawParams{};
     float mRotationAngle{};
-    ComPtr<ID3D12Resource> mpConstantBuffer;
-    std::byte* mpMappedConstantBuffer{};
-    UINT mConstantBufferSize{};
+    ComPtr<ID3D11Buffer> mpDX11ConstantBuffer;
+    ComPtr<ID3D12Resource> mpDX12ConstantBuffer;
+    std::byte* mpDX12MappedConstantBuffer{};
+    UINT mDX12ConstantBufferSize{};
+    DX11Renderer* mpDX11Renderer{};
     DX12Renderer* mpDX12Renderer{};
 };
 
@@ -140,6 +146,7 @@ module :private;
 
 CubeDemo::CubeDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow> pWindow)
     : IDemo{ctx, "Cube Demo", pRenderer, pWindow, nullptr}
+    , mpDX11Renderer{dynamic_cast<DX11Renderer*>(pRenderer)}
     , mpDX12Renderer{dynamic_cast<DX12Renderer*>(pRenderer)}
 {
     ASSERT(mpRenderer != nullptr);
@@ -147,10 +154,10 @@ CubeDemo::CubeDemo(Context& ctx, DXRenderer* pRenderer, std::shared_ptr<IWindow>
 
 CubeDemo::~CubeDemo()
 {
-    if (mpConstantBuffer != nullptr)
+    if (mpDX12ConstantBuffer != nullptr)
     {
-        mpConstantBuffer->Unmap(0u, nullptr);
-        mpMappedConstantBuffer = nullptr;
+        mpDX12ConstantBuffer->Unmap(0u, nullptr);
+        mpDX12MappedConstantBuffer = nullptr;
     }
 
     if (mpDX12Renderer != nullptr)
@@ -183,12 +190,6 @@ void CubeDemo::init()
 
     mDrawParams.vertexCount = static_cast<uint32_t>(cubeVertices.size());
 
-    if (mpDX12Renderer == nullptr)
-    {
-        WARN("CubeDemo requires the DX12 renderer; constant buffer initialization skipped.");
-        return;
-    }
-
     createConstantBuffer();
 }
 
@@ -201,7 +202,7 @@ void CubeDemo::update(float dt)
 
 void CubeDemo::draw()
 {
-    if (mpDX12Renderer == nullptr || mpMappedConstantBuffer == nullptr)
+    if (mpRenderer == nullptr)
     {
         return;
     }
@@ -212,46 +213,80 @@ void CubeDemo::draw()
 
     updateConstantBuffer(translation * rotation);
 
-    mpDX12Renderer->setImmediateConstantBuffer(mpConstantBuffer.Get());
-    mpDX12Renderer->draw(mDrawParams);
+    if (mpDX12Renderer != nullptr)
+    {
+        mpDX12Renderer->setImmediateConstantBuffer(mpDX12ConstantBuffer.Get());
+    }
+    else if (mpDX11Renderer != nullptr)
+    {
+        ID3D11DeviceContext* const pContext = mpDX11Renderer->getContext();
+        ASSERT(pContext != nullptr);
+
+        ID3D11Buffer* const pConstantBuffer = mpDX11ConstantBuffer.Get();
+        ASSERT(pConstantBuffer != nullptr);
+
+        pContext->VSSetConstantBuffers(0u, 1u, &pConstantBuffer);
+    }
+
+    mpRenderer->draw(mDrawParams);
 }
 
 void CubeDemo::createConstantBuffer()
 {
-    ID3D12Device* const pDevice = mpDX12Renderer->getD3DDevice();
-    ASSERT(pDevice != nullptr);
+    if (mpDX12Renderer != nullptr)
+    {
+        ID3D12Device* const pDevice = mpDX12Renderer->getD3DDevice();
+        ASSERT(pDevice != nullptr);
 
-    mConstantBufferSize = (sizeof(TransformCB) + 255u) & ~255u;
+        mDX12ConstantBufferSize = (sizeof(TransformCB) + 255u) & ~255u;
 
-    D3D12_HEAP_PROPERTIES heapProperties{};
-    heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_HEAP_PROPERTIES heapProperties{};
+        heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-    D3D12_RESOURCE_DESC resourceDesc{};
-    resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resourceDesc.Width = mConstantBufferSize;
-    resourceDesc.Height = 1u;
-    resourceDesc.DepthOrArraySize = 1u;
-    resourceDesc.MipLevels = 1u;
-    resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-    resourceDesc.SampleDesc.Count = 1u;
-    resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        D3D12_RESOURCE_DESC resourceDesc{};
+        resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        resourceDesc.Width = mDX12ConstantBufferSize;
+        resourceDesc.Height = 1u;
+        resourceDesc.DepthOrArraySize = 1u;
+        resourceDesc.MipLevels = 1u;
+        resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+        resourceDesc.SampleDesc.Count = 1u;
+        resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-    HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc,
-                                        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                                        IID_PPV_ARGS(&mpConstantBuffer)));
+        HR(pDevice->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                            IID_PPV_ARGS(&mpDX12ConstantBuffer)));
 
-    D3D12_RANGE readRange{0u, 0u};
-    HR(mpConstantBuffer->Map(0u, &readRange, reinterpret_cast<void**>(&mpMappedConstantBuffer)));
-    std::memset(mpMappedConstantBuffer, 0, mConstantBufferSize);
+        D3D12_RANGE readRange{0u, 0u};
+        HR(mpDX12ConstantBuffer->Map(0u, &readRange,
+                                     reinterpret_cast<void**>(&mpDX12MappedConstantBuffer)));
+        std::memset(mpDX12MappedConstantBuffer, 0, mDX12ConstantBufferSize);
+    }
+
+    if (mpDX11Renderer != nullptr)
+    {
+        ID3D11Device* const pDevice = mpDX11Renderer->getDevice();
+        ASSERT(pDevice != nullptr);
+
+        const UINT constantBufferSize = (sizeof(TransformCB) + 15u) & ~15u;
+
+        TransformCB initialData{};
+
+        D3D11_BUFFER_DESC desc{};
+        desc.ByteWidth = constantBufferSize;
+        desc.Usage = D3D11_USAGE_DYNAMIC;
+        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        D3D11_SUBRESOURCE_DATA subresourceData{};
+        subresourceData.pSysMem = &initialData;
+
+        HR(pDevice->CreateBuffer(&desc, &subresourceData, mpDX11ConstantBuffer.GetAddressOf()));
+    }
 }
 
 void CubeDemo::updateConstantBuffer(const DirectX::XMMATRIX& model)
 {
-    if (mpMappedConstantBuffer == nullptr)
-    {
-        return;
-    }
-
     auto* const pWindow = mpWindow.get();
     ASSERT(pWindow != nullptr);
 
@@ -265,6 +300,20 @@ void CubeDemo::updateConstantBuffer(const DirectX::XMMATRIX& model)
     cb.view = view;
     cb.proj = proj;
 
-    ASSERT(sizeof(TransformCB) <= mConstantBufferSize);
-    std::memcpy(mpMappedConstantBuffer, &cb, sizeof(TransformCB));
+    if (mpDX12MappedConstantBuffer != nullptr)
+    {
+        ASSERT(sizeof(TransformCB) <= mDX12ConstantBufferSize);
+        std::memcpy(mpDX12MappedConstantBuffer, &cb, sizeof(TransformCB));
+    }
+
+    if (mpDX11ConstantBuffer != nullptr)
+    {
+        ID3D11DeviceContext* const pContext = mpDX11Renderer->getContext();
+        ASSERT(pContext != nullptr);
+
+        D3D11_MAPPED_SUBRESOURCE mappedResource{};
+        HR(pContext->Map(mpDX11ConstantBuffer.Get(), 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mappedResource));
+        std::memcpy(mappedResource.pData, &cb, sizeof(TransformCB));
+        pContext->Unmap(mpDX11ConstantBuffer.Get(), 0u);
+    }
 }
