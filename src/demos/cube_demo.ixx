@@ -292,7 +292,7 @@ void CubeDemo::updateConstantBuffer(const DirectX::XMMATRIX& model)
 
     const DirectX::XMMATRIX view = mCamera.getViewMatrix();
     const float aspectRatio = pWindow->getAspectRatio();
-    const DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(
+    const DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovRH(
         DirectX::XMConvertToRadians(mCamera.getZoom()), aspectRatio, 0.1f, 100.0f);
 
     TransformCB cb{};
