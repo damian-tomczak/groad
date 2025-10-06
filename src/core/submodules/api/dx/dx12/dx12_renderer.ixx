@@ -287,7 +287,7 @@ void DX12Renderer::createPipeline(const GraphicsPipelineDesc& desc)
 
     D3D12_RASTERIZER_DESC rasterizerDesc{};
     rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-    rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+    rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
     rasterizerDesc.FrontCounterClockwise = FALSE;
     rasterizerDesc.DepthClipEnable = TRUE;
 
