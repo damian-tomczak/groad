@@ -209,7 +209,7 @@ void CubeDemo::draw()
 
     const DirectX::XMMATRIX rotation = DirectX::XMMatrixRotationY(mRotationAngle) *
                                        DirectX::XMMatrixRotationX(mRotationAngle * 0.5f);
-    const DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 5.0f);
+    const DirectX::XMMATRIX translation = DirectX::XMMatrixTranslation(0.0f, 0.0f, 15.0f);
 
     updateConstantBuffer(translation * rotation);
 
@@ -227,6 +227,14 @@ void CubeDemo::draw()
 
         pContext->VSSetConstantBuffers(0u, 1u, &pConstantBuffer);
     }
+
+    mpRenderer->draw(mDrawParams);
+
+    const DirectX::XMMATRIX innerRotation = DirectX::XMMatrixRotationY(-mRotationAngle * 1.5f) *
+                                            DirectX::XMMatrixRotationX(-mRotationAngle * 0.75f);
+    const DirectX::XMMATRIX innerScale = DirectX::XMMatrixScaling(0.5f, 0.5f, 0.5f);
+
+    updateConstantBuffer(translation * innerRotation * innerScale);
 
     mpRenderer->draw(mDrawParams);
 }
