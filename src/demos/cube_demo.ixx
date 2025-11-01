@@ -33,48 +33,48 @@ namespace
     };
 
     constexpr std::array<Vertex, 36> cubeVertices{
-        // Front face
+        // Front face (+Z)
         Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 0.0f, 0.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 0.5f, 0.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 1.0f, 0.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 0.0f, 0.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 1.0f, 0.0f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.5f, 1.0f, 0.0f, 1.0f}},
-        // Back face
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 1.0f, 0.0f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 0.0f, 0.0f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 1.0f, 0.0f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{1.0f, 0.5f, 0.0f, 1.0f}},
+        // Back face (-Z)
         Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.0f, 1.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 1.0f, 1.0f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.5f, 0.0f, 1.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.0f, 1.0f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.5f, 1.0f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 1.0f, 1.0f, 1.0f}},
-        // Left face
+        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.0f, 1.0f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 1.0f, 1.0f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.5f, 1.0f, 1.0f}},
+        // Left face (-X)
         Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.5f, 0.5f, 0.5f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.6f, 0.6f, 0.6f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.7f, 0.7f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.5f, 0.5f, 0.5f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.7f, 0.7f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.8f, 0.8f, 0.8f, 1.0f}},
-        // Right face
+        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.7f, 0.7f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.5f, 0.5f, 0.5f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.7f, 0.7f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.6f, 0.6f, 0.6f, 1.0f}},
+        // Right face (+X)
         Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.4f, 0.2f, 0.8f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.6f, 0.3f, 0.9f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.5f, 0.3f, 0.8f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.4f, 0.2f, 0.8f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.4f, 0.9f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.6f, 0.3f, 0.9f, 1.0f}},
-        // Top face
+        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.4f, 0.2f, 0.8f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.6f, 0.3f, 0.9f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.4f, 0.9f, 1.0f}},
+        // Top face (+Y)
         Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.6f, 0.2f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.1f, 0.7f, 0.3f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.0f, 0.8f, 0.4f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.6f, 0.2f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.1f, 0.7f, 0.25f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.1f, 0.7f, 0.3f, 1.0f}},
-        // Bottom face
+        Vertex{DirectX::XMFLOAT3{-0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.0f, 0.6f, 0.2f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, 0.5f}, DirectX::XMFLOAT4{0.1f, 0.7f, 0.3f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, 0.5f, -0.5f}, DirectX::XMFLOAT4{0.1f, 0.7f, 0.25f, 1.0f}},
+        // Bottom face (-Y)
         Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.6f, 0.1f, 0.1f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.15f, 0.15f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.8f, 0.2f, 0.2f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.6f, 0.1f, 0.1f, 1.0f}},
-        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.8f, 0.2f, 0.2f, 1.0f}},
         Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.7f, 0.15f, 0.15f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.8f, 0.2f, 0.2f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, -0.5f}, DirectX::XMFLOAT4{0.6f, 0.1f, 0.1f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.8f, 0.2f, 0.2f, 1.0f}},
+        Vertex{DirectX::XMFLOAT3{-0.5f, -0.5f, 0.5f}, DirectX::XMFLOAT4{0.7f, 0.15f, 0.15f, 1.0f}},
     };
 
     constexpr ShaderSource vertexShaderSource{
