@@ -10,11 +10,12 @@ export inline constexpr float mouseSensitivity = 0.05f;
 
 export class Camera : public NonCopyableAndMoveable
 {
-    inline static XMVECTOR mUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    inline static XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    inline static XMVECTOR mWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
     XMVECTOR mPos;
     XMVECTOR mFront;
+    XMVECTOR mUp = mWorldUp;
+    XMVECTOR mRight = XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
 
     float mYaw{};
     float mPitch{};
@@ -37,7 +38,7 @@ public:
         updateCameraVectors();
     }
 
-    Camera(float posX, float posY, float posZ, float yaw = 90.0f, float pitch = 0.0f)
+    Camera(float posX, float posY, float posZ, float yaw = -90.0f, float pitch = 0.0f)
         : Camera(XMVectorSet(posX, posY, posZ, 0.0f), yaw, pitch)
     {
     }
@@ -56,10 +57,10 @@ public:
         switch (dir)
         {
         case FORWARD:
-            mPos -= XMVectorScale(mFront, velocity);
+            mPos += XMVectorScale(mFront, velocity);
             break;
         case BACKWARD:
-            mPos += XMVectorScale(mFront, velocity);
+            mPos -= XMVectorScale(mFront, velocity);
             break;
         case LEFT:
             mPos -= XMVectorScale(mRight, velocity);
@@ -124,5 +125,7 @@ private:
 
         XMVECTOR front = XMVectorSet(cosf(yawRadians) * cosf(pitchRadians), sinf(pitchRadians), sinf(yawRadians) * cosf(pitchRadians), 0.0f);
         mFront = XMVector3Normalize(front);
+        mRight = XMVector3Normalize(XMVector3Cross(mFront, mWorldUp));
+        mUp = XMVector3Normalize(XMVector3Cross(mRight, mFront));
     }
 };

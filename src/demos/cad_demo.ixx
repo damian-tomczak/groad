@@ -513,10 +513,10 @@ void CADDemo::draw()
             bottom = bottom * nearPlane / focusPlane;
 
             mProjectionMatricesForEyes[Eye::LEFT] = XMMatrixTranslation(halfEyeDistance, 0.0f, 0.0f)
-                * XMMatrixPerspectiveOffCenterLH(leftEyeL, leftEyeR, bottom, top, nearPlane, farPlane);
+                * XMMatrixPerspectiveOffCenterRH(leftEyeL, leftEyeR, bottom, top, nearPlane, farPlane);
 
             mProjectionMatricesForEyes[Eye::RIGHT] = XMMatrixTranslation(-halfEyeDistance, 0.0f, 0.0f)
-                * XMMatrixPerspectiveOffCenterLH(rightEyeL, rightEyeR, bottom, top, nearPlane, farPlane);
+                * XMMatrixPerspectiveOffCenterRH(rightEyeL, rightEyeR, bottom, top, nearPlane, farPlane);
         };
 
         auto renderSceneForEye = [this, drawScene](Eye eye) {
@@ -534,6 +534,7 @@ void CADDemo::draw()
             pDX11Renderer->getContext()->OMSetRenderTargets(1, renderTarget->renderTargetView.GetAddressOf(), renderTarget->depthStencilView.Get());
 
             pDX11Renderer->mGlobalCB.proj = mProjectionMatricesForEyes[eye];
+            pDX11Renderer->mGlobalCB.invProj = XMMatrixInverse(nullptr, pDX11Renderer->mGlobalCB.proj);
 
             drawScene();
         };

@@ -230,8 +230,11 @@ void App::draw()
     mpRenderer->getContext()->OMSetDepthStencilState(pDepthStencilState.Get(), 1);
 
     XMMATRIX viewMtx = mpDemo->mCamera.getViewMatrix();
-    XMMATRIX projMtx = XMMatrixPerspectiveFovLH(XMConvertToRadians(mpDemo->mCamera.getZoom()),
+    XMMATRIX projMtx = XMMatrixPerspectiveFovRH(XMConvertToRadians(mpDemo->mCamera.getZoom()),
                                                 mpWindow->getAspectRatio(), 0.01f, 100.0f);
+
+    mpDemo->mCamera.mViewMtx = viewMtx;
+    mpDemo->mCamera.mProjMtx = projMtx;
 
     DXRenderer::GlobalCB globalCB
     {
@@ -372,6 +375,7 @@ void App::processInput(const IWindow::Message msg, float dt)
     }
     break;
     case IWindow::Message::MOUSE_MIDDLE_DOWN:
+    {
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
         mCtx.cursorPos = mpDemo->mCamera.getPos() + mpDemo->mCamera.getFront() * 4.0f;
 
@@ -382,6 +386,7 @@ void App::processInput(const IWindow::Message msg, float dt)
                 pRenderable->mLocalPos = pRenderable->mWorldPos - mCtx.cursorPos;
             }
         }
+    }
     break;
     case IWindow::Message::MOUSE_MOVE: {
         const auto eventData = mpWindow->getEventData<IWindow::Event::MousePosition>();
