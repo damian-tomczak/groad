@@ -7,7 +7,7 @@ module;
 #include "utils.h"
 
 export module window;
-export import std;
+import std;
 
 export class IWindow : public NonCopyableAndMoveable
 {
