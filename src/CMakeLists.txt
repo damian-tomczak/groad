@@ -69,6 +69,7 @@ target_sources(${CMAKE_PROJECT_NAME}
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     d3d11
+    d3d12
     D3DCompiler
     ImGui::ImGui
     dxgi

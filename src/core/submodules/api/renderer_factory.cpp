@@ -1,6 +1,7 @@
 import utils;
 import std;
 import dx11renderer;
+import dx12renderer;
 import core.renderer;
 import window;
 
@@ -19,6 +20,9 @@ IRenderer* const IRenderer::createRenderer(const API selectedApi, std::weak_ptr<
     {
     case API::DX11:
         pRenderer = new DX11Renderer(pWindow);
+        break;
+    case API::DX12:
+        pRenderer = new DX12Renderer(pWindow);
         break;
     default:
         ERR("Selected graphics api is not implemented yet");

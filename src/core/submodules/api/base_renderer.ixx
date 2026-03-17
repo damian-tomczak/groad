@@ -88,6 +88,7 @@ export
     class IRenderable : public IIdentifiable
     {
         friend class DX11Renderer;
+        friend class DX12Renderer;
 
     public:
         IRenderable(std::string&& tag, FXMVECTOR pos = XMVectorZero(), Color color = defaultColor)
