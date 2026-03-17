@@ -22,7 +22,7 @@ export
 
     struct Options final
     {
-        std::string_view api = "DX11";
+        std::string_view api = "DX12";
         unsigned short gpuIndex = 0;
 
         [[nodiscard]] ParsedOptions parse()
