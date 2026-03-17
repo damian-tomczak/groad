@@ -1,8 +1,11 @@
 module;
 
+
 #include "utils.h"
 
 export module core.options;
+
+import utils;
 import std;
 
 import core.renderer;
@@ -32,7 +35,7 @@ export
         }
     };
 
-    __forceinline bool equalsIgnoreCase(const std::string_view& s1, const std::string_view& s2,
+    inline bool equalsIgnoreCase(const std::string_view& s1, const std::string_view& s2,
                                         const std::locale& loc = std::locale())
     {
         const std::ctype<char>& ctype = std::use_facet<std::ctype<char>>(loc);
@@ -58,7 +61,7 @@ API strToApi(const std::string_view& str)
         return API::VULKAN;
     }
 
-    ERR("Unknown graphics api"s + str.data());
+    ERR(std::string("Unknown graphics api") + str.data());
 
     return {};
 }

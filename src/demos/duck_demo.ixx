@@ -1,7 +1,15 @@
 module;
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <d3d11.h>
 #include "utils.h"
 
 export module duck_demo;
+
+import utils;
 export import core.demo;
 import core.model_loader;
 import dx11renderer;

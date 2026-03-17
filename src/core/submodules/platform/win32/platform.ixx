@@ -3,14 +3,17 @@ module;
 #include "Windows.h"
 #include <windowsx.h>
 
-#include "utils.h"
 
 #include "imgui_impl_win32.h"
 
 #define LIBRARY_TYPE HMODULE
 #define LoadFunction GetProcAddress
 
+#include "utils.h"
+
 export module platform;
+
+import utils;
 import std;
 import window;
 

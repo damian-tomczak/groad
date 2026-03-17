@@ -1,9 +1,12 @@
 module;
 
-#include "utils.h"
 #include "mg.hpp"
 
+#include "utils.h"
+
 export module core.renderer;
+
+import utils;
 
 import window;
 import std;

@@ -4,9 +4,12 @@ module;
 #include "Windows.h"
 #endif
 
+
 #include "utils.h"
 
 export module window;
+
+import utils;
 import std;
 
 export class IWindow : public NonCopyableAndMoveable

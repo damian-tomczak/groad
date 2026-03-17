@@ -1,7 +1,11 @@
 module;
 
-#include "utils.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
+
+#include <d3d11.h>
 #include "mg.hpp"
 #include "imgui_impl_dx11.h"
 #include <d3dcompiler.h>
@@ -10,7 +14,11 @@ module;
 
 #define LIGHTS_NUM 2
 
+#include "utils.h"
+
 export module dx11renderer;
+
+import utils;
 export import dxrenderer;
 import std;
 

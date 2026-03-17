@@ -1,12 +1,19 @@
 module;
 
-#include "utils.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 
 #include <DirectXMath.h>
 #include <d3d11.h>
 #include <filesystem> // WO: std.core appears to be importing the filesystem incorrectly.
 
+#include "utils.h"
+
 export module core.model_loader;
+
+import utils;
 import dx11renderer;
 import std;
 

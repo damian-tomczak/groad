@@ -1,6 +1,8 @@
 module;
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <Windows.h>
 #include <cmath>
 
@@ -9,7 +11,6 @@ module;
 #include <d3d11.h>
 #include <wrl/client.h>
 
-#include "utils.h"
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
@@ -17,7 +18,11 @@ module;
 
 #include "mg.hpp"
 
+#include "utils.h"
+
 export module app;
+
+import utils;
 
 import core;
 import core.options;

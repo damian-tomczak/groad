@@ -1,9 +1,10 @@
-#include "utils.h"
-
+import utils;
 import std;
 import dx11renderer;
 import core.renderer;
 import window;
+
+#include "utils.h"
 
 IRenderer* const IRenderer::createRenderer(const API selectedApi, std::weak_ptr<IWindow> pWindow)
 {

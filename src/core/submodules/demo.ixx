@@ -1,8 +1,11 @@
 module;
 
+
 #include "utils.h"
 
 export module core.demo;
+
+import utils;
 export import core.context;
 export import core.camera;
 export import core.renderer;

@@ -1,6 +1,10 @@
 module;
 
-#include "utils.h"
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <d3d11.h>
 #include "imgui.h"
 #include "mg.hpp"
 
@@ -9,7 +13,11 @@ module;
 #include <windows.h>
 #endif
 
+#include "utils.h"
+
 export module cad_demo;
+
+import utils;
 import core;
 import dx11renderer;
 
@@ -1128,8 +1136,8 @@ void CADDemo::renderUi()
                     const size_t startIndex = std::distance(mpRenderer->getRenderables().begin(), it);
                     const size_t endIndex = newSelectedItemIndex;
 
-                    const size_t minIndex = std::min(startIndex, endIndex);
-                    const size_t maxIndex = std::max(startIndex, endIndex);
+                    const size_t minIndex = (std::min)(startIndex, endIndex);
+                    const size_t maxIndex = (std::max)(startIndex, endIndex);
 
                     for (size_t idx = minIndex; idx <= maxIndex; ++idx)
                     {

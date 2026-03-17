@@ -1,13 +1,14 @@
 module;
 
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <Windows.h>
 #include <cmath>
 
 #include <d3d11.h>
 #include <wrl/client.h>
 
-#include "utils.h"
 
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
@@ -15,7 +16,11 @@ module;
 
 #include "mg.hpp"
 
+#include "utils.h"
+
 export module core.context;
+
+import utils;
 import std;
 import dx11renderer;
 import window;

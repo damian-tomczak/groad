@@ -1,67 +1,7 @@
 #pragma once
 
-#include <mutex>
-#include <algorithm>
-#include <cassert>
-#include <chrono>
-#include <cmath>
-#include <compare>
-#include <deque>
-#include <exception>
-#include <fstream>
-#include <iomanip>
-#include <iosfwd>
-#include <iostream>
-#include <limits>
-#include <list>
-#include <map>
-#include <ostream>
-#include <queue>
-#include <random>
-#include <set>
-#include <stack>
-#include <stdexcept>
-#include <array>
-#include <bitset>
-#include <atomic>
-#include <concepts>
-#include <cstdint>
-#include <filesystem>
-#include <format>
-#include <functional>
-#include <iterator>
-#include <locale>
-#include <memory>
-#include <numbers>
-#include <optional>
-#include <ranges>
-#include <set>
-#include <span>
-#include <string>
-#include <string_view>
-#include <system_error>
-#include <tuple>
-#include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <variant>
-#include <vector>
-#include <sstream>
-
-#define NOMINMAX
-#include <d3d11.h>
-#include <wrl/client.h>
-#include <DirectXMath.h>
-#include <DirectXColors.h>
-
-using namespace Microsoft::WRL;
-using namespace DirectX;
-namespace std::filesystem
-{
-}
-namespace fs = std::filesystem;
-using namespace std::string_literals;
+// Compatibility shim for the C++20 `utils` module.
+// Import `utils` before including this header.
 
 #ifdef ERROR
 #undef ERROR
@@ -70,6 +10,17 @@ using namespace std::string_literals;
 #ifdef ERR
 #undef ERR
 #endif
+
+#ifndef FAILED
+#define FAILED(hr) (((HRESULT)(hr)) < 0)
+#endif
+
+#ifndef SUCCEEDED
+#define SUCCEEDED(hr) (((HRESULT)(hr)) >= 0)
+#endif
+
+#define STR(x) XSTR(x)
+#define XSTR(x) #x
 
 #ifdef _WIN32
 #define FUNCTION_SIGNATURE __FUNCSIG__
@@ -85,11 +36,6 @@ using namespace std::string_literals;
 #define WDEBUG_LOG_INFO
 #endif
 
-#define STR(x) XSTR(x)
-#define XSTR(x) #x
-
-using namespace std::literals;
-
 #define LOG(msg) log(DEBUG_LOG_INFO msg, LogLevel::INFO);
 #define WARN(msg) log(DEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define ERR(msg) log(DEBUG_LOG_INFO msg, LogLevel::ERROR);
@@ -99,8 +45,6 @@ using namespace std::literals;
 #define WWARN(msg) log(WDEBUG_LOG_INFO msg, LogLevel::WARNING);
 #define WERR(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR);
 #define WERR_NOTERMINATE(msg) log(WDEBUG_LOG_INFO msg, LogLevel::ERROR, false);
-
-// TODO: assert with msg
 
 #ifdef DEBUG
 #define ASSERT(x)                                \
@@ -117,87 +61,3 @@ using namespace std::literals;
     {                                                                           \
         ERR(std::format(#x " {}({})", std::system_category().message(hr), hr)); \
     }
-
-#define SINGLETON_BODY(ClassName)   \
-    NOT_COPYABLE(ClassName);        \
-    private: ClassName() = default; \
-    friend Singleton<ClassName>;
-
-#ifdef WIN32
-#elif __GNUC__
-#define __forceinline __attribute__((always_inline))
-#else
-#error "not implemented"
-#endif // !__GNUC__
-
-enum class LogLevel : uint8_t
-{
-    DEFAULT,
-    INFO = DEFAULT,
-    WARNING,
-    ERROR,
-    COUNT
-};
-
-void log(const std::string_view msg, const LogLevel level = LogLevel::DEFAULT, bool shouldTerminate = true);
-void log(const std::wstring_view msg, const LogLevel level = LogLevel::DEFAULT, bool shouldTerminate = true);
-
-class NonCopyable
-{
-protected:
-    NonCopyable() = default;
-
-public:
-    NonCopyable(const NonCopyable&) = delete;
-    NonCopyable& operator=(const NonCopyable&) = delete;
-};
-
-class NonMoveable
-{
-protected:
-    NonMoveable() = default;
-
-public:
-    NonMoveable(NonMoveable&&) = delete;
-    NonMoveable& operator=(NonMoveable&&) = delete;
-};
-
-class NonCopyableAndMoveable : public NonCopyable, public NonMoveable
-{
-};
-
-template <typename DerivedClass>
-class Singleton : public NonCopyable
-{
-public:
-    static DerivedClass& getInstance()
-    {
-        Singleton* ptr = pInstance.load(std::memory_order_acquire);
-        if (ptr == nullptr)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            ptr = pInstance.load(std::memory_order_relaxed);
-            if (ptr == nullptr)
-            {
-                ptr = new DerivedClass;
-                pInstance.store(ptr, std::memory_order_release);
-            }
-        }
-
-        ASSERT(ptr != nullptr);
-
-        return static_cast<DerivedClass&>(*ptr);
-    }
-
-    static void destroyInstance()
-    {
-        pInstance.reset();
-    }
-
-protected:
-    Singleton() = default;
-
-private:
-    inline static std::mutex mutex;
-    inline static std::atomic<Singleton*> pInstance;
-};

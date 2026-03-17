@@ -1,9 +1,12 @@
 module;
 
-#include "utils.h"
 #include "mg.hpp"
 
+#include "utils.h"
+
 export module core.camera;
+
+import utils;
 import std;
 
 export inline constexpr float mouseSensitivity = 0.05f;
@@ -86,7 +89,7 @@ public:
 
     void setZoom(float yoffset)
     {
-        mZoom = std::min(std::max(mZoom - yoffset / abs(yoffset), 1.0f), 45.0f);
+        mZoom = (std::min)((std::max)(mZoom - yoffset / abs(yoffset), 1.0f), 45.0f);
     }
 
     [[nodiscard]] float getZoom() const

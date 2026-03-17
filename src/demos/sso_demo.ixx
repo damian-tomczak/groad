@@ -1,9 +1,12 @@
 module;
-#include "utils.h"
 
 #include "imgui.h"
 
+#include "utils.h"
+
 export module sso_demo;
+
+import utils;
 export import core.demo;
 import dx11renderer;
 

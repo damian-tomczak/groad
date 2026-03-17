@@ -1,8 +1,16 @@
 module;
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+
+#include <d3d11.h>
 #include "utils.h"
 
 export module surface;
+
+import utils;
 import dx11renderer;
 import std;
 
@@ -283,13 +291,13 @@ WaterSurface::AbsorptionTexture::AbsorptionTexture(unsigned textureSize_) : text
             float top = posY;
             float bottom = 1.0f - posY;
 
-            float leftDistance = std::max(left, std::max(top, bottom));
-            float rightDistance = std::max(right, std::max(top, bottom));
-            float topDistance = std::max(top, std::max(left, right));
-            float bottomDistance = std::max(bottom, std::max(left, right));
+            float leftDistance = (std::max)(left, (std::max)(top, bottom));
+            float rightDistance = (std::max)(right, (std::max)(top, bottom));
+            float topDistance = (std::max)(top, (std::max)(left, right));
+            float bottomDistance = (std::max)(bottom, (std::max)(left, right));
 
-            float l = std::min(std::min(leftDistance, rightDistance), std::min(topDistance, bottomDistance));
-            float absorption_value = 0.95f * std::min(1.0f, l * 5.0f);
+            float l = (std::min)((std::min)(leftDistance, rightDistance), (std::min)(topDistance, bottomDistance));
+            float absorption_value = 0.95f * (std::min)(1.0f, l * 5.0f);
 
             texture[x][y] = absorption_value;
         }
@@ -368,7 +376,7 @@ void WaterSurface::randomDrop(float dt)
     static std::uniform_int_distribution<unsigned> randomX(0, mTextureSize - 1);
     static std::uniform_int_distribution<unsigned> randomY(0, mTextureSize - 1);
 
-    float frameThreshold = std::min(dropRatePerSecond * dt, 1.0f);
+    float frameThreshold = (std::min)(dropRatePerSecond * dt, 1.0f);
 
     if (dropChance(random) < frameThreshold)
     {

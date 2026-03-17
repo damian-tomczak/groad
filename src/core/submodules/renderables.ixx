@@ -1,7 +1,10 @@
 module;
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "mg.hpp"
-#include "utils.h"
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -10,7 +13,11 @@ module;
     friend void reloadCounters();       \
     inline static unsigned counter = 1; \
 
+#include "utils.h"
+
 export module core.renderables;
+
+import utils;
 import dx11renderer;
 import dx12renderer;
 

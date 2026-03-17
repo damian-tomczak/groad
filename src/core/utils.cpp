@@ -1,12 +1,18 @@
+module;
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #ifdef _WIN32
 #include <Windows.h>
 #endif
 
-#include "utils.h"
+#ifdef ERROR
+#undef ERROR
+#endif
 
-#include <sstream>
-
-import std;
+module utils;
 
 namespace
 {

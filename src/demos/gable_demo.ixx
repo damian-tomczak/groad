@@ -1,9 +1,17 @@
 module;
-#include "utils.h"
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <d3d11.h>
 #include "imgui.h"
 
+#include "utils.h"
+
 export module gable_demo;
+
+import utils;
 export import core.demo;
 import dx11renderer;
 

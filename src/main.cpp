@@ -1,9 +1,8 @@
-#include "utils.h"
-
-#include <cstdlib>
-
+import utils;
 import core.options;
 import app;
+
+#include "utils.h"
 
 enum ParseResult
 {
@@ -64,7 +63,7 @@ ParseResult updateOptions(Options& options, int argc, const char** argv)
         }
         else
         {
-            ERR("Unknown argument: "s + arg.data());
+            ERR(std::string("Unknown argument: ") + arg.data());
         }
     }
 
@@ -78,7 +77,7 @@ int main(int argc, const char** argv)
         Options options;
         if (updateOptions(options, argc, argv) == STOP_PROGRAM)
         {
-            return EXIT_SUCCESS;
+            return 0;
         }
         const auto parsedOptions = options.parse();
 
@@ -89,14 +88,14 @@ int main(int argc, const char** argv)
     }
     catch (const std::exception& e)
     {
-        log("STL exception: "s + e.what(), LogLevel::ERROR);
-        return EXIT_FAILURE;
+        log(std::string("STL exception: ") + e.what(), LogLevel::ERROR);
+        return 1;
     }
     catch (...)
     {
         log("Unknown exception", LogLevel::ERROR);
-        return EXIT_FAILURE;
+        return 1;
     }
 
-    return EXIT_SUCCESS;
+    return 0;
 }

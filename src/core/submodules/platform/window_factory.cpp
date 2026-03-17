@@ -1,7 +1,8 @@
-#include "utils.h"
-
+import utils;
 import window;
 import platform;
+
+#include "utils.h"
 
 IWindow* IWindow::createWindow(const uint32_t width, const uint32_t height)
 {
