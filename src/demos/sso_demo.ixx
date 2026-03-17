@@ -9,6 +9,7 @@ export module sso_demo;
 import utils;
 export import core.demo;
 import dx11renderer;
+import dx12renderer;
 
 export class SSODemo : public IDemo
 {

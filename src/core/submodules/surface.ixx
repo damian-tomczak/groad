@@ -12,6 +12,7 @@ export module surface;
 
 import utils;
 import dx11renderer;
+import dx12renderer;
 import std;
 
 export class ISurface

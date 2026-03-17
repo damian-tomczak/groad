@@ -13,6 +13,7 @@ import utils;
 export import core.demo;
 import core.model_loader;
 import dx11renderer;
+import dx12renderer;
 
 export class DuckDemo : public IDemo
 {

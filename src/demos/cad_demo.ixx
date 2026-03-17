@@ -5,6 +5,7 @@ module;
 #endif
 
 #include <d3d11.h>
+#include <d3d12.h>
 #include "imgui.h"
 #include "mg.hpp"
 
@@ -20,6 +21,7 @@ export module cad_demo;
 import utils;
 import core;
 import dx11renderer;
+import dx12renderer;
 
 export class CADDemo : public IDemo
 {
@@ -237,6 +239,14 @@ public:
     void init() override{};
     void draw() override
     {
+        if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer))
+        {
+            pDX12Renderer->setPSO(DX12Renderer::PSOType::GRID);
+            pDX12Renderer->getCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            pDX12Renderer->getCommandList()->DrawInstanced(6, 1, 0, 0);
+            return;
+        }
+
         auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
         pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().gridVS.first.Get(), nullptr, 0);
@@ -356,6 +366,71 @@ void CADDemo::init()
 void CADDemo::draw()
 {
     //IDemo::draw();
+
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer))
+    {
+        mpSurface->draw();
+
+        for (const auto [renderableIndex, pRenderable] : std::views::enumerate(pDX12Renderer->getRenderables()))
+        {
+            if (pRenderable == nullptr) continue;
+
+            pDX12Renderer->mGlobalCB.color = pRenderable->mColor;
+            pDX12Renderer->mGlobalCB.tesFactor = pRenderable->mTesFactor;
+
+            XMMATRIX model = XMMatrixIdentity();
+
+            XMMATRIX localScaleMat = XMMatrixScalingFromVector(pRenderable->mScale);
+            XMMATRIX pitchRotationMatrix = XMMatrixRotationX(pRenderable->mPitch);
+            XMMATRIX yawRotationMatrix = XMMatrixRotationY(pRenderable->mYaw);
+            XMMATRIX rollRotationMatrix = XMMatrixRotationZ(pRenderable->mRoll);
+            XMMATRIX localRotationMat = pitchRotationMatrix * yawRotationMatrix * rollRotationMatrix;
+
+            XMMATRIX centroidScaleMat = XMMatrixIdentity();
+            XMMATRIX centroidRotationMat = XMMatrixIdentity();
+            XMMATRIX translationToOrigin = XMMatrixIdentity();
+            XMMATRIX translationBack = XMMatrixIdentity();
+
+            if (mCtx.renderableSelection.renderableIds.contains(pRenderable->getId()))
+            {
+                centroidRotationMat = XMMatrixRotationX(mCtx.centroidPitch) * XMMatrixRotationY(mCtx.centroidYaw) * XMMatrixRotationZ(mCtx.centroidRoll);
+                centroidScaleMat = XMMatrixScaling(mCtx.centroidScale, mCtx.centroidScale, mCtx.centroidScale);
+                translationToOrigin = XMMatrixTranslationFromVector(-(mCtx.centroidPos - pRenderable->mWorldPos));
+                translationBack = XMMatrixTranslationFromVector((mCtx.centroidPos - pRenderable->mWorldPos));
+            }
+
+            XMMATRIX worldTranslation = XMMatrixTranslationFromVector(pRenderable->mWorldPos);
+            model = localScaleMat * localRotationMat * translationToOrigin * centroidScaleMat * centroidRotationMat * translationBack * worldTranslation;
+
+            pDX12Renderer->mGlobalCB.modelMtx = model;
+
+            if (mCtx.renderableSelection.renderableIds.contains(pRenderable->getId()))
+            {
+                pDX12Renderer->mGlobalCB.color = defaultSelectionColor;
+            }
+
+            pDX12Renderer->updateGlobalCB();
+
+            pDX12Renderer->getCommandList()->IASetVertexBuffers(0, 1, &pDX12Renderer->mVertexBufferViews[renderableIndex]);
+            if (pDX12Renderer->mIndexBuffers[renderableIndex])
+            {
+                pDX12Renderer->getCommandList()->IASetIndexBuffer(&pDX12Renderer->mIndexBufferViews[renderableIndex]);
+            }
+
+            pRenderable->draw(mpRenderer, renderableIndex);
+        }
+
+        // Draw cursor
+        {
+            pDX12Renderer->mGlobalCB.modelMtx = XMMatrixTranslationFromVector(mCtx.cursorPos);
+            pDX12Renderer->updateGlobalCB();
+            pDX12Renderer->setPSO(DX12Renderer::PSOType::CURSOR);
+            pDX12Renderer->getCommandList()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+            pDX12Renderer->getCommandList()->DrawInstanced(6, 1, 0, 0);
+        }
+
+        return;
+    }
 
     auto drawScene = [this]() {
         auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
@@ -605,7 +680,7 @@ void CADDemo::draw()
 
 void CADDemo::processInput(IWindow::Message msg, float dt)
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
+    // processInput uses IRenderer methods that work with both DX11 and DX12
 
     switch (msg)
     {
@@ -863,13 +938,13 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
                 continue;
             }
 
-            pDX11Renderer->removeRenderable(*it);
+            mpRenderer->removeRenderable(*it);
             mCtx.renderableSelection.renderableIds.erase(*it);
             it = mCtx.renderableSelection.renderableIds.begin();
         }
 
         // TODO: perf bottleneck
-        for (auto& pRenderable : pDX11Renderer->getRenderables())
+        for (auto& pRenderable : mpRenderer->getRenderables())
         {
             if (pRenderable != nullptr)
             {
@@ -882,7 +957,6 @@ void CADDemo::processInput(IWindow::Message msg, float dt)
 
 void CADDemo::renderUi()
 {
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 
     mCtx.isMenuEnabled = false;
     mCtx.isUiClicked = false;
@@ -1344,7 +1418,7 @@ void CADDemo::renderUi()
                         }
 
                         ImGui::SameLine();
-                        ImGui::Text("- %s", pDX11Renderer->getRenderable(id)->mTag.c_str());
+                        ImGui::Text("- %s", mpRenderer->getRenderable(id)->mTag.c_str());
                     }
 
                     if (idToDelete != invalidId)
@@ -1431,7 +1505,10 @@ void CADDemo::renderUi()
             if (dataChanged)
             {
                 pSelectedRenderable->regenerateData();
-                pDX11Renderer->buildGeometryBuffers();
+                if (auto pDX11 = dynamic_cast<DX11Renderer*>(mpRenderer))
+                    pDX11->buildGeometryBuffers();
+                else if (auto pDX12 = dynamic_cast<DX12Renderer*>(mpRenderer))
+                    pDX12->buildGeometryBuffers();
             }
 
             mCtx.isUiClicked |= dataChanged;
@@ -1588,8 +1665,6 @@ void CADDemo::renderUi()
 void CADDemo::update(float dt)
 {
     IDemo::update(dt);
-
-    auto pDX11Renderer = static_cast<DX11Renderer*>(mpRenderer);
 }
 
 void CADDemo::drawBernsteins(const std::vector<XMFLOAT3>& bernsteinPositions)

@@ -4,6 +4,7 @@ add_subdirectory(modules)
 
 set(SRC_FILES
     src/backend/imgui_impl_dx11.cpp
+    src/backend/imgui_impl_dx12.cpp
     src/backend/imgui_impl_win32.cpp
     src/imgui_demo.cpp
     src/imgui_draw.cpp
@@ -15,6 +16,7 @@ set(SRC_FILES
 set(H_FILES
     include/imconfig.h
     include/imgui_impl_dx11.h
+    include/imgui_impl_dx12.h
     include/imgui_impl_win32.h
     include/imgui_internal.h
     include/imgui.h

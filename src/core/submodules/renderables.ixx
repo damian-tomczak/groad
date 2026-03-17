@@ -7,6 +7,7 @@ module;
 #include "mg.hpp"
 
 #include <d3d11.h>
+#include <d3d12.h>
 #include <wrl/client.h>
 
 #define COUNTER()                       \
@@ -311,6 +312,17 @@ module :private;
 
 void Point::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        auto pCmdList = pDX12Renderer->getCommandList();
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::DEFAULT_SOLID);
+        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pCmdList->IASetVertexBuffers(0, 1, &pDX12Renderer->mVertexBufferViews[renderableIndex]);
+        pCmdList->IASetIndexBuffer(&pDX12Renderer->mIndexBufferViews[renderableIndex]);
+        pCmdList->DrawIndexedInstanced(static_cast<UINT>(getTopology().size()), 1, 0, 0, 0);
+        return;
+    }
+
     DX11Renderer * pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -327,6 +339,68 @@ void Point::draw(class IRenderer* pRenderer, unsigned long long int renderableIn
 
 void Point::drawPrimitive(IRenderer* pRenderer, XMVECTOR pos, float radius, int segments)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        // DX12: drawPrimitive creates temporary buffers - use upload heap directly
+        std::vector<XMFLOAT3> geometry = produceGeometry(radius, segments);
+        std::vector<unsigned> topology = produceTopology(segments);
+
+        const UINT vbSize = static_cast<UINT>(sizeof(XMFLOAT3) * geometry.size());
+        const UINT ibSize = static_cast<UINT>(sizeof(unsigned) * topology.size());
+
+        D3D12_HEAP_PROPERTIES uploadHeap{.Type = D3D12_HEAP_TYPE_UPLOAD};
+
+        D3D12_RESOURCE_DESC bufDesc{
+            .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+            .Width = vbSize,
+            .Height = 1,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .SampleDesc{.Count = 1},
+            .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        };
+
+        ComPtr<ID3D12Resource> vbUpload, ibUpload;
+        HR(pDX12Renderer->getDevice()->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE,
+            &bufDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&vbUpload)));
+
+        UINT8* pData = nullptr;
+        D3D12_RANGE readRange{0, 0};
+        HR(vbUpload->Map(0, &readRange, reinterpret_cast<void**>(&pData)));
+        memcpy(pData, geometry.data(), vbSize);
+        vbUpload->Unmap(0, nullptr);
+
+        bufDesc.Width = ibSize;
+        HR(pDX12Renderer->getDevice()->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE,
+            &bufDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&ibUpload)));
+        HR(ibUpload->Map(0, &readRange, reinterpret_cast<void**>(&pData)));
+        memcpy(pData, topology.data(), ibSize);
+        ibUpload->Unmap(0, nullptr);
+
+        D3D12_VERTEX_BUFFER_VIEW vbv{
+            .BufferLocation = vbUpload->GetGPUVirtualAddress(),
+            .SizeInBytes = vbSize,
+            .StrideInBytes = sizeof(XMFLOAT3),
+        };
+        D3D12_INDEX_BUFFER_VIEW ibv{
+            .BufferLocation = ibUpload->GetGPUVirtualAddress(),
+            .SizeInBytes = ibSize,
+            .Format = DXGI_FORMAT_R32_UINT,
+        };
+
+        pDX12Renderer->mGlobalCB.modelMtx = XMMatrixTranslationFromVector(pos);
+        pDX12Renderer->mGlobalCB.color = Color{0.5f, 0.5f, 0.5f, 1.0f};
+        pDX12Renderer->updateGlobalCB();
+
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::DEFAULT_SOLID);
+        auto pCmdList = pDX12Renderer->getCommandList();
+        pCmdList->IASetVertexBuffers(0, 1, &vbv);
+        pCmdList->IASetIndexBuffer(&ibv);
+        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        pCmdList->DrawIndexedInstanced(static_cast<UINT>(topology.size()), 1, 0, 0, 0);
+        return;
+    }
+
     auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     std::vector<XMFLOAT3> geometry = produceGeometry(radius, segments);
@@ -430,6 +504,17 @@ std::vector<unsigned int> Point::produceTopology(int segments)
 
 void Torus::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        auto pCmdList = pDX12Renderer->getCommandList();
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::DEFAULT_LINE);
+        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+        pCmdList->IASetVertexBuffers(0, 1, &pDX12Renderer->mVertexBufferViews[renderableIndex]);
+        pCmdList->IASetIndexBuffer(&pDX12Renderer->mIndexBufferViews[renderableIndex]);
+        pCmdList->DrawIndexedInstanced(static_cast<UINT>(getTopology().size()), 1, 0, 0, 0);
+        return;
+    }
+
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
@@ -500,6 +585,23 @@ void Torus::applySerializerData(const MG1::Torus& serialTorus)
 
 void IBezierCurve::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        auto pCmdList = pDX12Renderer->getCommandList();
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::BEZIER_CURVE);
+        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+
+        for (unsigned int i = 0; i < mGeometry.size() + 1; i += IBezierCurve::deBoorNumber)
+        {
+            D3D12_VERTEX_BUFFER_VIEW vbv = pDX12Renderer->mVertexBufferViews[renderableIndex];
+            vbv.BufferLocation += i * sizeof(XMFLOAT3);
+            vbv.SizeInBytes = getStride();
+            pCmdList->IASetVertexBuffers(0, 1, &vbv);
+            pCmdList->DrawInstanced(1, 1, 0, 0);
+        }
+        return;
+    }
+
     auto pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     auto defaultColor = pDX11Renderer->mGlobalCB.color;
@@ -1069,6 +1171,22 @@ void IBezierSurface::regenerateData()
 
 void IBezierSurface::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        auto pCmdList = pDX12Renderer->getCommandList();
+        pCmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
+
+        for (unsigned int i = 0; i < mBezierPatchCreator.u * mBezierPatchCreator.v; i++)
+        {
+            D3D12_VERTEX_BUFFER_VIEW vbv = pDX12Renderer->mVertexBufferViews[renderableIndex];
+            vbv.BufferLocation += sizeof(XMFLOAT3) * i * numberOfControlPoints;
+            vbv.SizeInBytes = getStride();
+            pCmdList->IASetVertexBuffers(0, 1, &vbv);
+            pCmdList->DrawInstanced(1, 1, 0, 0);
+        }
+        return;
+    }
+
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST);
@@ -1192,6 +1310,13 @@ void BezierSurfaceC0::regenerateData()
 
 void BezierSurfaceC0::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::BEZIER_PATCH_C0);
+        IBezierSurface::draw(pRenderer, renderableIndex);
+        return;
+    }
+
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC0VS.first.Get(), nullptr, 0);
@@ -1372,6 +1497,22 @@ void BezierSurfaceC2::regenerateData()
 
 void BezierSurfaceC2::draw(class IRenderer* pRenderer, unsigned long long int renderableIndex)
 {
+    if (auto pDX12Renderer = dynamic_cast<DX12Renderer*>(pRenderer))
+    {
+        pDX12Renderer->setPSO(DX12Renderer::PSOType::BEZIER_PATCH_C2);
+
+        if (mIsPolygon)
+        {
+            // TODO: DX12 polygon mode with GS for C2 surfaces
+        }
+
+        pDX12Renderer->mGlobalCB.color = Colors::White;
+        pDX12Renderer->updateGlobalCB();
+
+        IBezierSurface::draw(pRenderer, renderableIndex);
+        return;
+    }
+
     DX11Renderer* pDX11Renderer = static_cast<DX11Renderer*>(pRenderer);
 
     pDX11Renderer->getContext()->VSSetShader(pDX11Renderer->getShaders().bezierPatchC2VS.first.Get(), nullptr, 0);

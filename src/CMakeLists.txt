@@ -69,9 +69,10 @@ target_sources(${CMAKE_PROJECT_NAME}
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     d3d11
+    d3d12
+    dxgi
     D3DCompiler
     ImGui::ImGui
-    dxgi
     DirectXTK
     MGSerializer
 )

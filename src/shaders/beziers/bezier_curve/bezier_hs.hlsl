@@ -31,7 +31,7 @@ struct HSConstantDataOutput
 	float EdgeTessFactor[2] : SV_TessFactor;
 };
 
-#define NUM_CONTROL_POINTS 4
+#define NUM_CONTROL_POINTS 1
 
 static const float adaptabilityFactor = 40.0f;
 
@@ -83,10 +83,10 @@ HSOutput main(
 {
 	HSOutput o = (HSOutput) 0;
 
-	o.controlPoint0 = ip[i].controlPoint0;
-	o.controlPoint1 = ip[i].controlPoint1;
-	o.controlPoint2 = ip[i].controlPoint2;
-	o.controlPoint3 = ip[i].controlPoint3;
+	o.controlPoint0 = ip[0].controlPoint0;
+	o.controlPoint1 = ip[0].controlPoint1;
+	o.controlPoint2 = ip[0].controlPoint2;
+	o.controlPoint3 = ip[0].controlPoint3;
 
 	return o;
 }

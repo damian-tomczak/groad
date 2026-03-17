@@ -15,6 +15,7 @@ export module core.model_loader;
 
 import utils;
 import dx11renderer;
+import dx12renderer;
 import std;
 
 export

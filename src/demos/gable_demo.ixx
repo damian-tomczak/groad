@@ -14,6 +14,7 @@ export module gable_demo;
 import utils;
 export import core.demo;
 import dx11renderer;
+import dx12renderer;
 
 export class GableDemo : public IDemo
 {
