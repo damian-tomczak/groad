@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>groad CEF Overlay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --panel: rgba(9, 16, 28, 0.84);
+      --panel-soft: rgba(18, 28, 46, 0.76);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f5f7fb;
+      --muted: #a7b4c6;
+      --accent: #59c9a5;
+      --accent-strong: #7fe8c4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Inter", sans-serif;
+      color: var(--text);
+      background: transparent;
+      overflow: hidden;
+    }
+
+    .shell {
+      position: relative;
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 18px;
+      background:
+        radial-gradient(circle at top left, rgba(90, 170, 255, 0.18), transparent 40%),
+        radial-gradient(circle at bottom right, rgba(88, 201, 165, 0.16), transparent 35%);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    }
+
+    .hero {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.05;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 16px;
+      font: inherit;
+      cursor: pointer;
+      color: #071018;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.06);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat {
+      padding: 16px;
+      border-radius: 16px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+    }
+
+    .label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .value {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .list {
+      padding: 18px;
+    }
+
+    .list h2 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+    }
+
+    .item:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .badge {
+      align-self: start;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: rgba(89, 201, 165, 0.12);
+      color: var(--accent-strong);
+    }
+
+    .ticker {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      bottom: 24px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      background: rgba(6, 11, 19, 0.7);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 8px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 14px rgba(89, 201, 165, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel hero">
+      <span class="eyebrow">CEF Windowless Overlay</span>
+      <h1>Actual browser content composited over the DX12 scene.</h1>
+      <p>
+        This page is rendered by Chromium through CEF windowless mode and uploaded into a DX12 texture.
+        ImGui can still render in the same frame on top of or beside the browser surface.
+      </p>
+
+      <div class="toolbar">
+        <button id="launch">Launch Sync</button>
+        <button class="secondary" id="inspect">Open Inspector</button>
+        <button class="secondary" id="toast">Emit Toast</button>
+      </div>
+
+      <div class="stats">
+        <article class="stat">
+          <span class="label">Browser FPS</span>
+          <span class="value" id="fps">60</span>
+        </article>
+        <article class="stat">
+          <span class="label">Frame Upload</span>
+          <span class="value" id="upload">0.6 ms</span>
+        </article>
+        <article class="stat">
+          <span class="label">Active Session</span>
+          <span class="value" id="session">Demo</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="stack">
+      <article class="panel list">
+        <h2>Bridge Events</h2>
+        <div class="item"><span>Renderer -> Browser handshake</span><span class="badge">READY</span></div>
+        <div class="item"><span>Input routed through windowless host</span><span class="badge">LIVE</span></div>
+        <div class="item"><span>ImGui overlay still active in host frame</span><span class="badge">OK</span></div>
+      </article>
+
+      <article class="panel list">
+        <h2>Tasks</h2>
+        <div class="item"><span>Review topology metrics</span><span>02 min</span></div>
+        <div class="item"><span>Approve material sync</span><span>05 min</span></div>
+        <div class="item"><span>Open asset diff</span><span>now</span></div>
+      </article>
+    </section>
+
+    <footer class="ticker">
+      <span><span class="dot"></span><strong id="clock">--:--:--</strong> browser overlay online</span>
+      <span id="status">Ready for pointer + keyboard input</span>
+    </footer>
+  </main>
+
+  <script>
+    const fps = document.getElementById("fps");
+    const upload = document.getElementById("upload");
+    const clock = document.getElementById("clock");
+    const status = document.getElementById("status");
+    const session = document.getElementById("session");
+
+    function tick() {
+      const now = new Date();
+      clock.textContent = now.toLocaleTimeString();
+      fps.textContent = String(58 + Math.round(Math.sin(now.getSeconds() / 3) * 2));
+      upload.textContent = `${(0.5 + Math.abs(Math.sin(now.getSeconds() / 5)) * 0.6).toFixed(1)} ms`;
+    }
+
+    document.getElementById("launch").addEventListener("click", () => {
+      status.textContent = "Sync job queued from Chromium UI";
+      session.textContent = "Queued";
+    });
+
+    document.getElementById("inspect").addEventListener("click", () => {
+      status.textContent = "DevTools request sent";
+      session.textContent = "Inspecting";
+    });
+
+    document.getElementById("toast").addEventListener("click", () => {
+      status.textContent = "Toast request sent to host";
+      session.textContent = "Toast";
+    });
+
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

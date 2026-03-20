@@ -4,6 +4,23 @@ import app;
 
 #include "utils.h"
 
+struct HINSTANCE__;
+using HINSTANCE = HINSTANCE__*;
+
+extern "C" __declspec(dllimport) HINSTANCE __stdcall GetModuleHandleW(const wchar_t* moduleName);
+
+namespace groad::cef
+{
+struct StartupResult
+{
+    bool shouldExit;
+    int exitCode;
+};
+
+StartupResult initialize(HINSTANCE hInstance);
+void shutdown();
+}
+
 enum ParseResult
 {
     DEFAULT,
@@ -74,6 +91,20 @@ int main(int argc, const char** argv)
 {
     try
     {
+        const groad::cef::StartupResult cefStartup = groad::cef::initialize(GetModuleHandleW(nullptr));
+        if (cefStartup.shouldExit)
+        {
+            return cefStartup.exitCode;
+        }
+
+        struct CefShutdownGuard
+        {
+            ~CefShutdownGuard()
+            {
+                groad::cef::shutdown();
+            }
+        } cefShutdownGuard;
+
         Options options;
         if (updateOptions(options, argc, argv) == STOP_PROGRAM)
         {

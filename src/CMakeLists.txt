@@ -77,6 +77,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     MGSerializer
 )
 
+if(TARGET Groad::CEF)
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Groad::CEF)
+endif()
+
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     .
     ${ASSETS_DIR}
@@ -139,5 +143,23 @@ add_custom_target(copy_assets ALL
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/shaders $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/${DEBUG_SHADERS_DIR}
   COMMENT "Copying assets to build directory"
 )
+
+if(GROAD_WITH_CEF)
+    foreach(CEF_BINARY_FILE IN LISTS GROAD_CEF_BINARY_FILES)
+        add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${GROAD_CEF_BINARY_DIR}/${CEF_BINARY_FILE}"
+                "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/${CEF_BINARY_FILE}"
+            VERBATIM
+        )
+    endforeach()
+
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${GROAD_CEF_RESOURCE_DIR}"
+            "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>"
+        VERBATIM
+    )
+endif()
 
 add_dependencies(${PROJECT_NAME} copy_assets)

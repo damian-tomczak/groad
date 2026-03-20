@@ -4,3 +4,6 @@
 [submodule "external/Scene-Serializer"]
 	path = external/Scene-Serializer
 	url = https://github.com/damian-tomczak/Scene-Serializer.git
+[submodule "external/cef"]
+	path = external/cef
+	url = https://github.com/chromiumembedded/cef-project.git

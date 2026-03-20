@@ -20,6 +20,7 @@ module;
 
 #include "mg.hpp"
 
+#include "cef/cef_runtime.h"
 #include "utils.h"
 
 export module app;
@@ -35,6 +36,7 @@ import dx12renderer;
 import duck_demo;
 import cad_demo;
 import gable_demo;
+import cef_ui_demo;
 import sso_demo;
 
 export class App final : public NonCopyableAndMoveable
@@ -59,6 +61,7 @@ public:
         CAD = DEFAULT,
         DUCK,
         GABLE,
+        CEF_UI,
         SSO,
     };
 
@@ -118,8 +121,8 @@ App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 
 App::~App()
 {
-    mpWindow.reset();
     mpDemo.reset();
+    mpWindow.reset();
 
     delete mpRenderer;
 
@@ -183,6 +186,11 @@ void App::run()
             msg = mpWindow->getMessage();
         }
 
+        if (!mIsRunning)
+        {
+            break;
+        }
+
         update(dt);
         draw();
     }
@@ -190,6 +198,8 @@ void App::run()
 
 void App::update(float dt)
 {
+    groad::cef::doMessageLoopWork();
+
     if (mIsWPressed)
     {
         mpDemo->mCamera.moveCamera(Camera::FORWARD, dt);
@@ -353,6 +363,9 @@ void App::processInput(const IWindow::Message msg, float dt)
     case IWindow::Message::KEY_F3:
         loadDemo(Demo::GABLE);
         break;
+    case IWindow::Message::KEY_F4:
+        loadDemo(Demo::CEF_UI);
+        break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
         {
@@ -492,6 +505,9 @@ void App::loadDemo(App::Demo mode)
     case App::Demo::GABLE:
         mpDemo = std::make_unique<GableDemo>(mCtx, mpRenderer, mpWindow);
         break;
+    case App::Demo::CEF_UI:
+        mpDemo = std::make_unique<CEFUIDemo>(mCtx, mpRenderer, mpWindow);
+        break;
     case App::Demo::SSO:
         mpDemo = std::make_unique<SSODemo>(mCtx, mpRenderer, mpWindow);
         break;
@@ -560,6 +576,10 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
             else if (ImGui::MenuItem("GableDemo", "F3"))
             {
                 result = App::Demo::GABLE;
+            }
+            else if (ImGui::MenuItem("CEF UI Demo", "F4"))
+            {
+                result = App::Demo::CEF_UI;
             }
             else if (ImGui::MenuItem("SSODemo", ""))
             {

@@ -40,6 +40,7 @@ set(EXTERNAL_DIR "${CMAKE_SOURCE_DIR}/external")
 set(ASSETS_DIR "${CMAKE_SOURCE_DIR}/assets")
 
 option(GROAD_USE_EXTERNAL_SUBMODULES "Use real dependencies from the external/ submodule directory when available." ON)
+option(GROAD_ENABLE_CEF "Enable real CEF integration when the external/cef submodule is available." ON)
 set(GROAD_USING_STUBS OFF)
 
 if(GROAD_USE_EXTERNAL_SUBMODULES AND EXISTS "${EXTERNAL_DIR}/CMakeLists.txt")

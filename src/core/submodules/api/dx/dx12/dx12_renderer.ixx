@@ -124,6 +124,9 @@ public:
 
         ShaderBlob blendVS;
         ShaderBlob blendPS;
+
+        ShaderBlob cefOverlayVS;
+        ShaderBlob cefOverlayPS;
     };
 
     enum class PSOType
@@ -143,7 +146,16 @@ public:
         GABLE,
         BILLBOARD,
         BLEND,
+        CEF_OVERLAY,
         COUNT
+    };
+
+    struct SrvDescriptorRange
+    {
+        UINT startIndex{};
+        UINT count{};
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle{};
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle{};
     };
 
     void init(unsigned short gpuIndex) override;
@@ -204,6 +216,27 @@ public:
         return mpCbvSrvUavHeap.Get();
     }
 
+    SrvDescriptorRange allocateSrvDescriptorRange(UINT count = 1);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE getCpuSrvHandle(UINT index) const
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = mpCbvSrvUavHeap->GetCPUDescriptorHandleForHeapStart();
+        handle.ptr += static_cast<SIZE_T>(index) * mCbvSrvUavDescriptorSize;
+        return handle;
+    }
+
+    D3D12_GPU_DESCRIPTOR_HANDLE getGpuSrvHandle(UINT index) const
+    {
+        D3D12_GPU_DESCRIPTOR_HANDLE handle = mpCbvSrvUavHeap->GetGPUDescriptorHandleForHeapStart();
+        handle.ptr += static_cast<UINT64>(index) * mCbvSrvUavDescriptorSize;
+        return handle;
+    }
+
+    UINT getSrvDescriptorSize() const
+    {
+        return mCbvSrvUavDescriptorSize;
+    }
+
     const D3D12_VIEWPORT& getViewport() const
     {
         return mViewport;
@@ -253,7 +286,8 @@ private:
         const D3D12_INPUT_ELEMENT_DESC* inputLayout, UINT inputLayoutCount,
         D3D12_PRIMITIVE_TOPOLOGY_TYPE topoType,
         D3D12_FILL_MODE fillMode,
-        bool enableBlend);
+        bool enableBlend,
+        bool enableDepth = true);
 
     Shaders mShaders;
     std::unordered_map<PSOType, ComPtr<ID3D12PipelineState>> mPSOs;
@@ -289,6 +323,7 @@ private:
 
     D3D12_VIEWPORT mViewport{};
     D3D12_RECT mScissorRect{};
+    UINT mNextSrvDescriptorIndex = 1;
 };
 
 module :private;
@@ -347,13 +382,13 @@ static inline D3D12_DEPTH_STENCILOP_DESC createDefaultDepthStencilOpDesc()
     };
 }
 
-static inline D3D12_DEPTH_STENCIL_DESC createDepthStencilDesc()
+static inline D3D12_DEPTH_STENCIL_DESC createDepthStencilDesc(bool enableDepth)
 {
     const auto defaultStencilOp = createDefaultDepthStencilOpDesc();
     return {
-        .DepthEnable = TRUE,
-        .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
-        .DepthFunc = D3D12_COMPARISON_FUNC_LESS,
+        .DepthEnable = enableDepth,
+        .DepthWriteMask = enableDepth ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO,
+        .DepthFunc = enableDepth ? D3D12_COMPARISON_FUNC_LESS : D3D12_COMPARISON_FUNC_ALWAYS,
         .StencilEnable = FALSE,
         .StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK,
         .StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK,
@@ -521,6 +556,21 @@ void DX12Renderer::createDescriptorHeaps()
     }
 }
 
+DX12Renderer::SrvDescriptorRange DX12Renderer::allocateSrvDescriptorRange(UINT count)
+{
+    ASSERT((count > 0) && ((mNextSrvDescriptorIndex + count) <= SrvHeapSize));
+
+    const UINT startIndex = mNextSrvDescriptorIndex;
+    mNextSrvDescriptorIndex += count;
+
+    return {
+        .startIndex = startIndex,
+        .count = count,
+        .cpuHandle = getCpuSrvHandle(startIndex),
+        .gpuHandle = getGpuSrvHandle(startIndex),
+    };
+}
+
 void DX12Renderer::createRootSignature()
 {
     D3D12_DESCRIPTOR_RANGE srvRange{};
@@ -594,7 +644,8 @@ ComPtr<ID3D12PipelineState> DX12Renderer::createPSO(
     const D3D12_INPUT_ELEMENT_DESC* inputLayout, UINT inputLayoutCount,
     D3D12_PRIMITIVE_TOPOLOGY_TYPE topoType,
     D3D12_FILL_MODE fillMode,
-    bool enableBlend)
+    bool enableBlend,
+    bool enableDepth)
 {
     const bool usesLineOrPointTopology = topoType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
         || topoType == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
@@ -631,7 +682,7 @@ ComPtr<ID3D12PipelineState> DX12Renderer::createPSO(
     };
 
     psoDesc.BlendState = createBlendDesc(enableBlend);
-    psoDesc.DepthStencilState = createDepthStencilDesc();
+    psoDesc.DepthStencilState = createDepthStencilDesc(enableDepth);
 
     psoDesc.SampleMask = UINT_MAX;
     psoDesc.PrimitiveTopologyType = topoType;
@@ -708,11 +759,12 @@ void DX12Renderer::createPipelineStates()
         const D3D12_INPUT_ELEMENT_DESC* layout, UINT layoutCount,
         D3D12_PRIMITIVE_TOPOLOGY_TYPE topoType,
         D3D12_FILL_MODE fillMode,
-        bool enableBlend)
+        bool enableBlend,
+        bool enableDepth = true)
     {
         if (vs && ps)
         {
-            mPSOs[type] = createPSO(debugName, vs, ps, hs, ds, gs, layout, layoutCount, topoType, fillMode, enableBlend);
+            mPSOs[type] = createPSO(debugName, vs, ps, hs, ds, gs, layout, layoutCount, topoType, fillMode, enableBlend, enableDepth);
         }
     };
 
@@ -824,6 +876,13 @@ void DX12Renderer::createPipelineStates()
         mShaders.blendVS.Get(), mShaders.blendPS.Get(), nullptr, nullptr, nullptr,
         noInputLayout, noInputLayoutCount,
         D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE, D3D12_FILL_MODE_SOLID, true);
+
+    // CEF overlay
+    tryCreatePSO(PSOType::CEF_OVERLAY,
+        "CEF_OVERLAY",
+        mShaders.cefOverlayVS.Get(), mShaders.cefOverlayPS.Get(), nullptr, nullptr, nullptr,
+        noInputLayout, noInputLayoutCount,
+        D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE, D3D12_FILL_MODE_SOLID, true, false);
 }
 
 void DX12Renderer::createGlobalCBResource()
@@ -1298,6 +1357,10 @@ void DX12Renderer::createShaders()
     // Blend
     DX12_COMPILE_VS("blend/blend_vs.hlsl", mShaders.blendVS);
     DX12_COMPILE_PS("blend/blend_ps.hlsl", mShaders.blendPS);
+
+    // CEF overlay
+    DX12_COMPILE_VS("cef/cef_overlay_vs.hlsl", mShaders.cefOverlayVS);
+    DX12_COMPILE_PS("cef/cef_overlay_ps.hlsl", mShaders.cefOverlayPS);
 
 #undef DEFAULT_SHADER_VER
 #undef DX12_COMPILE_VS

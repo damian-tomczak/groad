@@ -27,6 +27,8 @@ public:
     }
     ~Win32Window();
 
+    using NativeMessageHandler = std::function<bool(HWND, UINT, WPARAM, LPARAM)>;
+
     HINSTANCE getHInstance() const
     {
         return mHInstance;
@@ -35,6 +37,16 @@ public:
     HWND getHwnd() const
     {
         return mHwnd;
+    }
+
+    void setNativeMessageHandler(NativeMessageHandler handler)
+    {
+        mNativeMessageHandler = std::move(handler);
+    }
+
+    void clearNativeMessageHandler()
+    {
+        mNativeMessageHandler = nullptr;
     }
 
     void show() override;
@@ -46,6 +58,7 @@ private:
 
     HINSTANCE mHInstance{};
     HWND mHwnd{};
+    NativeMessageHandler mNativeMessageHandler;
 
     void init() override;
 };
@@ -125,6 +138,19 @@ IWindow::Message Win32Window::getMessage()
         TranslateMessage(&winMsg);
         DispatchMessage(&winMsg);
 
+        // Some native handlers enqueue internal messages directly while dispatching
+        // the current Win32 message, for example live resize notifications.
+        msg = IWindow::getMessage();
+        if (msg != Message::EMPTY)
+        {
+            return msg;
+        }
+
+        if (PeekMessage(&winMsg, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) != 0)
+        {
+            return Message::QUIT;
+        }
+
         auto potentialMsg = static_cast<Message>(winMsg.message);
         if ((potentialMsg > Message::EMPTY) && (potentialMsg < Message::COUNT))
         {
@@ -150,12 +176,17 @@ bool Win32Window::instanceWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LP
     switch (msg)
     {
     case WM_DESTROY:
+        if (hwnd == mHwnd)
+        {
+            mHwnd = nullptr;
+        }
+        putMessage(Message::QUIT);
         PostQuitMessage(0);
         return true;
     case WM_SIZE:
-        PostMessage(hwnd, static_cast<UINT32>(Message::RESIZE), wParam, lParam);
         mWidth = LOWORD(lParam);
         mHeight = HIWORD(lParam);
+        putMessage(Message::RESIZE, Event::WindowSize{.width = mWidth, .height = mHeight});
         return true;
     case WM_KEYDOWN:
         switch (wParam)
@@ -302,11 +333,6 @@ extern "C++" IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UI
 
 LRESULT CALLBACK Win32Window::staticWindowProcedure(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
-    {
-        return true;
-    }
-
     Win32Window* pThis{};
     if (msg == WM_NCCREATE)
     {
@@ -317,6 +343,16 @@ LRESULT CALLBACK Win32Window::staticWindowProcedure(HWND hwnd, UINT msg, WPARAM 
     else
     {
         pThis = reinterpret_cast<Win32Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    }
+
+    if ((pThis != nullptr) && (pThis->mNativeMessageHandler != nullptr) && pThis->mNativeMessageHandler(hwnd, msg, wParam, lParam))
+    {
+        return true;
+    }
+
+    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+    {
+        return true;
     }
 
     if ((pThis != nullptr) && (!pThis->instanceWindowProcedure(hwnd, msg, wParam, lParam)))
