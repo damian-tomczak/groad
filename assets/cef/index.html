@@ -254,11 +254,24 @@
     const clock = document.getElementById("clock");
     const status = document.getElementById("status");
     const session = document.getElementById("session");
+    let fpsFrameCount = 0;
+    let fpsWindowStart = performance.now();
+
+    function updateFps(now) {
+      fpsFrameCount += 1;
+      const elapsed = now - fpsWindowStart;
+      if (elapsed >= 500) {
+        fps.textContent = (fpsFrameCount * 1000 / elapsed).toFixed(1);
+        fpsFrameCount = 0;
+        fpsWindowStart = now;
+      }
+
+      requestAnimationFrame(updateFps);
+    }
 
     function tick() {
       const now = new Date();
       clock.textContent = now.toLocaleTimeString();
-      fps.textContent = String(58 + Math.round(Math.sin(now.getSeconds() / 3) * 2));
       upload.textContent = `${(0.5 + Math.abs(Math.sin(now.getSeconds() / 5)) * 0.6).toFixed(1)} ms`;
     }
 
@@ -279,6 +292,7 @@
 
     tick();
     setInterval(tick, 1000);
+    requestAnimationFrame(updateFps);
   </script>
 </body>
 </html>

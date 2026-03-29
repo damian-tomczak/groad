@@ -98,6 +98,8 @@ private:
 
     std::unique_ptr<IDemo> mpDemo;
     Demo mMode{};
+    std::optional<Demo> mPendingMode;
+    bool mHasPendingCefVsyncPolicyChange{};
 
     Context mCtx{};
 
@@ -108,6 +110,8 @@ module :private;
 
 App::App(const ParsedOptions&& options) : mOptions{std::move(options)}
 {
+    mSettings.isVsync = mOptions.isVsync;
+
     const char* apiStr = apiToStr(mOptions.api);
 
     LOG("Selected graphics API: " + apiStr);
@@ -198,6 +202,12 @@ void App::run()
 
 void App::update(float dt)
 {
+    if (mPendingMode != std::nullopt)
+    {
+        loadDemo(*mPendingMode);
+        mPendingMode.reset();
+    }
+
     groad::cef::doMessageLoopWork();
 
     if (mIsWPressed)
@@ -355,16 +365,16 @@ void App::processInput(const IWindow::Message msg, float dt)
     }
         break;
     case IWindow::Message::KEY_F1:
-        loadDemo(Demo::CAD);
+        mPendingMode = Demo::CAD;
         break;
     case IWindow::Message::KEY_F2:
-        loadDemo(Demo::DUCK);
+        mPendingMode = Demo::DUCK;
         break;
     case IWindow::Message::KEY_F3:
-        loadDemo(Demo::GABLE);
+        mPendingMode = Demo::GABLE;
         break;
     case IWindow::Message::KEY_F4:
-        loadDemo(Demo::CEF_UI);
+        mPendingMode = Demo::CEF_UI;
         break;
     case IWindow::Message::KEY_W_DOWN:
         if (!mCtx.isUiClicked)
@@ -490,6 +500,17 @@ void App::processInput(const IWindow::Message msg, float dt)
 
 void App::loadDemo(App::Demo mode)
 {
+    if ((mpDemo != nullptr) && (mMode == mode))
+    {
+        return;
+    }
+
+    if (mOptions.api == API::DX12)
+    {
+        auto* pDX12 = static_cast<DX12Renderer*>(mpRenderer);
+        pDX12->flushGpu();
+    }
+
     mMode = mode;
 
     mpRenderer->clearRenderables();
@@ -555,12 +576,13 @@ void App::checkShaders()
 }
 #endif
 
-std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
+std::optional<App::Demo> showMenu(App::Settings& settings, bool& hasPendingCefVsyncPolicyChange, std::function<void()> pMenuBarCallback, const char* demoName, float& menuBarHeight)
 {
     std::optional<App::Demo> result{};
 
     if (ImGui::BeginMainMenuBar())
     {
+        const ImGuiIO& io = ImGui::GetIO();
         menuBarHeight = ImGui::GetFrameHeight();
 
         if (ImGui::BeginMenu("Demo"))
@@ -591,7 +613,17 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
 
         if (ImGui::BeginMenu("Settings"))
         {
-            ImGui::Checkbox("VSync", &settings.isVsync);
+            if (ImGui::Checkbox("VSync", &settings.isVsync))
+            {
+                groad::cef::setDisableGpuVsyncSwitch(!settings.isVsync);
+                hasPendingCefVsyncPolicyChange = true;
+            }
+
+            if (hasPendingCefVsyncPolicyChange)
+            {
+                ImGui::Separator();
+                ImGui::TextDisabled("CEF GPU VSync command-line change will apply after app restart.");
+            }
 
             ImGui::EndMenu();
         }
@@ -602,6 +634,15 @@ std::optional<App::Demo> showMenu(App::Settings& settings, std::function<void()>
         {
             pMenuBarCallback();
         }
+
+        const float fpsLabelWidth = ImGui::CalcTextSize("FPS: 0000.0").x;
+        const float fpsLabelX = ImGui::GetWindowWidth() - fpsLabelWidth - ImGui::GetStyle().WindowPadding.x;
+        if (fpsLabelX > ImGui::GetCursorPosX())
+        {
+            ImGui::SetCursorPosX(fpsLabelX);
+        }
+
+        ImGui::Text("FPS: %.1f", io.Framerate);
 
         ImGui::EndMainMenuBar();
     }
@@ -619,10 +660,10 @@ void App::renderUi()
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
+        std::optional<App::Demo> selectedMode = showMenu(mSettings, mHasPendingCefVsyncPolicyChange, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
         if (selectedMode != std::nullopt)
         {
-            loadDemo(*selectedMode);
+            mPendingMode = *selectedMode;
         }
 
         mpDemo->renderUi();
@@ -636,10 +677,10 @@ void App::renderUi()
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        std::optional<App::Demo> selectedMode = showMenu(mSettings, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
+        std::optional<App::Demo> selectedMode = showMenu(mSettings, mHasPendingCefVsyncPolicyChange, mpDemo->mpMenuBarCallback, mpDemo->mpDemoName, mCtx.menuBarHeight);
         if (selectedMode != std::nullopt)
         {
-            loadDemo(*selectedMode);
+            mPendingMode = *selectedMode;
         }
 
         mpDemo->renderUi();

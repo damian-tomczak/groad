@@ -19,6 +19,7 @@ struct StartupResult
 
 StartupResult initialize(HINSTANCE hInstance);
 void shutdown();
+void setDisableGpuVsyncSwitch(bool disableGpuVsync);
 }
 
 enum ParseResult
@@ -28,12 +29,33 @@ enum ParseResult
 };
 
 constexpr const char* helpMessage = 
-    PROJECT_NAME " [--help|-h] [--graphics|-g <Graphics API>] [--index|-i <Device Index>]: \n"
+    PROJECT_NAME " [--help|-h] [--graphics|-g <Graphics API>] [--index|-i <Device Index>] [--vsync|-v <on|off>]: \n"
     "  --help|-h                Displays this help message.\n"
     "  --graphics|-g <API>      Sets the graphics API to be used.\n"
     "                           Supported APIs: DX11, D3D12\n"
     "  --index|-i <Index>       Selects the GPU device by index.\n"
-    "                           Use a non-negative integer as <Index>.\n";
+    "                           Use a non-negative integer as <Index>.\n"
+    "  --vsync|-v <on|off>      Sets whole-app VSync default.\n";
+
+void applyEarlyVsyncOption(Options& options, int argc, const char** argv)
+{
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string_view arg = argv[i];
+        if ((equalsIgnoreCase(arg, "--vsync") || equalsIgnoreCase(arg, "-v")) && ((i + 1) < argc))
+        {
+            const std::string_view value = argv[i + 1];
+            if (equalsIgnoreCase(value, "on") || equalsIgnoreCase(value, "true") || equalsIgnoreCase(value, "1"))
+            {
+                options.isVsync = true;
+            }
+            else if (equalsIgnoreCase(value, "off") || equalsIgnoreCase(value, "false") || equalsIgnoreCase(value, "0"))
+            {
+                options.isVsync = false;
+            }
+        }
+    }
+}
 
 
 ParseResult updateOptions(Options& options, int argc, const char** argv)
@@ -78,6 +100,22 @@ ParseResult updateOptions(Options& options, int argc, const char** argv)
                 ERR("--index/i invalid gpu index");
             }
         }
+        else if (equalsIgnoreCase(arg, "--vsync") || equalsIgnoreCase(arg, "-v"))
+        {
+            const std::string_view value = getNextArg();
+            if (equalsIgnoreCase(value, "on") || equalsIgnoreCase(value, "true") || equalsIgnoreCase(value, "1"))
+            {
+                options.isVsync = true;
+            }
+            else if (equalsIgnoreCase(value, "off") || equalsIgnoreCase(value, "false") || equalsIgnoreCase(value, "0"))
+            {
+                options.isVsync = false;
+            }
+            else
+            {
+                ERR("--vsync/v expects on/off, true/false or 1/0");
+            }
+        }
         else
         {
             ERR(std::string("Unknown argument: ") + arg.data());
@@ -91,6 +129,10 @@ int main(int argc, const char** argv)
 {
     try
     {
+        Options startupOptions;
+        applyEarlyVsyncOption(startupOptions, argc, argv);
+        groad::cef::setDisableGpuVsyncSwitch(!startupOptions.isVsync);
+
         const groad::cef::StartupResult cefStartup = groad::cef::initialize(GetModuleHandleW(nullptr));
         if (cefStartup.shouldExit)
         {

@@ -18,12 +18,14 @@ export
     {
         API api;
         unsigned short gpuIndex;
+        bool isVsync;
     };
 
     struct Options final
     {
         std::string_view api = "DX12";
         unsigned short gpuIndex = 0;
+        bool isVsync = true;
 
         [[nodiscard]] ParsedOptions parse()
         {
@@ -31,6 +33,7 @@ export
             {
                 .api = strToApi(api),
                 .gpuIndex = gpuIndex,
+                .isVsync = isVsync,
             };
         }
     };

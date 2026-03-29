@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,10 +27,13 @@ StartupResult initialize(HINSTANCE hInstance);
 void shutdown();
 void doMessageLoopWork();
 bool isInitialized();
+void setDisableGpuVsyncSwitch(bool disableGpuVsync);
 
 class BrowserSurface final
 {
 public:
+    using AcceleratedFrameCallback = std::function<void(HANDLE sharedTextureHandle, int width, int height)>;
+
     BrowserSurface();
     ~BrowserSurface();
 
@@ -38,6 +42,8 @@ public:
 
     void setRect(int left, int top, int width, int height);
     void reload();
+    void requestFrame();
+    void setAcceleratedFrameCallback(AcceleratedFrameCallback callback);
 
     bool handleMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     bool consumeFrame(std::vector<std::uint8_t>& pixels, int& width, int& height);

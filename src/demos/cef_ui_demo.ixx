@@ -61,6 +61,8 @@ private:
     void updateBrowserRect();
     void ensureOverlayResources(DX12Renderer& renderer, int width, int height);
     void recreateOverlayTexture(DX12Renderer& renderer, int width, int height);
+    void ensureAcceleratedCopyResources(DX12Renderer& renderer);
+    void copyAcceleratedBrowserFrame(HANDLE sharedTextureHandle, int width, int height);
     void uploadPendingBrowserFrame(DX12Renderer& renderer);
     void drawBrowserOverlay(DX12Renderer& renderer);
     void logEvent(std::string message);
@@ -78,6 +80,8 @@ private:
 
     bool mIsBrowserCreateAttempted = false;
     bool mIsBrowserReady = false;
+    bool mIsUsingAcceleratedPaint = false;
+    bool mHasLoggedAcceleratedPaint = false;
 };
 
 module :private;
@@ -131,15 +135,29 @@ public:
 
 struct CEFUIDemo::DX12OverlayResources
 {
+    ~DX12OverlayResources()
+    {
+        if (copyFenceEvent != nullptr)
+        {
+            CloseHandle(copyFenceEvent);
+            copyFenceEvent = nullptr;
+        }
+    }
+
     ComPtr<ID3D12Resource> texture;
     ComPtr<ID3D12Resource> uploadBuffer;
+    ComPtr<ID3D12CommandAllocator> copyCommandAllocator;
+    ComPtr<ID3D12GraphicsCommandList> copyCommandList;
+    ComPtr<ID3D12Fence> copyFence;
     DX12Renderer::SrvDescriptorRange srvRange{};
     std::vector<ComPtr<ID3D12Resource>> retiredResources;
 
     UINT rowPitch = 0;
     UINT64 uploadSize = 0;
+    UINT64 copyFenceValue = 0;
     int width = 0;
     int height = 0;
+    HANDLE copyFenceEvent = nullptr;
     bool hasSrvRange = false;
 };
 
@@ -164,6 +182,8 @@ CEFUIDemo::CEFUIDemo(Context& ctx, IRenderer* pRenderer, std::shared_ptr<IWindow
 
 CEFUIDemo::~CEFUIDemo()
 {
+    mBrowser.setAcceleratedFrameCallback({});
+
     if (auto* pWindow = dynamic_cast<Win32Window*>(mpWindow.get()))
     {
         pWindow->clearNativeMessageHandler();
@@ -241,6 +261,13 @@ void CEFUIDemo::init()
 
     mPagePath = resolveDemoPagePath();
 
+    if (isDx12())
+    {
+        mBrowser.setAcceleratedFrameCallback([this](HANDLE sharedTextureHandle, int width, int height) {
+            copyAcceleratedBrowserFrame(sharedTextureHandle, width, height);
+        });
+    }
+
     if (auto* pWindow = dynamic_cast<Win32Window*>(mpWindow.get()))
     {
         pWindow->setNativeMessageHandler([this](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -298,6 +325,7 @@ void CEFUIDemo::update(float dt)
 
     if (mIsBrowserReady)
     {
+        mBrowser.requestFrame();
         mBrowserTitle = mBrowser.getTitle();
     }
 }
@@ -411,6 +439,122 @@ void CEFUIDemo::recreateOverlayTexture(DX12Renderer& renderer, int width, int he
     logEvent(std::format("Allocated DX12 browser texture: {}x{}.", width, height));
 }
 
+void CEFUIDemo::ensureAcceleratedCopyResources(DX12Renderer& renderer)
+{
+    ASSERT(mDx12Overlay != nullptr);
+
+    if (mDx12Overlay->copyCommandAllocator == nullptr)
+    {
+        HR(renderer.getDevice()->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&mDx12Overlay->copyCommandAllocator)));
+    }
+
+    if (mDx12Overlay->copyCommandList == nullptr)
+    {
+        HR(renderer.getDevice()->CreateCommandList(
+            0,
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            mDx12Overlay->copyCommandAllocator.Get(),
+            nullptr,
+            IID_PPV_ARGS(&mDx12Overlay->copyCommandList)));
+        HR(mDx12Overlay->copyCommandList->Close());
+    }
+
+    if (mDx12Overlay->copyFence == nullptr)
+    {
+        HR(renderer.getDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mDx12Overlay->copyFence)));
+        mDx12Overlay->copyFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (mDx12Overlay->copyFenceEvent == nullptr)
+        {
+            ERR("Failed to create CEF accelerated copy fence event");
+        }
+    }
+}
+
+void CEFUIDemo::copyAcceleratedBrowserFrame(HANDLE sharedTextureHandle, int width, int height)
+{
+    auto* pDX12Renderer = dynamic_cast<DX12Renderer*>(mpRenderer);
+    if ((pDX12Renderer == nullptr) || (sharedTextureHandle == nullptr) || (width <= 0) || (height <= 0))
+    {
+        return;
+    }
+
+    ensureOverlayResources(*pDX12Renderer, width, height);
+    if ((mDx12Overlay == nullptr) || (mDx12Overlay->texture == nullptr))
+    {
+        return;
+    }
+
+    ensureAcceleratedCopyResources(*pDX12Renderer);
+    if ((mDx12Overlay->copyCommandAllocator == nullptr)
+        || (mDx12Overlay->copyCommandList == nullptr)
+        || (mDx12Overlay->copyFence == nullptr)
+        || (mDx12Overlay->copyFenceEvent == nullptr))
+    {
+        return;
+    }
+
+    ComPtr<ID3D12Resource> sharedTexture;
+    const HRESULT openSharedHandleResult = pDX12Renderer->getDevice()->OpenSharedHandle(
+        sharedTextureHandle,
+        IID_PPV_ARGS(&sharedTexture));
+    if (FAILED(openSharedHandleResult))
+    {
+        WARN(std::format("Failed to open accelerated CEF shared texture handle. {}({})",
+            std::system_category().message(openSharedHandleResult),
+            openSharedHandleResult));
+        return;
+    }
+
+    HR(mDx12Overlay->copyCommandAllocator->Reset());
+    HR(mDx12Overlay->copyCommandList->Reset(mDx12Overlay->copyCommandAllocator.Get(), nullptr));
+
+    D3D12_RESOURCE_BARRIER toCopy{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition{
+            .pResource = mDx12Overlay->texture.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST,
+        },
+    };
+    mDx12Overlay->copyCommandList->ResourceBarrier(1, &toCopy);
+    mDx12Overlay->copyCommandList->CopyResource(mDx12Overlay->texture.Get(), sharedTexture.Get());
+
+    D3D12_RESOURCE_BARRIER toShaderRead{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Transition{
+            .pResource = mDx12Overlay->texture.Get(),
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+            .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+        },
+    };
+    mDx12Overlay->copyCommandList->ResourceBarrier(1, &toShaderRead);
+
+    HR(mDx12Overlay->copyCommandList->Close());
+
+    ID3D12CommandList* const commandLists[] = {mDx12Overlay->copyCommandList.Get()};
+    pDX12Renderer->getCommandQueue()->ExecuteCommandLists(static_cast<UINT>(std::size(commandLists)), commandLists);
+
+    mDx12Overlay->copyFenceValue += 1;
+    HR(pDX12Renderer->getCommandQueue()->Signal(mDx12Overlay->copyFence.Get(), mDx12Overlay->copyFenceValue));
+    HR(mDx12Overlay->copyFence->SetEventOnCompletion(mDx12Overlay->copyFenceValue, mDx12Overlay->copyFenceEvent));
+    WaitForSingleObjectEx(mDx12Overlay->copyFenceEvent, INFINITE, FALSE);
+
+    mIsUsingAcceleratedPaint = true;
+    mLastFrameWidth = width;
+    mLastFrameHeight = height;
+    mLastFrameBytes = static_cast<size_t>(width) * static_cast<size_t>(height) * texturePixelSize;
+
+    if (!mHasLoggedAcceleratedPaint)
+    {
+        logEvent("Using CEF accelerated paint shared texture path.");
+        mHasLoggedAcceleratedPaint = true;
+    }
+}
+
 void CEFUIDemo::uploadPendingBrowserFrame(DX12Renderer& renderer)
 {
     std::vector<std::uint8_t> pixels;
@@ -497,7 +641,10 @@ void CEFUIDemo::drawBrowserOverlay(DX12Renderer& renderer)
         return;
     }
 
-    uploadPendingBrowserFrame(renderer);
+    if (!mIsUsingAcceleratedPaint)
+    {
+        uploadPendingBrowserFrame(renderer);
+    }
     if ((mDx12Overlay == nullptr) || (mDx12Overlay->texture == nullptr))
     {
         return;

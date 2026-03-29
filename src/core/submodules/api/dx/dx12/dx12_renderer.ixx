@@ -164,6 +164,10 @@ public:
 
     void beginFrame();
     void endFrame(bool vsync);
+    void flushGpu()
+    {
+        waitForGpu();
+    }
 
     void clearRenderTarget(const float* clearColor);
     void clearDepthStencil();

@@ -15,6 +15,8 @@ namespace groad::cef
 {
 namespace
 {
+constexpr int desiredWindowlessFrameRate = 60;
+
 std::filesystem::path getExecutablePath()
 {
     std::array<wchar_t, MAX_PATH> buffer{};
@@ -31,9 +33,22 @@ std::string makeFileUrl(const std::filesystem::path& path)
 #ifdef GROAD_WITH_CEF
 namespace
 {
+bool gDisableGpuVsyncSwitch = false;
+
 class GroadCefApp final : public CefApp
 {
 public:
+    void OnBeforeCommandLineProcessing(const CefString& process_type, CefRefPtr<CefCommandLine> command_line) override
+    {
+        (void)process_type;
+
+        command_line->AppendSwitch("disable-frame-rate-limit");
+        if (gDisableGpuVsyncSwitch)
+        {
+            command_line->AppendSwitch("disable-gpu-vsync");
+        }
+    }
+
     IMPLEMENT_REFCOUNTING(GroadCefApp);
 };
 
@@ -211,6 +226,10 @@ public:
                  const void* buffer,
                  int width,
                  int height) override;
+    void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+                            PaintElementType type,
+                            const RectList& dirtyRects,
+                            const CefAcceleratedPaintInfo& info) override;
 
 private:
     BrowserSurface::Impl* mpOwner;
@@ -231,6 +250,7 @@ struct BrowserSurface::Impl
     bool closeParentOnBeforeClose = false;
     std::wstring title = L"CEF Browser";
     std::vector<std::uint8_t> pixels;
+    BrowserSurface::AcceleratedFrameCallback acceleratedFrameCallback;
 
     CefRefPtr<BrowserClient> client;
     CefRefPtr<CefBrowser> browser;
@@ -300,6 +320,33 @@ void BrowserClient::OnPaint(CefRefPtr<CefBrowser> browser,
     const size_t byteCount = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
     mpOwner->pixels.resize(byteCount);
     std::memcpy(mpOwner->pixels.data(), buffer, byteCount);
+}
+
+void BrowserClient::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+                                       PaintElementType type,
+                                       const RectList& dirtyRects,
+                                       const CefAcceleratedPaintInfo& info)
+{
+    if ((type != PET_VIEW) || (info.shared_texture_handle == nullptr))
+    {
+        return;
+    }
+
+    const int width = (std::max)(1, info.extra.visible_rect.width);
+    const int height = (std::max)(1, info.extra.visible_rect.height);
+
+    BrowserSurface::AcceleratedFrameCallback acceleratedFrameCallback;
+    {
+        std::scoped_lock lock(mpOwner->mutex);
+        mpOwner->width = width;
+        mpOwner->height = height;
+        acceleratedFrameCallback = mpOwner->acceleratedFrameCallback;
+    }
+
+    if (acceleratedFrameCallback)
+    {
+        acceleratedFrameCallback(info.shared_texture_handle, width, height);
+    }
 }
 #endif
 
@@ -385,6 +432,15 @@ bool isInitialized()
 #endif
 }
 
+void setDisableGpuVsyncSwitch(bool disableGpuVsync)
+{
+#ifdef GROAD_WITH_CEF
+    gDisableGpuVsyncSwitch = disableGpuVsync;
+#else
+    (void)disableGpuVsync;
+#endif
+}
+
 BrowserSurface::BrowserSurface() : mImpl{std::make_unique<Impl>()}
 {
 }
@@ -414,9 +470,11 @@ bool BrowserSurface::create(HWND parentWindow, const std::filesystem::path& html
 
     CefWindowInfo windowInfo;
     windowInfo.SetAsWindowless(parentWindow);
+    windowInfo.shared_texture_enabled = mImpl->acceleratedFrameCallback ? 1 : 0;
+    windowInfo.external_begin_frame_enabled = true;
 
     CefBrowserSettings browserSettings;
-    browserSettings.windowless_frame_rate = 60;
+    browserSettings.windowless_frame_rate = desiredWindowlessFrameRate;
     browserSettings.background_color = CefColorSetARGB(0, 0, 0, 0);
 
     mImpl->browser = CefBrowserHost::CreateBrowserSync(
@@ -427,6 +485,11 @@ bool BrowserSurface::create(HWND parentWindow, const std::filesystem::path& html
         nullptr,
         nullptr
     );
+
+    if (mImpl->browser != nullptr)
+    {
+        mImpl->browser->GetHost()->SetWindowlessFrameRate(desiredWindowlessFrameRate);
+    }
 
     return mImpl->browser != nullptr;
 #else
@@ -489,6 +552,29 @@ void BrowserSurface::reload()
     {
         mImpl->browser->Reload();
     }
+#endif
+}
+
+void BrowserSurface::requestFrame()
+{
+#ifdef GROAD_WITH_CEF
+    if (mImpl->browser != nullptr)
+    {
+        mImpl->browser->GetHost()->SendExternalBeginFrame();
+    }
+#endif
+}
+
+void BrowserSurface::setAcceleratedFrameCallback(AcceleratedFrameCallback callback)
+{
+#ifdef GROAD_WITH_CEF
+    if (mImpl != nullptr)
+    {
+        std::scoped_lock lock(mImpl->mutex);
+        mImpl->acceleratedFrameCallback = callback;
+    }
+#else
+    (void)callback;
 #endif
 }
 
